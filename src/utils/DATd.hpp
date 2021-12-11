@@ -1,4 +1,17 @@
 /*
+ * File: DATd.hpp
+ * Project: utils
+ * 提供字符串正则匹配工具
+ * File Created: Saturday, 11th December 2021 6:49:57 pm
+ * Author: Xu En (xuen@mokar.com)
+ * -----
+ * Last Modified: Saturday, 11th December 2021 7:56:28 pm
+ * Modified By: Xu En (xuen@mokahr.com)
+ * -----
+ * Copyright 2021 - 2021 Your Company, Moka
+ */
+
+/*
  * File: Trie.hpp
  * Project: core
  * File Created: Saturday, 11th December 2021 6:45:52 pm
