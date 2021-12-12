@@ -11,16 +11,18 @@
  */
 #ifndef SRC_CORE_DARTS_HPP_
 #define SRC_CORE_DARTS_HPP_
+
 #include <stdlib.h>
-#include <string>
+
 #include <set>
+#include <string>
 #include <vector>
 
 class Atom {
-  public:
-    std::string image;   // image of atom
-    uint32_t st;   // start of this atom in str
-    uint32_t et;   // end of this atom in str
+   public:
+    std::string image;  // image of atom
+    uint32_t st;        // start of this atom in str
+    uint32_t et;        // end of this atom in str
     std::set<std::string> *tags;
 
     Atom(const char *image, uint32_t start, uint32_t end) {
@@ -47,36 +49,33 @@ class Atom {
         }
     }
 
-
-
     ~Atom() {
         if (tags != NULL) {
             delete tags;
             tags = NULL;
         }
     }
-
-
-}
-
+};
 
 class AtomList {
-  public:
+   public:
     std::vector<Atom *> data;
-
-}
-
+};
 
 class Word {
-  public:
-    Atom *word;  // the word image
-    uint32_t st;  // the word in atomlist start
-    uint32_t et;   // the words in atom list end
-    void *att;    // this word other attr
-    uint16_t feat;   // this word other type
+   public:
+    Atom *word;     // the word image
+    uint32_t st;    // the word in atomlist start
+    uint32_t et;    // the words in atom list end
+    void *att;      // this word other attr
+    uint16_t feat;  // this word other type
 
-
-}
-
+    Word(const Word &wd) {
+        this->word = wd.word;
+        this->st = wd.st;
+        this->et = wd.et;
+        this->feat = wd.feat;
+    }
+};
 
 #endif  // SRC_CORE_DARTS_HPP_
