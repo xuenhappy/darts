@@ -11,15 +11,15 @@
  * Copyright 2021 - 2021 Your Company, Moka
  */
 
-#ifndef SRC_IMPL_MAIN_HPP_
-#define SRC_IMPL_MAIN_HPP_
+#ifndef SRC_MAIN_MAIN_HPP_
+#define SRC_MAIN_MAIN_HPP_
 
-#include "../utils/argparse.hpp"
+#include "utils/argparse.hpp"
 int main(int argc, char *argv[]) {
     argparse::ArgumentParser program("darts");
     program.add_argument("square")
-    .help("display the square of a given integer")
-    .scan<'i', int>();
+        .help("display the square of a given integer")
+        .scan<'i', int>();
 
     try {
         program.parse_args(argc, argv);
@@ -35,6 +35,4 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-
-
-#endif  // SRC_IMPL_MAIN_HPP_
+#endif  // SRC_MAIN_MAIN_HPP_
