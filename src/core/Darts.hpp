@@ -14,10 +14,14 @@
 
 #include <stdlib.h>
 
+#include <iostream>
 #include <set>
 #include <string>
 #include <vector>
 
+#include "../utils/StrUtils.hpp"
+
+namespace darts {
 class Atom {
    public:
     std::string image;  // image of atom
@@ -55,11 +59,60 @@ class Atom {
             tags = NULL;
         }
     }
+
+    friend std::ostream &operator<<(std::ostream &output, const Atom &D) {
+        output << "Atom[ " << D.image << "]";
+        return output;
+    }
 };
 
 class AtomList {
    public:
-    std::vector<Atom *> data;
+    std::vector<Atom *> *data;
+
+    explicit AtomList(size_t n) {
+        this->data = new std::vector<Atom *>();
+        this->data->reserve(n);
+    }
+
+    /***
+     *create the Atom list from data
+     * */
+    static AtomList *createFromString(std::string &str) {
+        AtomList *result = new AtomList(str.length() / 3 + 5);
+        // TODO(en.xu): split str
+        return result;
+    }
+
+    void clear() {
+        if (!this->data) {
+            return;
+        }
+        for (auto val : *(this->data)) {
+            if (val) {
+                delete val;
+            }
+        }
+        this->data->clear();
+    }
+
+    ~AtomList() {
+        if (this->data) {
+            clear();
+            delete this->data;
+        }
+    }
+
+    friend std::ostream &operator<<(std::ostream &output, const AtomList &D) {
+        output << "AtomList[ ";
+        if (D.data) {
+            for (auto a : *D.data) {
+                output << *a << ",";
+            }
+        }
+        output << "]";
+        return output;
+    }
 };
 
 class Word {
@@ -70,12 +123,26 @@ class Word {
     void *att;      // this word other attr
     uint16_t feat;  // this word other type
 
+    Word(Atom *atom, uint32_t start, uint32_t end) {
+        this->word = atom;
+        this->st = start;
+        this->et = end;
+    }
+
     Word(const Word &wd) {
         this->word = wd.word;
         this->st = wd.st;
         this->et = wd.et;
         this->feat = wd.feat;
     }
+    friend std::ostream &operator<<(std::ostream &output, const Word &D) {
+        if (D.word) {
+            output << "Word[ " << D.word->image << "]";
+        } else {
+            output << "Word[NULL] ";
+        }
+        return output;
+    }
 };
-
+}  // namespace darts
 #endif  // SRC_CORE_DARTS_HPP_

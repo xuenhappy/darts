@@ -10,3 +10,28 @@
  * -----
  * Copyright 2021 - 2021 Your Company, Moka
  */
+
+#ifndef SRC_UTILS_STRUTILS_HPP_
+#define SRC_UTILS_STRUTILS_HPP_
+
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+namespace darts {
+std::string join(const std::vector<std::string>& v, std::string& delt) {
+    std::stringstream ss;
+    std::vector<std::string>::const_iterator it = v.begin();
+    if (it != v.end()) {
+        ss << *it;
+        ++it;
+    }
+    for (; it != v.end(); ++it) {
+        ss << delt << *it;
+    }
+    ss << std::endl;
+    return ss.str();
+}
+}  // namespace darts
+
+#endif  // SRC_UTILS_STRUTILS_HPP_
