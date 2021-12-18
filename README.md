@@ -21,8 +21,14 @@ See Details in `test/demo.cpp`
 
 ## Reference
 
-1.  `md5.hpp` is copied from network, you can find original author in source code(in comments).
-2.  `MutexLock.hpp`, `BlockingQueue.hpp`, `Condition.hpp` reference from [muduo].
+1. 提供基本的字符串归一化功能
+2. 提供字符串按照字符类型的基本切分功能
+3. 提供中文转拼音功能
+4. 提供拼音自动切分
+5. 提供字符串职能切分
+
+6.  `md5.hpp` is copied from network, you can find original author in source code(in comments).
+7.  `MutexLock.hpp`, `BlockingQueue.hpp`, `Condition.hpp` reference from [muduo].
 
 ## Contact
 
