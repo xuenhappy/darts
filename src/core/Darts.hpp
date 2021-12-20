@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include "../utils/StrUtils.hpp"
+#include "utils/StrUtils.hpp"
 
 namespace darts {
 class Atom {
