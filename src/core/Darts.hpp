@@ -69,6 +69,7 @@ class Atom {
 class AtomList {
    public:
     std::vector<Atom *> *data;
+    std::string ori_str;
 
     explicit AtomList(size_t n) {
         this->data = new std::vector<Atom *>();
@@ -78,8 +79,9 @@ class AtomList {
     /***
      *create the Atom list from data
      * */
-    static AtomList *createFromString(std::string &str) {
+    static AtomList *createFromString(const std::string &str) {
         AtomList *result = new AtomList(str.length() / 3 + 5);
+        result->ori_str = str;
         // TODO(en.xu): split str
         return result;
     }
@@ -94,6 +96,10 @@ class AtomList {
             }
         }
         this->data->clear();
+    }
+
+    size_t size() {
+        return this->data == NULL ? 0 : this->data->size();
     }
 
     ~AtomList() {
@@ -144,5 +150,9 @@ class Word {
         return output;
     }
 };
+
+class CellMap {
+};
+
 }  // namespace darts
 #endif  // SRC_CORE_DARTS_HPP_

@@ -12,5 +12,26 @@
 
 #ifndef SRC_CORE_SEGMENT_HPP_
 #define SRC_CORE_SEGMENT_HPP_
+#include "core/Darts.hpp"
 
+namespace darts {
+
+class CellPersenter {
+   public:
+    /***
+     * 对每个Word进行向量表示
+     **/
+    virtual void embed(const AtomList *dstSrc, CellMap *cmap) = 0;
+    virtual void ranging(const Word *pre, const Word *next) = 0;
+    virtual ~CellPersenter() {}
+};
+
+class CellRecognizer {
+   public:
+    // recognizer all Wcell possable in the atomlist
+    virtual void addSomeCells(const AtomList *dstSrc, CellMap *cmap) = 0;
+    virtual ~CellRecognizer() {}
+};
+
+}  // namespace darts
 #endif  // SRC_CORE_SEGMENT_HPP_
