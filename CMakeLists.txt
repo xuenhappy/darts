@@ -8,12 +8,8 @@ else()
 endif()
 
 
-
-set(XTENSOR_USE_XSIMD 0)
-set(XTENSOR_USE_TBB 0)
 # xsimd and TBB dependencies are automatically
 # searched when the following is executed
-find_package(xtl REQUIRED)
 find_package (Eigen3 3.3 REQUIRED NO_MODULE)
 
 find_package(Eigen3 REQUIRED)
