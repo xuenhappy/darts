@@ -18,13 +18,8 @@
 #include "../utils/file_utils.hpp"
 #include "../utils/utils_base.hpp"
 
-/**
- * @brief 执行一些初始化的工程
- *
- */
-void init() { initUtils(); }
-
 int main(int argc, char *argv[]) {
+  initUtils();
   std::cout << getResource("test1") << std::endl;
   std::cout << getResource("/test1") << std::endl;
   std::cout << getResource("test1/tst") << std::endl;

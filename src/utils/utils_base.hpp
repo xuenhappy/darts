@@ -18,13 +18,13 @@
 
 void initUtils() {
   if (!loadCharMap()) {
-    exit(-1);
+    exit(1);
   }
   if (!loadPinyin()) {
-    exit(-1);
+    exit(1);
   }
   if (!initializeMap()) {
-    exit(-1);
+    exit(1);
   }
 }
 
