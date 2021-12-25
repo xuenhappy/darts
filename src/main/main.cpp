@@ -16,12 +16,13 @@
 
 #include "../utils/argparse.hpp"
 #include "../utils/file_utils.hpp"
-#include "../utils/norm_chr.hpp"
+#include "../utils/utils_base.hpp"
+
 /**
  * @brief 执行一些初始化的工程
  *
  */
-void init() {}
+void init() { initUtils(); }
 
 int main(int argc, char *argv[]) {
   std::cout << getResource("test1") << std::endl;

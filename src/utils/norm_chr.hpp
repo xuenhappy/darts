@@ -16,6 +16,7 @@
 
 #include <fstream>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -46,13 +47,28 @@ int initializeMap() {
     std::cerr << "open data " << dat << " file failed " << std::endl;
     return EXIT_FAILURE;
   }
-  Json::Reader reader;
+  std::stringstream sin;
+  sin << in.rdbuf();
+  in.close();
+  std::string data(sin.str());
+  if (data.empty()) {
+    return EXIT_SUCCESS;
+  }
+
+  bool res;
+  JSONCPP_STRING errs;
   Json::Value root;
-  if (!reader.parse(in, root)) {
-    in.close();
-    std::cerr << "parse error\n" << std::endl;
+  Json::CharReaderBuilder readerBuilder;
+
+  std::unique_ptr<Json::CharReader> const jsonReader(
+      readerBuilder.newCharReader());
+  res = jsonReader->parse(data.c_str(), data.c_str() + data.length(), &root,
+                          &errs);
+  if (!res || !errs.empty()) {
+    std::cerr << "parseJson err. " << errs << std::endl;
     return EXIT_FAILURE;
   }
+
   auto mem = root.getMemberNames();
   for (auto iter = mem.begin(); iter != mem.end(); iter++) {
     if (root[*iter].type() == Json::arrayValue) {
@@ -68,7 +84,7 @@ int initializeMap() {
       return EXIT_FAILURE;
     }
   }
-  in.close();
+
   _addWordMap();
   return EXIT_SUCCESS;
 }

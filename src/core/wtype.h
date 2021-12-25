@@ -9,22 +9,15 @@
  * -----
  * Copyright 2021 - 2021 Your Company, Moka
  */
-#ifndef SRC_CORE_ATOMTYPE_H_
-#define SRC_CORE_ATOMTYPE_
+
+#ifndef SRC_CORE_WTYPE_H_
+#define SRC_CORE_WTYPE_H_
 #include <string>
-enum WordType {
-    UNK,
-    POS,
-    SYMBOL,
-    CJK,
-    LOC,
-    COMPANY
-};
+enum WordType { UNK, POS, SYMBOL, CJK, LOC, COMPANY };
 
-static const char* EnumStrings[] = {"People", "Tree", "Car", "Text", "Cave", "QRcode", "Pillar"};
+static const char* EnumStrings[] = {"People", "Tree",   "Car",   "Text",
+                                    "Cave",   "QRcode", "Pillar"};
 
-const char* getWordTypeText(int enumVal) {
-    return EnumStrings[enumVal];
-}
+const char* getWordTypeText(int enumVal) { return EnumStrings[enumVal]; }
 
-#endif  // SRC_CORE_ATOMTYPE_H_
+#endif  // SRC_CORE_WTYPE_H_
