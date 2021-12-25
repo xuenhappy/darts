@@ -17,29 +17,34 @@
 #include "../utils/argparse.hpp"
 #include "../utils/file_utils.hpp"
 #include "../utils/norm_chr.hpp"
+/**
+ * @brief 执行一些初始化的工程
+ *
+ */
+void init() {}
 
 int main(int argc, char *argv[]) {
-    std::cout << getResource("test1") << std::endl;
-    std::cout << getResource("/test1") << std::endl;
-    std::cout << getResource("test1/tst") << std::endl;
+  std::cout << getResource("test1") << std::endl;
+  std::cout << getResource("/test1") << std::endl;
+  std::cout << getResource("test1/tst") << std::endl;
 
-    argparse::ArgumentParser program("darts");
-    program.add_argument("square")
-        .help("display the square of a given integer")
-        .scan<'i', int>();
+  argparse::ArgumentParser program("darts");
+  program.add_argument("square")
+      .help("display the square of a given integer")
+      .scan<'i', int>();
 
-    try {
-        program.parse_args(argc, argv);
-    } catch (const std::runtime_error &err) {
-        std::cerr << err.what() << std::endl;
-        std::cerr << program;
-        std::exit(1);
-    }
+  try {
+    program.parse_args(argc, argv);
+  } catch (const std::runtime_error &err) {
+    std::cerr << err.what() << std::endl;
+    std::cerr << program;
+    std::exit(1);
+  }
 
-    auto input = program.get<int>("square");
-    std::cout << (input * input) << std::endl;
+  auto input = program.get<int>("square");
+  std::cout << (input * input) << std::endl;
 
-    return 0;
+  return 0;
 }
 
 #endif  // SRC_MAIN_MAIN_HPP_

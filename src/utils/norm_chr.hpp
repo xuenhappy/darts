@@ -12,10 +12,12 @@
  */
 #ifndef SRC_UTILS_NORM_CHR_HPP_
 
+#include <fstream>
 #include <map>
 #include <sstream>
 #include <string>
 
+#include "file_utils.hpp"
 #include "utf8.hpp"
 
 /**
@@ -23,6 +25,30 @@
  *
  */
 const std::map<std::string, std::string> _WordMap;
+/**
+ * @brief add some special words map
+ *
+ */
+void _addWordMap() {}
+
+/**
+ * @brief 执行初始化
+ *
+ * @return int
+ */
+int initializeMap() {
+  std::string dat = getResource("data/confuse.json");
+  std::ifstream in(dat.c_str());
+  if (!in.is_open()) {
+    std::cerr << "open data " << dat << " file failed " << std::endl;
+    return EXIT_FAILURE;
+  }
+  while (!in.eof()) {
+  }
+
+  _addWordMap();
+  return EXIT_SUCCESS;
+}
 
 /**
  * @brief 对原始字符串进行字符归一化
@@ -46,11 +72,5 @@ std::string normalizeStr(const std::string& str) {
   }
   return output.str();
 }
-
-/**
- * @brief
- *
- */
-void test() {}
 
 #endif  // SRC_UTILS_NORM_CHR_HPP_
