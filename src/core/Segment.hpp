@@ -12,7 +12,7 @@
 
 #ifndef SRC_CORE_SEGMENT_HPP_
 #define SRC_CORE_SEGMENT_HPP_
-#include "core/Darts.hpp"
+#include "../core/darts.hpp"
 
 namespace darts {
 

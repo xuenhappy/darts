@@ -19,7 +19,8 @@
 #include <string>
 #include <vector>
 
-#include "utils/StrUtils.hpp"
+#include "../core/wtype.h"
+#include "../utils/str_utils.hpp"
 
 namespace darts {
 class Atom {
@@ -27,7 +28,7 @@ class Atom {
     std::string image;  // image of atom
     uint32_t st;        // start of this atom in str
     uint32_t et;        // end of this atom in str
-    std::set<std::string> *tags;
+    std::set<WordType> *tags;
 
     Atom(const char *image, uint32_t start, uint32_t end) {
         this->image = image;
@@ -40,21 +41,22 @@ class Atom {
         this->st = atom.st;
         this->et = atom.et;
         if (atom.tags != NULL) {
-            this->tags = new std::set<std::string>(*atom.tags);
+            this->tags = new std::set<WordType>(*atom.tags);
         }
     }
 
-    void addType(const char *tag) {
-        if (tag != NULL) {
+    void addType(WordType type) {
+        if (type != NULL) {
             if (this->tags == NULL) {
-                this->tags = new std::set<std::string>();
+                this->tags = new std::set<WordType>();
             }
-            this->tags->insert(tag);
+            this->tags->insert(type);
         }
     }
 
     ~Atom() {
         if (tags != NULL) {
+            tags->clear();
             delete tags;
             tags = NULL;
         }
@@ -123,11 +125,12 @@ class AtomList {
 
 class Word {
    public:
-    Atom *word;     // the word image
-    uint32_t st;    // the word in atomlist start
-    uint32_t et;    // the words in atom list end
-    void *att;      // this word other attr
-    uint16_t feat;  // this word other type
+    Atom *word;       // the word image
+    uint32_t st;      // the word in atomlist start
+    uint32_t et;      // the words in atom list end
+    double *att;      // this word other attr
+    size_t att_size;  // thid word attr size
+    uint16_t feat;    // this word other type
 
     Word(Atom *atom, uint32_t start, uint32_t end) {
         this->word = atom;

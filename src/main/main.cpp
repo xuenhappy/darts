@@ -14,7 +14,7 @@
 #ifndef SRC_MAIN_MAIN_HPP_
 #define SRC_MAIN_MAIN_HPP_
 
-#include "utils/argparse.hpp"
+#include "../utils/argparse.hpp"
 int main(int argc, char *argv[]) {
     argparse::ArgumentParser program("darts");
     program.add_argument("square")
