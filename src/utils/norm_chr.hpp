@@ -12,10 +12,13 @@
  */
 #ifndef SRC_UTILS_NORM_CHR_HPP_
 
+#include <json/json.h>
+
 #include <fstream>
 #include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "file_utils.hpp"
 #include "utf8.hpp"
@@ -24,7 +27,7 @@
  * @brief  字符串规范化使用的工具
  *
  */
-const std::map<std::string, std::string> _WordMap;
+std::map<std::string, std::string> _WordMap;
 /**
  * @brief add some special words map
  *
@@ -43,9 +46,29 @@ int initializeMap() {
     std::cerr << "open data " << dat << " file failed " << std::endl;
     return EXIT_FAILURE;
   }
-  while (!in.eof()) {
+  Json::Reader reader;
+  Json::Value root;
+  if (!reader.parse(in, root)) {
+    in.close();
+    std::cerr << "parse error\n" << std::endl;
+    return EXIT_FAILURE;
   }
-
+  auto mem = root.getMemberNames();
+  for (auto iter = mem.begin(); iter != mem.end(); iter++) {
+    if (root[*iter].type() == Json::arrayValue) {
+      auto cnt = root[*iter].size();
+      std::string key(*iter);
+      for (auto i = 0; i < cnt; i++) {
+        std::string val = root[*iter][i].asString();
+        _WordMap[val] = *iter;
+      }
+    } else {
+      std::cerr << "open json data " << dat << "key:" << *iter << "  failed "
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  }
+  in.close();
   _addWordMap();
   return EXIT_SUCCESS;
 }
