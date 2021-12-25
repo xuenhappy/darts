@@ -1,5 +1,5 @@
 # Prerequisites
-*.d
+.*
 
 # Compiled Object files
 *.slo
@@ -33,3 +33,4 @@
 build/*
 .vscode/*
 
+.DS_Store
