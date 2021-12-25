@@ -1,5 +1,8 @@
 # darts
-a chinese fast smart tokenizer 
+
+
+中文分词框架(a chinese fast smart tokenizer)
+本分词程序采用自定义神经网络结构结合常规规则等算法，折中考虑了效果与性能的分词程序
 
 ## Introduction
 
@@ -17,7 +20,7 @@ See Details in `test/demo.cpp`
 
 ## Cases
 
-1. [CppJieba]
+1. [Darts]
 
 ## Reference
 
@@ -26,13 +29,11 @@ See Details in `test/demo.cpp`
 3. 提供中文转拼音功能
 4. 提供拼音自动切分
 5. 提供字符串职能切分
+6. 提供面向c++/python等语言的基础API
+7. 提供修改python的模型开发工具
 
-6.  `md5.hpp` is copied from network, you can find original author in source code(in comments).
-7.  `MutexLock.hpp`, `BlockingQueue.hpp`, `Condition.hpp` reference from [muduo].
+
 
 ## Contact
 
-+ i@yanyiwu.com
-
-[CppJieba]:https://github.com/yanyiwu/cppjieba.git
-[muduo]:https://github.com/chenshuo/muduo.git
+nanhangxuen@163.com
