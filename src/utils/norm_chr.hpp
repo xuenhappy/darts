@@ -11,12 +11,12 @@
  * Copyright 2021 - 2021 Your Company, Moka
  */
 #ifndef SRC_UTILS_NORM_CHR_HPP_
-#define SRC_UTILS_NORM_CHR_HPP_
+
 #include <map>
 #include <sstream>
 #include <string>
 
-#include "utf8.h"
+#include "utf8.hpp"
 
 /**
  * @brief  字符串规范化使用的工具
@@ -30,10 +30,27 @@ const std::map<std::string, std::string> _WordMap;
  * @param str
  * @return std::string
  */
-std::string normalizeStr(const std::string &str) {
-    std::stringstream output;
+std::string normalizeStr(const std::string& str) {
+  std::stringstream output;
 
-    return output.str();
+  utf8_iter ITER;
+  utf8_init(&ITER, str.c_str());
+  const char* tmps;
+  while (utf8_next(&ITER)) {
+    tmps = utf8_getchar(&ITER);
+    if (_WordMap.find(tmps) != _WordMap.end()) {
+      output << _WordMap.at(tmps);
+    } else {
+      output << tmps;
+    }
+  }
+  return output.str();
 }
+
+/**
+ * @brief
+ *
+ */
+void test() {}
 
 #endif  // SRC_UTILS_NORM_CHR_HPP_

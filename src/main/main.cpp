@@ -16,6 +16,8 @@
 
 #include "../utils/argparse.hpp"
 #include "../utils/file_utils.hpp"
+#include "../utils/norm_chr.hpp"
+
 int main(int argc, char *argv[]) {
     std::cout << getResource("test1") << std::endl;
     std::cout << getResource("/test1") << std::endl;
