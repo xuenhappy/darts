@@ -15,7 +15,12 @@
 #define SRC_MAIN_MAIN_HPP_
 
 #include "../utils/argparse.hpp"
+#include "../utils/file_utils.hpp"
 int main(int argc, char *argv[]) {
+    std::cout << getResource("test1") << std::endl;
+    std::cout << getResource("/test1") << std::endl;
+    std::cout << getResource("test1/tst") << std::endl;
+
     argparse::ArgumentParser program("darts");
     program.add_argument("square")
         .help("display the square of a given integer")

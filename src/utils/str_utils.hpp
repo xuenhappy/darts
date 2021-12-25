@@ -11,14 +11,52 @@
  * Copyright 2021 - 2021 Your Company, Moka
  */
 
-#ifndef SRC_UTILS_STRUTILS_HPP_
-#define SRC_UTILS_STRUTILS_HPP_
+#ifndef SRC_UTILS_STR_UTILS_HPP_
+#define SRC_UTILS_STR_UTILS_HPP_
 
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "../core/wtype.h"
 namespace darts {
+/**
+ * @brief  字符串规范化使用的工具
+ *
+ */
+const std::map<std::string, std::string> _WordMap;
+
+/**
+ * @brief 拼音数据
+ *
+ */
+const std::map<std::string, std::string[]> _WordPinyin;
+
+/**
+ * @brief 字符串类型数据
+ *
+ */
+const std::map<std::string, WordType> _charType;
+
+/**
+ * @brief 返回某个字符对应的字符类型
+ *
+ * @param chr
+ * @return WordType
+ */
+WordType charType(const std::string& chr) {
+    return WordType::UNK;
+}
+
+/**
+ * @brief 字符串连接
+ *
+ * @param v
+ * @param delt
+ * @return std::string
+ */
 std::string join(const std::vector<std::string>& v, std::string& delt) {
     std::stringstream ss;
     std::vector<std::string>::const_iterator it = v.begin();
@@ -34,4 +72,4 @@ std::string join(const std::vector<std::string>& v, std::string& delt) {
 }
 }  // namespace darts
 
-#endif  // SRC_UTILS_STRUTILS_HPP_
+#endif  // SRC_UTILS_STR_UTILS_HPP_

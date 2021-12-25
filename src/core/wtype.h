@@ -11,13 +11,20 @@
  */
 #ifndef SRC_CORE_ATOMTYPE_H_
 #define SRC_CORE_ATOMTYPE_
-
+#include <string>
 enum WordType {
+    UNK,
     POS,
     SYMBOL,
     CJK,
     LOC,
     COMPANY
 };
+
+static const char* EnumStrings[] = {"People", "Tree", "Car", "Text", "Cave", "QRcode", "Pillar"};
+
+const char* getWordTypeText(int enumVal) {
+    return EnumStrings[enumVal];
+}
 
 #endif  // SRC_CORE_ATOMTYPE_H_
