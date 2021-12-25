@@ -26,16 +26,16 @@
 std::map<std::string, WordType> _charType;
 
 int loadCharMap() {
-  std::string dat = getResource("data/chars.tmap");
-  std::ifstream in(dat.c_str());
-  if (!in.is_open()) {
-    std::cerr << "open data " << dat << " file failed " << std::endl;
-    return EXIT_FAILURE;
-  }
+    std::string dat = getResource("data/chars.tmap");
+    std::ifstream in(dat.c_str());
+    if (!in.is_open()) {
+        std::cerr << "open data " << dat << " file failed " << std::endl;
+        return EXIT_FAILURE;
+    }
 
-  in.close();
+    in.close();
 
-  return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -60,7 +60,6 @@ size_t wordLen(const std::string& str) { return 0; }
  * @param str 原始字符串
  * @param accept hook函数
  */
-void atomSplit(const std::string& str,
-               void (*accept)(const char*, WordType, size_t, size_t)) {}
+void atomSplit(const std::string& str, void (*accept)(const char*, WordType, size_t, size_t)) {}
 
 #endif  // SRC_UTILS_CHSPLITER_HPP_
