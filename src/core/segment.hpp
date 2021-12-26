@@ -12,8 +12,8 @@
 
 #ifndef SRC_CORE_SEGMENT_HPP_
 #define SRC_CORE_SEGMENT_HPP_
+#include <float.h>
 
-#include <algorithm>
 #include <map>
 #include <memory>
 #include <set>
@@ -48,7 +48,6 @@ class CellRecognizer {
 };
 
 typedef struct _GraphEdge {
-    int st;
     int et;
     double weight;
 } * GraphEdge;
@@ -60,6 +59,13 @@ class Segment {
     std::shared_ptr<CellPersenter> quantizer;
 
 
+    /**
+     * @brief build map
+     *
+     * @param context
+     * @param cmap
+     * @param graph
+     */
     void buildGraph(AtomList *context, CellMap *cmap, std::map<int, std::vector<GraphEdge> *> &graph) {
         cmap->makeCurIndex();
         this->quantizer->embed(context, cmap);
@@ -68,17 +74,23 @@ class Segment {
             std::vector<GraphEdge> *tmp = new std::vector<GraphEdge>();
             cmap->iterRow(pre, pre->val->et, [&](Cursor next) {
                 auto dist = quantizer->ranging(pre->idx < 0 ? NULL : pre->val.get(), next->val.get());
-                tmp->push_back(new _GraphEdge{pre->idx, next->idx, dist});
+                tmp->push_back(new _GraphEdge{next->idx, dist});
             });
             if (tmp->empty()) {
                 auto dist = quantizer->ranging(pre->idx < 0 ? NULL : pre->val.get(), NULL);
                 int cidx = cmap->Size();
-                tmp->push_back(new _GraphEdge{pre->idx, cidx, dist});
+                tmp->push_back(new _GraphEdge{cidx, dist});
             }
             graph.insert(std::make_pair(pre->idx, tmp));
         });
     }
 
+    /**
+     * @brief select best path
+     *
+     * @param graph
+     * @param bestPaths
+     */
     void selectPath(std::map<int, std::vector<GraphEdge> *> &graph, std::vector<int> &bestPaths) {
         auto sz = graph.size();
         std::vector<double> dist(sz);
@@ -100,33 +112,27 @@ class Segment {
 
         // dijkstra
         while (used.find(sz - 1) != used.end()) {
-            // minDist, u := float32(3.4e30), 0
-            // used.Intersect(visted).Each(func(i interface{}) bool {
-            // 	idx := i.(int)
-            // 	if dist[idx] < minDist {
-            // 		minDist = dist[idx]
-            // 		u = idx
-            // 	}
-            // 	return false
-            // })
-            // if u == sz-1 {
-            // 	break
-            // }
-            // used.Remove(u)
-            // for _, nw := range graph[u] {
-            // 	node, weight := int(nw[0]), nw[1]
-            // 	if !used.Contains(node) {
-            // 		continue
-            // 	}
-            // 	c := dist[u] + weight
-            // 	visted.Add(node)
-            // 	if (dist[node] < 0) || (c < dist[node]) {
-            // 		dist[node] = c
-            // 		prev[node] = u
-            // 	}
-            // }
+            double minDist = DBL_MAX;
+            int u = 0;
+            for (auto idx : visted) {
+                if (dist[idx] < minDist) {
+                    minDist = dist[idx];
+                    u = idx;
+                }
+            }
+            if (u == sz - 1) break;
+            used.erase(u);
+            for (auto nw : *graph[u]) {
+                auto node = nw->et;
+                if (used.find(node) == used.end()) continue;
+                auto c = dist[u] + nw->weight;
+                visted.insert(node);
+                if ((dist[node] < 0) || (c < dist[node])) {
+                    dist[node] = c;
+                    prev[node] = u;
+                }
+            }
         }
-
 
         bestPaths.push_back(sz - 1);
         while (bestPaths.back() > -1) {
@@ -136,7 +142,35 @@ class Segment {
     }
 
 
+    /**
+     * @brief 进行最优选择
+     *
+     * @param context
+     * @param cmap
+     * @param ret
+     */
     void splitContent(AtomList *context, CellMap *cmap, std::vector<std::shared_ptr<Word>> &ret) {
+        // get best path
+        std::map<int, std::vector<GraphEdge> *> graph;
+        buildGraph(context, cmap, graph);
+        std::vector<int> bestPaths;
+        selectPath(graph, bestPaths);
+        // output result
+        cmap->iterRow(NULL, -1, [&](Cursor cur) {
+            if (std::binary_search(bestPaths.begin(), bestPaths.end(), cur->idx)) {
+                ret.push_back(cur->val);
+            }
+        });
+        // clear memory
+        bestPaths.clear();
+        for (auto p : graph) {
+            for (auto v : *(p.second)) {
+                delete v;
+            }
+            p.second->clear();
+            delete p.second;
+        }
+        graph.clear();
     }
 
     void buildMap(AtomList *atomList, CellMap *cmap) {
