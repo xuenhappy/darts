@@ -14,6 +14,7 @@
 #ifndef SRC_UTILS_CHSPLITER_HPP_
 #define SRC_UTILS_CHSPLITER_HPP_
 #include <fstream>
+#include <functional>
 #include <map>
 #include <string>
 
@@ -60,6 +61,6 @@ size_t wordLen(const std::string& str) { return 0; }
  * @param str 原始字符串
  * @param accept hook函数
  */
-void atomSplit(const std::string& str, void (*accept)(const char*, WordType, size_t, size_t)) {}
+void atomSplit(const std::string& str, std::function<void(const char*, WordType, size_t, size_t)> accept) {}
 
 #endif  // SRC_UTILS_CHSPLITER_HPP_
