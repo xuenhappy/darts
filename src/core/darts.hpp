@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "../core/wtype.h"
+#include "../utils/chspliter.hpp"
 #include "../utils/str_utils.hpp"
 
 namespace darts {
@@ -104,21 +105,26 @@ class AtomList {
     std::vector<std::shared_ptr<Atom>> data;
     std::string content;
 
-    explicit AtomList(size_t n) {
-        data.reserve(n);
+
+    /**
+     * @brief Construct a new Atom List object
+     *
+     * @param str
+     */
+    explicit AtomList(const std::string &str) {
+        data.reserve(str.length() / 3 + 5);
+        content = str;
+        atomSplit(str, [&](const char *astr, WordType ttype, size_t s, size_t e) {
+            auto atom = std::make_shared<Atom>(astr, s, e);
+            atom->addTag(ttype);
+            this->data.push_back(atom);
+        });
     }
 
-
-    /***
-     *create the Atom list from data
-     * */
-    static AtomList *createFromString(const std::string &str) {
-        AtomList *result = new AtomList(str.length() / 3 + 5);
-        result->content = str;
-        // TODO(en.xu): split str
-        return result;
-    }
-
+    /**
+     * @brief
+     *
+     */
     void clear() {
         auto iter = data.begin();
         while (iter != data.end()) {
@@ -147,7 +153,7 @@ class AtomList {
             end = data.size();
         }
         if (start < 0) {
-            start == 0;
+            start = 0;
         }
 
         if (start >= end) return nullptr;
@@ -177,7 +183,7 @@ class AtomList {
     friend std::ostream &operator<<(std::ostream &output, const AtomList &D) {
         output << "AtomList[ ";
         for (auto a : D.data) {
-            output << *a << ",";
+            output << a << ",";
         }
         output << "]";
         return output;
@@ -244,7 +250,7 @@ typedef struct _Cursor {
     struct _Cursor *lack;
     std::shared_ptr<Word> val;
     int idx;
-} Cursor;
+} * Cursor;
 
 /**
  * @brief create a cursor
@@ -254,8 +260,8 @@ typedef struct _Cursor {
  * @param next
  * @return Cursor*
  */
-Cursor *makeCursor(std::shared_ptr<Word> word, Cursor *pre, Cursor *next) {
-    Cursor *cur = new Cursor();
+Cursor makeCursor(std::shared_ptr<Word> word, Cursor pre, Cursor next) {
+    Cursor cur = new struct _Cursor();
     cur->prev = pre;
     cur->lack = next;
     cur->val = word;
@@ -266,16 +272,20 @@ Cursor *makeCursor(std::shared_ptr<Word> word, Cursor *pre, Cursor *next) {
 
 class CellMap {
    private:
-    Cursor *head;
+    Cursor head;
     size_t rows, colums, size;
 
    public:
-    Cursor *Head() {
+    Cursor Head() {
         return this->head;
     }
 
+    size_t Size() const {
+        return this->size;
+    }
+
     CellMap() {
-        this->head = makeCursor(std::make_shared<Word>(NULL, -1, 0), NULL, NULL);
+        this->head = makeCursor(std::make_shared<Word>(nullptr, -1, 0), NULL, NULL);
         this->head->idx = -1;
         this->rows = this->colums = this->size = 0;
     }
@@ -316,7 +326,7 @@ class CellMap {
      * @param row
      * @param dfunc
      */
-    void iterRow(Cursor *cur, int row, std::function<void(Cursor *)> dfunc) {
+    void iterRow(Cursor cur, int row, std::function<void(Cursor)> dfunc) {
         if (!cur) {
             cur = this->head;
         }
@@ -347,7 +357,7 @@ class CellMap {
     }
 
     // AddNext do add the cell to give cir next
-    Cursor *addNext(Cursor *cur, std::shared_ptr<Word> cell) {
+    Cursor addNext(Cursor cur, std::shared_ptr<Word> cell) {
         if (!cur) {
             cur = this->head;
         }
@@ -386,7 +396,7 @@ class CellMap {
     }
 
     // AddPre add a cell to next
-    Cursor *addPre(Cursor *cur, std::shared_ptr<Word> cell) {
+    Cursor addPre(Cursor cur, std::shared_ptr<Word> cell) {
         if (!cur) {
             cur = this->head;
         }
@@ -430,7 +440,7 @@ class CellMap {
      * @param cur
      * @return Cursor*
      */
-    Cursor *AddCell(std::shared_ptr<Word> cell, Cursor *cur) {
+    Cursor AddCell(std::shared_ptr<Word> cell, Cursor cur) {
         if (!cur) {
             return addNext(this->head, cell);
         }
