@@ -29,7 +29,7 @@
  * @brief  字符串规范化使用的工具
  *
  */
-std::map<std::string, std::string> _WordMap;
+static std::map<std::string, std::string> _WordMap;
 /**
  * @brief add some special words map
  *

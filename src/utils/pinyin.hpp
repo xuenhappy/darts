@@ -29,7 +29,7 @@ typedef struct _pinyin {
     std::vector<std::string> piyins;
 } * PinyinInfo;
 
-std::map<std::string, PinyinInfo> _WordPinyin;
+static std::map<std::string, PinyinInfo> _WordPinyin;
 /**
  * @brief 加载拼音数据
  *

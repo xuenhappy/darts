@@ -28,7 +28,7 @@
  * @brief 字符串类型数据
  *
  */
-std::map<uint32_t, WordType> _charType;
+static std::map<uint32_t, WordType> _charType;
 
 int loadCharMap() {
     std::string dat = getResource("data/chars.tmap");
@@ -53,9 +53,9 @@ WordType charType(uint32_t code) {
         return WordType::EMPTY;
     }
 
-    if (!std::iswprint(code)) {
-        return WordType::POS;
-    }
+    // if (!std::iswprint(code)) {
+    //     return WordType::POS;
+    // }
     if (_charType.find(code) != _charType.end()) {
         return _charType[code];
     }
@@ -116,7 +116,7 @@ size_t wordLen(const char* str) {
                 buf_type = WordType::POS;
                 continue;
             }
-            if (buf_type != WordType::UNK) {
+            if (buf_type != WordType::NONE) {
                 nums += 1;
                 buf_type = WordType::NONE;
             }

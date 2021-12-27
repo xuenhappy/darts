@@ -94,7 +94,14 @@ class Atom {
     }
 
     friend std::ostream &operator<<(std::ostream &output, const Atom &D) {
-        output << "Atom[ " << D.image << "]";
+        std::vector<std::string> tags;
+        if (D.tags) {
+            for (auto t : *D.tags) {
+                tags.push_back(getWordTypeText(t));
+            }
+        }
+        output << "Atom['" << D.image << "',type={" << join(tags, ",") << "}]";
+
         return output;
     }
 };
@@ -178,7 +185,7 @@ class AtomList {
     friend std::ostream &operator<<(std::ostream &output, const AtomList &D) {
         output << "AtomList[ ";
         for (auto a : D.data) {
-            output << a << ",";
+            output << *a << ",";
         }
         output << "]";
         return output;
@@ -223,7 +230,7 @@ class Word {
 
     friend std::ostream &operator<<(std::ostream &output, const Word &D) {
         if (D.word) {
-            output << "Word[ " << D.word->image << "]";
+            output << "Word[ " << *D.word << "]";
         } else {
             output << "Word[NULL] ";
         }
