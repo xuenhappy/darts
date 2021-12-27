@@ -12,12 +12,61 @@
 
 #ifndef SRC_CORE_WTYPE_H_
 #define SRC_CORE_WTYPE_H_
+#include <algorithm>
 #include <string>
-enum WordType { UNK, POS, SYMBOL, CJK, LOC, COMPANY };
+enum WordType {
+    NONE,
+    UNK,
+    POS,
+    NUM,
+    ENG,
+    CJK,
+    EMPTY,
+    SYMBOLS,
+    FACE,
+    ARROW,
+    RUSH,
+    ORDER,
+    IP,
+    CNUM,
+    KEYW,
+    TIME,
+    MOTH,
+    DAY,
+    EMAIL,
+    URL,
+    TMS,
+    TMR,
+    NAME,
+    LOC,
+    CAM,
+    ACD,
+    SCH,
+    MAJ,
+    COM,
+    TIL,
+    DPT,
+};
 
-static const char* EnumStrings[] = {"People", "Tree",   "Car",   "Text",
-                                    "Cave",   "QRcode", "Pillar"};
+static const char* EnumStrings[] = {
+    "NONE",  "UNK", "POS",  "NUM",  "ENG",  "CJK",  "EMPTY", "SYMBOLS", "FACE", "ARROW", "RUSH",
+    "ORDER", "IP",  "CNUM", "KEYW", "TIME", "MOTH", "DAY",   "EMAIL",   "URL",  "TMS",   "TMR",
+    "NAME",  "LOC", "CAM",  "ACD",  "SCH",  "MAJ",  "COM",   "TIL",     "DPT",
+};
 
 const char* getWordTypeText(int enumVal) { return EnumStrings[enumVal]; }
+
+WordType getWordType(const char* name) {
+    int n = sizeof(EnumStrings) / sizeof(EnumStrings[0]);
+    size_t i = 0;
+    while (i < n) {
+        if (strcmp(EnumStrings[i], name) == 0) {
+            return WordType(i);
+        }
+        i++;
+    }
+    return WordType::NONE;
+}
+
 
 #endif  // SRC_CORE_WTYPE_H_

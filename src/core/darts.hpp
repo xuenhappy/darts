@@ -75,8 +75,7 @@ class Atom {
                 }
             } else {
                 std::set<WordType> C;
-                std::set_intersection(tags->begin(), tags->end(),
-                                      otags->begin(), otags->end(),
+                std::set_intersection(tags->begin(), tags->end(), otags->begin(), otags->end(),
                                       std::inserter(C, C.begin()));
                 if (!C.empty()) {
                     this->tags->clear();
@@ -114,7 +113,7 @@ class AtomList {
     explicit AtomList(const std::string &str) {
         data.reserve(str.length() / 3 + 5);
         content = str;
-        atomSplit(str, [&](const char *astr, WordType ttype, size_t s, size_t e) {
+        atomSplit(str.c_str(), [&](const char *astr, WordType ttype, size_t s, size_t e) {
             auto atom = std::make_shared<Atom>(astr, s, e);
             atom->addTag(ttype);
             this->data.push_back(atom);
@@ -133,13 +132,9 @@ class AtomList {
         data.clear();
     }
 
-    size_t size() const {
-        return data.size();
-    }
+    size_t size() const { return data.size(); }
 
-    ~AtomList() {
-        clear();
-    }
+    ~AtomList() { clear(); }
 
     /**
      * @brief Get the Atom object
@@ -240,9 +235,7 @@ class Word {
      *
      * @param tags
      */
-    void addTags(std::set<WordType> *tags) {
-        this->word->addTags(tags);
-    }
+    void addTags(std::set<WordType> *tags) { this->word->addTags(tags); }
 };
 
 typedef struct _Cursor {
@@ -276,13 +269,9 @@ class CellMap {
     size_t rows, colums, size;
 
    public:
-    Cursor Head() {
-        return this->head;
-    }
+    Cursor Head() { return this->head; }
 
-    size_t Size() const {
-        return this->size;
-    }
+    size_t Size() const { return this->size; }
 
     CellMap() {
         this->head = makeCursor(std::make_shared<Word>(nullptr, -1, 0), NULL, NULL);

@@ -159,8 +159,6 @@ int initializeMap() {
  */
 std::string normalizeStr(const std::string& str) {
     std::stringstream output;
-
-
     utf8_iter ITER;
     utf8_init(&ITER, str.c_str());
     std::string tmps;
