@@ -67,7 +67,7 @@ const std::string getResource(const std::string &spath) {
         }
     }
 
-    char *env = getenv("DARTS_PATH");
+    char *env = getenv("DARTS_CONF_PATH");
     if (!env) {
         return spath;
     }

@@ -21,14 +21,13 @@
 
 int main(int argc, char *argv[]) {
     initUtils();
+    std::cout << normalizeStr("这是一段中文测试；看】🅿Ａ,Ｂ,Ｃ,Ｄ,Ｅ,Ｆ,Ｇ,Ｈ,Ｉ,Ｊ,Ｋ,Ｌ,Ｍ,Ｎ,Ｏ,看？") << std::endl;
     std::cout << getResource("test1") << std::endl;
     std::cout << getResource("/test1") << std::endl;
     std::cout << getResource("test1/tst") << std::endl;
 
     argparse::ArgumentParser program("darts");
-    program.add_argument("square")
-        .help("display the square of a given integer")
-        .scan<'i', int>();
+    program.add_argument("square").help("display the square of a given integer").scan<'i', int>();
 
     try {
         program.parse_args(argc, argv);

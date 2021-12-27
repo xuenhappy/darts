@@ -17,15 +17,15 @@
 #include "pinyin.hpp"
 
 void initUtils() {
-  if (!loadCharMap()) {
-    exit(1);
-  }
-  if (!loadPinyin()) {
-    exit(1);
-  }
-  if (!initializeMap()) {
-    exit(1);
-  }
+    if (loadCharMap()) {
+        exit(1);
+    }
+    if (loadPinyin()) {
+        exit(1);
+    }
+    if (initializeMap()) {
+        exit(1);
+    }
 }
 
 #endif  // SRC_UTILS_UTILS_BASE_HPP_

@@ -13,6 +13,7 @@
 #ifndef SRC_UTILS_NORM_CHR_HPP_
 
 #include <json/json.h>
+#include <stdint.h>
 
 #include <fstream>
 #include <map>
@@ -33,7 +34,69 @@ std::map<std::string, std::string> _WordMap;
  * @brief add some special words map
  *
  */
-void _addWordMap() {}
+
+
+void _addWordMap() {
+    // basic chars
+    for (uint32_t i = 0; i < 0x20 + 1; i++) {
+        _WordMap[codeStr(i)] = ' ';
+    }
+    _WordMap[codeStr(0x7F)] = ' ';
+    for (uint32_t i = 8198; i < 8208; i++) {
+        _WordMap[codeStr(i)] = ' ';
+    }
+    for (uint32_t i = 8232; i < 8240; i++) {
+        _WordMap[codeStr(i)] = ' ';
+    }
+    for (uint32_t i = 8287; i < 8304; i++) {
+        _WordMap[codeStr(i)] = ' ';
+    }
+    for (uint32_t i = 0xFE00; i < 0xFE0F + 1; i++) {
+        _WordMap[codeStr(i)] = ' ';
+    }
+    for (uint32_t i = 65281; i < 65374 + 1; i++) {
+        _WordMap[codeStr(i)] = codeStr(i - 65248);
+    }
+    _WordMap[codeStr(12288)] = codeStr(32);
+
+
+    // special map
+    std::map<std::string, std::string> special = {
+        {"“", "\""},  {"”", "\""},  {"、", ","},  {"〜", "~"},  {"～", "~"},  {"－", "-"},  {"–", "-"},
+        {"\r", "\n"}, {"︳", "|"},  {"▎", "|"},   {"ⅰ", "i"},   {"丨", "|"},  {"│", "|"},   {"︱", "|"},
+        {"｜", "|"},  {"／", "/"},  {"『", "《"}, {"《", "《"}, {"〖", "《"}, {"】", "》"}, {"〗", "》"},
+        {"【", "《"}, {"》", "》"}, {"』", "》"}, {"「", "《"}, {"」", "》"}, {"❬", "《"},  {"❭", "》"},
+        {"❮", "《"},  {"❯", "》"},  {"❰", "《"},  {"❱", "》"},  {"〘", "《"}, {"〙", "》"}, {"〚", "《"},
+        {"〛", "》"}, {"〉", "》"}, {"《", "《"}, {"》", "》"}, {"「", "《"}, {"」", "》"}, {"『", "《"},
+        {"』", "》"}, {"【", "《"}, {"】", "》"}, {"〔", "《"}, {"〕", "》"}, {"〖", "《"}, {"〗", "》"}};
+    for (auto kv : special) {
+        _WordMap[kv.first] = kv.second;
+    }
+
+
+    // check wordmap and fix it
+    std::map<std::string, std::string> _TMP;
+    for (auto kv : _WordMap) {
+        if (kv.first != kv.second) {
+            _TMP[kv.first] = kv.second;
+        }
+    }
+
+
+    // '\n' don't replace,\t replace 4 space empty,notice!!!!!!!!!!
+    _TMP.erase("\n");
+    _TMP["\t"] = "    ";
+    _TMP.erase(" ");
+
+    _WordMap.clear();
+    for (auto kv : _TMP) {
+        if (_TMP.find(kv.second) != _TMP.end()) {
+            _WordMap[kv.first] = _TMP[kv.second];
+        } else {
+            _WordMap[kv.first] = kv.second;
+        }
+    }
+}
 
 /**
  * @brief 执行初始化
@@ -97,9 +160,10 @@ int initializeMap() {
 std::string normalizeStr(const std::string& str) {
     std::stringstream output;
 
+
     utf8_iter ITER;
     utf8_init(&ITER, str.c_str());
-    const char* tmps;
+    std::string tmps;
     while (utf8_next(&ITER)) {
         tmps = utf8_getchar(&ITER);
         if (_WordMap.find(tmps) != _WordMap.end()) {
