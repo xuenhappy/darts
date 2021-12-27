@@ -93,12 +93,11 @@ class Segment {
      */
     void selectPath(std::map<int, std::vector<GraphEdge> *> &graph, std::vector<int> &bestPaths) {
         auto sz = graph.size();
-        std::vector<double> dist(sz);
-        std::vector<int> prev(sz);
-        for (auto i = 0; i < sz; ++i) {
-            dist[i] = -1.0;
-            prev[i] = -2;
-        }
+        std::vector<double> dist;
+        dist.assign(sz, -1.0);
+        std::vector<int> prev;
+        prev.assign(sz, -2);
+
         std::set<int> used;
         for (auto j = 1; j < sz; j++) {
             used.insert(j);
@@ -187,9 +186,7 @@ class Segment {
     }
 
    public:
-    explicit Segment(std::shared_ptr<CellPersenter> quantizer) {
-        this->quantizer = quantizer;
-    }
+    explicit Segment(std::shared_ptr<CellPersenter> quantizer) { this->quantizer = quantizer; }
     ~Segment() {
         if (this->quantizer) {
             this->quantizer = nullptr;
@@ -219,9 +216,7 @@ class Segment {
         auto cmap = new CellMap();
         buildMap(atomList, cmap);
         if (maxMode) {
-            auto call = [&ret](Cursor cur) {
-                ret.push_back(cur->val);
-            };
+            auto call = [&ret](Cursor cur) { ret.push_back(cur->val); };
             cmap->iterRow(NULL, -1, call);
         } else {
             splitContent(atomList, cmap, ret);

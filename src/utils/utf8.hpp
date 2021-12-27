@@ -289,11 +289,7 @@ static const uint8_t table_utf8[] = {0, 0, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC};
 
 const char* unicode_converter(uint32_t codepoint, uint8_t size) {
     static char str[10];
-    for (size_t i = 0; i < 10; i++) {
-        str[i] = '\0';
-    }
-
-
+    memset(str, '\0', sizeof(str));
     if (size == 0) return str;
 
     if (size == 1) {
@@ -305,7 +301,6 @@ const char* unicode_converter(uint32_t codepoint, uint8_t size) {
         str[i] = 0x80 | (codepoint & 0x3F);
         codepoint = codepoint >> 6;
     }
-
     str[0] = table_utf8[size] | codepoint;
 
     return str;
