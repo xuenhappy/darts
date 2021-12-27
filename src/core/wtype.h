@@ -13,6 +13,7 @@
 #ifndef SRC_CORE_WTYPE_H_
 #define SRC_CORE_WTYPE_H_
 #include <algorithm>
+#include <cstring>
 #include <string>
 enum WordType {
     NONE,
