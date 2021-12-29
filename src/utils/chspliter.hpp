@@ -79,8 +79,9 @@ WordType charType(uint32_t code) {
     // if (!std::iswprint(code)) {
     //     return WordType::POS;
     // }
-    if (_charType.find(code) != _charType.end()) {
-        return _charType[code];
+    auto it = _charType.find(code);
+    if (it != _charType.end()) {
+        return it->second;
     }
 
     if (code < 255) {

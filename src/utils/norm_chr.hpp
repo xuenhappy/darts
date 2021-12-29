@@ -162,10 +162,12 @@ std::string normalizeStr(const std::string& str) {
     utf8_iter ITER;
     utf8_init(&ITER, str.c_str());
     std::string tmps;
+    std::map<std::string, std::string>::const_iterator it;
     while (utf8_next(&ITER)) {
         tmps = utf8_getchar(&ITER);
-        if (_WordMap.find(tmps) != _WordMap.end()) {
-            output << _WordMap.at(tmps);
+        it = _WordMap.find(tmps);
+        if (it != _WordMap.end()) {
+            output << it->second;
         } else {
             output << tmps;
         }

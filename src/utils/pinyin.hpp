@@ -101,8 +101,9 @@ int loadPinyin() {
  * @return const PinyinInfo*
  */
 const std::shared_ptr<PinyinInfo> pinyin(const uint32_t word) {
-    if (_WordPinyin.find(word) != _WordPinyin.end()) {
-        return _WordPinyin[word];
+    auto it = _WordPinyin.find(word);
+    if (it != _WordPinyin.end()) {
+        return it->second;
     }
     return nullptr;
 }
