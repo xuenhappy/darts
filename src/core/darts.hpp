@@ -100,7 +100,7 @@ class Atom {
                 tags.push_back(getWordTypeText(t));
             }
         }
-        output << "Atom['" << D.image << "',type={" << join(tags, ",") << "}]";
+        output << "Atom['" << D.image << "',{" << join(tags, ",") << "}]";
 
         return output;
     }

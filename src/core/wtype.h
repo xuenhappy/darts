@@ -17,7 +17,7 @@
 #include <string>
 enum WordType {
     NONE,
-    UNK,
+    WUNK,
     POS,
     NUM,
     ENG,
@@ -50,7 +50,7 @@ enum WordType {
 };
 
 static const char* EnumStrings[] = {
-    "NONE",  "UNK", "POS",  "NUM",  "ENG",  "CJK",  "EMPTY", "SYMBOLS", "FACE", "ARROW", "RUSH",
+    "NONE",  "WUNK", "POS",  "NUM",  "ENG",  "CJK",  "EMPTY", "SYMBOLS", "FACE", "ARROW", "RUSH",
     "ORDER", "IP",  "CNUM", "KEYW", "TIME", "MOTH", "DAY",   "EMAIL",   "URL",  "TMS",   "TMR",
     "NAME",  "LOC", "CAM",  "ACD",  "SCH",  "MAJ",  "COM",   "TIL",     "DPT",
 };

@@ -93,7 +93,7 @@ WordType charType(uint32_t code) {
     if (0x3400 <= code && code <= 0x4DB5) {
         return WordType::CJK;
     }
-    return WordType::UNK;
+    return WordType::WUNK;
 }
 
 /**
