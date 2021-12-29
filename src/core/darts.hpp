@@ -280,6 +280,10 @@ class CellMap {
 
     size_t Size() const { return this->size; }
 
+    size_t Row() const { return this->rows; }
+
+    size_t Column() const { return this->colums; }
+
     CellMap() {
         this->head = makeCursor(std::make_shared<Word>(nullptr, -1, 0), NULL, NULL);
         this->head->idx = -1;

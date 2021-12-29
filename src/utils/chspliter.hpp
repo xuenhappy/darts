@@ -22,6 +22,7 @@
 
 #include "../core/wtype.h"
 #include "file_utils.hpp"
+#include "str_utils.hpp"
 #include "utf8.hpp"
 
 /**
@@ -37,6 +38,28 @@ int loadCharMap() {
         std::cerr << "open data " << dat << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
+    std::string head("-%");
+    std::string line;
+    WordType prefix = WordType::NONE;
+    while (std::getline(in, line)) {
+        darts::trim(line);
+        if (line.empty()) {
+            continue;
+        }
+        if (!strncmp(line.c_str(), head.c_str(), head.size())) {
+            prefix = getWordType(line.substr(head.size()).c_str());
+            if (prefix == WordType::NONE) {
+                std::cerr << "WARN:Bad word type tag name" << line.substr(head.size()) << std::endl;
+            }
+            continue;
+        }
+        utf8_iter ITER;
+        utf8_init(&ITER, line.c_str());
+        while (utf8_next(&ITER)) {
+            _charType[ITER.codepoint] = prefix;
+        }
+    }
+
 
     in.close();
     return EXIT_SUCCESS;

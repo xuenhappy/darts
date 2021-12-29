@@ -43,7 +43,6 @@ std::string join(const std::vector<std::string> &v, const std::string &delt) {
     }
     return ss.str();
 }
-}  // namespace darts
 
 
 /**
@@ -86,4 +85,23 @@ static inline std::string trim_copy(const char *cs) {
     return trim(s);
 }
 
+/**
+ * @brief split a give line by a delimiter
+ *
+ * @param s
+ * @param delimiter
+ * @param res
+ */
+static inline void split(const std::string &s, const std::string &delimiter, std::vector<std::string> &res) {
+    size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+    while ((pos_end = s.find(delimiter, pos_start)) != std::string::npos) {
+        res.push_back(s.substr(pos_start, pos_end - pos_start));
+        pos_start = pos_end + delim_len;
+    }
+    if (pos_end < s.length()) {
+        res.push_back(s.substr(pos_start));
+    }
+}
+
+}  // namespace darts
 #endif  // SRC_UTILS_STR_UTILS_HPP_
