@@ -385,15 +385,139 @@ class DRegexDat final :
   // accessors -------------------------------------------------------
 
   enum : int {
-    kCodeMapFieldNumber = 8,
-    kVFieldNumber = 6,
-    kOutPutFieldNumber = 7,
     kCheckFieldNumber = 2,
     kBaseFieldNumber = 3,
     kFailFieldNumber = 4,
     kLFieldNumber = 5,
+    kVFieldNumber = 6,
+    kOutPutFieldNumber = 7,
+    kCodeMapFieldNumber = 8,
     kMaxLenFieldNumber = 1,
   };
+  // repeated int64 Check = 2;
+  int check_size() const;
+  private:
+  int _internal_check_size() const;
+  public:
+  void clear_check();
+  private:
+  int64_t _internal_check(int index) const;
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+      _internal_check() const;
+  void _internal_add_check(int64_t value);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+      _internal_mutable_check();
+  public:
+  int64_t check(int index) const;
+  void set_check(int index, int64_t value);
+  void add_check(int64_t value);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+      check() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+      mutable_check();
+
+  // repeated int64 Base = 3;
+  int base_size() const;
+  private:
+  int _internal_base_size() const;
+  public:
+  void clear_base();
+  private:
+  int64_t _internal_base(int index) const;
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+      _internal_base() const;
+  void _internal_add_base(int64_t value);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+      _internal_mutable_base();
+  public:
+  int64_t base(int index) const;
+  void set_base(int index, int64_t value);
+  void add_base(int64_t value);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+      base() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+      mutable_base();
+
+  // repeated int64 Fail = 4;
+  int fail_size() const;
+  private:
+  int _internal_fail_size() const;
+  public:
+  void clear_fail();
+  private:
+  int64_t _internal_fail(int index) const;
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+      _internal_fail() const;
+  void _internal_add_fail(int64_t value);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+      _internal_mutable_fail();
+  public:
+  int64_t fail(int index) const;
+  void set_fail(int index, int64_t value);
+  void add_fail(int64_t value);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+      fail() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+      mutable_fail();
+
+  // repeated int64 L = 5;
+  int l_size() const;
+  private:
+  int _internal_l_size() const;
+  public:
+  void clear_l();
+  private:
+  int64_t _internal_l(int index) const;
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+      _internal_l() const;
+  void _internal_add_l(int64_t value);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+      _internal_mutable_l();
+  public:
+  int64_t l(int index) const;
+  void set_l(int index, int64_t value);
+  void add_l(int64_t value);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+      l() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+      mutable_l();
+
+  // repeated .darts.DRegexDat.AItem V = 6;
+  int v_size() const;
+  private:
+  int _internal_v_size() const;
+  public:
+  void clear_v();
+  ::darts::DRegexDat_AItem* mutable_v(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem >*
+      mutable_v();
+  private:
+  const ::darts::DRegexDat_AItem& _internal_v(int index) const;
+  ::darts::DRegexDat_AItem* _internal_add_v();
+  public:
+  const ::darts::DRegexDat_AItem& v(int index) const;
+  ::darts::DRegexDat_AItem* add_v();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem >&
+      v() const;
+
+  // repeated .darts.DRegexDat.AItem OutPut = 7;
+  int output_size() const;
+  private:
+  int _internal_output_size() const;
+  public:
+  void clear_output();
+  ::darts::DRegexDat_AItem* mutable_output(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem >*
+      mutable_output();
+  private:
+  const ::darts::DRegexDat_AItem& _internal_output(int index) const;
+  ::darts::DRegexDat_AItem* _internal_add_output();
+  public:
+  const ::darts::DRegexDat_AItem& output(int index) const;
+  ::darts::DRegexDat_AItem* add_output();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem >&
+      output() const;
+
   // map<string, int32> CodeMap = 8;
   int codemap_size() const;
   private:
@@ -411,78 +535,6 @@ class DRegexDat final :
   ::PROTOBUF_NAMESPACE_ID::Map< std::string, int32_t >*
       mutable_codemap();
 
-  // .darts.DRegexDat.AItem V = 6;
-  bool has_v() const;
-  private:
-  bool _internal_has_v() const;
-  public:
-  void clear_v();
-  const ::darts::DRegexDat_AItem& v() const;
-  PROTOBUF_NODISCARD ::darts::DRegexDat_AItem* release_v();
-  ::darts::DRegexDat_AItem* mutable_v();
-  void set_allocated_v(::darts::DRegexDat_AItem* v);
-  private:
-  const ::darts::DRegexDat_AItem& _internal_v() const;
-  ::darts::DRegexDat_AItem* _internal_mutable_v();
-  public:
-  void unsafe_arena_set_allocated_v(
-      ::darts::DRegexDat_AItem* v);
-  ::darts::DRegexDat_AItem* unsafe_arena_release_v();
-
-  // .darts.DRegexDat.AItem OutPut = 7;
-  bool has_output() const;
-  private:
-  bool _internal_has_output() const;
-  public:
-  void clear_output();
-  const ::darts::DRegexDat_AItem& output() const;
-  PROTOBUF_NODISCARD ::darts::DRegexDat_AItem* release_output();
-  ::darts::DRegexDat_AItem* mutable_output();
-  void set_allocated_output(::darts::DRegexDat_AItem* output);
-  private:
-  const ::darts::DRegexDat_AItem& _internal_output() const;
-  ::darts::DRegexDat_AItem* _internal_mutable_output();
-  public:
-  void unsafe_arena_set_allocated_output(
-      ::darts::DRegexDat_AItem* output);
-  ::darts::DRegexDat_AItem* unsafe_arena_release_output();
-
-  // int64 Check = 2;
-  void clear_check();
-  int64_t check() const;
-  void set_check(int64_t value);
-  private:
-  int64_t _internal_check() const;
-  void _internal_set_check(int64_t value);
-  public:
-
-  // int64 Base = 3;
-  void clear_base();
-  int64_t base() const;
-  void set_base(int64_t value);
-  private:
-  int64_t _internal_base() const;
-  void _internal_set_base(int64_t value);
-  public:
-
-  // int64 Fail = 4;
-  void clear_fail();
-  int64_t fail() const;
-  void set_fail(int64_t value);
-  private:
-  int64_t _internal_fail() const;
-  void _internal_set_fail(int64_t value);
-  public:
-
-  // int64 L = 5;
-  void clear_l();
-  int64_t l() const;
-  void set_l(int64_t value);
-  private:
-  int64_t _internal_l() const;
-  void _internal_set_l(int64_t value);
-  public:
-
   // int32 MaxLen = 1;
   void clear_maxlen();
   int32_t maxlen() const;
@@ -499,17 +551,21 @@ class DRegexDat final :
   template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t > check_;
+  mutable std::atomic<int> _check_cached_byte_size_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t > base_;
+  mutable std::atomic<int> _base_cached_byte_size_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t > fail_;
+  mutable std::atomic<int> _fail_cached_byte_size_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t > l_;
+  mutable std::atomic<int> _l_cached_byte_size_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem > v_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem > output_;
   ::PROTOBUF_NAMESPACE_ID::internal::MapField<
       DRegexDat_CodeMapEntry_DoNotUse,
       std::string, int32_t,
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::TYPE_STRING,
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::TYPE_INT32> codemap_;
-  ::darts::DRegexDat_AItem* v_;
-  ::darts::DRegexDat_AItem* output_;
-  int64_t check_;
-  int64_t base_;
-  int64_t fail_;
-  int64_t l_;
   int32_t maxlen_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_darts_2eproto;
@@ -598,264 +654,272 @@ inline void DRegexDat::set_maxlen(int32_t value) {
   // @@protoc_insertion_point(field_set:darts.DRegexDat.MaxLen)
 }
 
-// int64 Check = 2;
+// repeated int64 Check = 2;
+inline int DRegexDat::_internal_check_size() const {
+  return check_.size();
+}
+inline int DRegexDat::check_size() const {
+  return _internal_check_size();
+}
 inline void DRegexDat::clear_check() {
-  check_ = int64_t{0};
+  check_.Clear();
 }
-inline int64_t DRegexDat::_internal_check() const {
-  return check_;
+inline int64_t DRegexDat::_internal_check(int index) const {
+  return check_.Get(index);
 }
-inline int64_t DRegexDat::check() const {
+inline int64_t DRegexDat::check(int index) const {
   // @@protoc_insertion_point(field_get:darts.DRegexDat.Check)
-  return _internal_check();
+  return _internal_check(index);
 }
-inline void DRegexDat::_internal_set_check(int64_t value) {
-  
-  check_ = value;
-}
-inline void DRegexDat::set_check(int64_t value) {
-  _internal_set_check(value);
+inline void DRegexDat::set_check(int index, int64_t value) {
+  check_.Set(index, value);
   // @@protoc_insertion_point(field_set:darts.DRegexDat.Check)
 }
+inline void DRegexDat::_internal_add_check(int64_t value) {
+  check_.Add(value);
+}
+inline void DRegexDat::add_check(int64_t value) {
+  _internal_add_check(value);
+  // @@protoc_insertion_point(field_add:darts.DRegexDat.Check)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+DRegexDat::_internal_check() const {
+  return check_;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+DRegexDat::check() const {
+  // @@protoc_insertion_point(field_list:darts.DRegexDat.Check)
+  return _internal_check();
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+DRegexDat::_internal_mutable_check() {
+  return &check_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+DRegexDat::mutable_check() {
+  // @@protoc_insertion_point(field_mutable_list:darts.DRegexDat.Check)
+  return _internal_mutable_check();
+}
 
-// int64 Base = 3;
+// repeated int64 Base = 3;
+inline int DRegexDat::_internal_base_size() const {
+  return base_.size();
+}
+inline int DRegexDat::base_size() const {
+  return _internal_base_size();
+}
 inline void DRegexDat::clear_base() {
-  base_ = int64_t{0};
+  base_.Clear();
 }
-inline int64_t DRegexDat::_internal_base() const {
-  return base_;
+inline int64_t DRegexDat::_internal_base(int index) const {
+  return base_.Get(index);
 }
-inline int64_t DRegexDat::base() const {
+inline int64_t DRegexDat::base(int index) const {
   // @@protoc_insertion_point(field_get:darts.DRegexDat.Base)
-  return _internal_base();
+  return _internal_base(index);
 }
-inline void DRegexDat::_internal_set_base(int64_t value) {
-  
-  base_ = value;
-}
-inline void DRegexDat::set_base(int64_t value) {
-  _internal_set_base(value);
+inline void DRegexDat::set_base(int index, int64_t value) {
+  base_.Set(index, value);
   // @@protoc_insertion_point(field_set:darts.DRegexDat.Base)
 }
+inline void DRegexDat::_internal_add_base(int64_t value) {
+  base_.Add(value);
+}
+inline void DRegexDat::add_base(int64_t value) {
+  _internal_add_base(value);
+  // @@protoc_insertion_point(field_add:darts.DRegexDat.Base)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+DRegexDat::_internal_base() const {
+  return base_;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+DRegexDat::base() const {
+  // @@protoc_insertion_point(field_list:darts.DRegexDat.Base)
+  return _internal_base();
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+DRegexDat::_internal_mutable_base() {
+  return &base_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+DRegexDat::mutable_base() {
+  // @@protoc_insertion_point(field_mutable_list:darts.DRegexDat.Base)
+  return _internal_mutable_base();
+}
 
-// int64 Fail = 4;
+// repeated int64 Fail = 4;
+inline int DRegexDat::_internal_fail_size() const {
+  return fail_.size();
+}
+inline int DRegexDat::fail_size() const {
+  return _internal_fail_size();
+}
 inline void DRegexDat::clear_fail() {
-  fail_ = int64_t{0};
+  fail_.Clear();
 }
-inline int64_t DRegexDat::_internal_fail() const {
-  return fail_;
+inline int64_t DRegexDat::_internal_fail(int index) const {
+  return fail_.Get(index);
 }
-inline int64_t DRegexDat::fail() const {
+inline int64_t DRegexDat::fail(int index) const {
   // @@protoc_insertion_point(field_get:darts.DRegexDat.Fail)
-  return _internal_fail();
+  return _internal_fail(index);
 }
-inline void DRegexDat::_internal_set_fail(int64_t value) {
-  
-  fail_ = value;
-}
-inline void DRegexDat::set_fail(int64_t value) {
-  _internal_set_fail(value);
+inline void DRegexDat::set_fail(int index, int64_t value) {
+  fail_.Set(index, value);
   // @@protoc_insertion_point(field_set:darts.DRegexDat.Fail)
 }
+inline void DRegexDat::_internal_add_fail(int64_t value) {
+  fail_.Add(value);
+}
+inline void DRegexDat::add_fail(int64_t value) {
+  _internal_add_fail(value);
+  // @@protoc_insertion_point(field_add:darts.DRegexDat.Fail)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+DRegexDat::_internal_fail() const {
+  return fail_;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+DRegexDat::fail() const {
+  // @@protoc_insertion_point(field_list:darts.DRegexDat.Fail)
+  return _internal_fail();
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+DRegexDat::_internal_mutable_fail() {
+  return &fail_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+DRegexDat::mutable_fail() {
+  // @@protoc_insertion_point(field_mutable_list:darts.DRegexDat.Fail)
+  return _internal_mutable_fail();
+}
 
-// int64 L = 5;
+// repeated int64 L = 5;
+inline int DRegexDat::_internal_l_size() const {
+  return l_.size();
+}
+inline int DRegexDat::l_size() const {
+  return _internal_l_size();
+}
 inline void DRegexDat::clear_l() {
-  l_ = int64_t{0};
+  l_.Clear();
 }
-inline int64_t DRegexDat::_internal_l() const {
-  return l_;
+inline int64_t DRegexDat::_internal_l(int index) const {
+  return l_.Get(index);
 }
-inline int64_t DRegexDat::l() const {
+inline int64_t DRegexDat::l(int index) const {
   // @@protoc_insertion_point(field_get:darts.DRegexDat.L)
-  return _internal_l();
+  return _internal_l(index);
 }
-inline void DRegexDat::_internal_set_l(int64_t value) {
-  
-  l_ = value;
-}
-inline void DRegexDat::set_l(int64_t value) {
-  _internal_set_l(value);
+inline void DRegexDat::set_l(int index, int64_t value) {
+  l_.Set(index, value);
   // @@protoc_insertion_point(field_set:darts.DRegexDat.L)
 }
-
-// .darts.DRegexDat.AItem V = 6;
-inline bool DRegexDat::_internal_has_v() const {
-  return this != internal_default_instance() && v_ != nullptr;
+inline void DRegexDat::_internal_add_l(int64_t value) {
+  l_.Add(value);
 }
-inline bool DRegexDat::has_v() const {
-  return _internal_has_v();
+inline void DRegexDat::add_l(int64_t value) {
+  _internal_add_l(value);
+  // @@protoc_insertion_point(field_add:darts.DRegexDat.L)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+DRegexDat::_internal_l() const {
+  return l_;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >&
+DRegexDat::l() const {
+  // @@protoc_insertion_point(field_list:darts.DRegexDat.L)
+  return _internal_l();
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+DRegexDat::_internal_mutable_l() {
+  return &l_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< int64_t >*
+DRegexDat::mutable_l() {
+  // @@protoc_insertion_point(field_mutable_list:darts.DRegexDat.L)
+  return _internal_mutable_l();
+}
+
+// repeated .darts.DRegexDat.AItem V = 6;
+inline int DRegexDat::_internal_v_size() const {
+  return v_.size();
+}
+inline int DRegexDat::v_size() const {
+  return _internal_v_size();
 }
 inline void DRegexDat::clear_v() {
-  if (GetArenaForAllocation() == nullptr && v_ != nullptr) {
-    delete v_;
-  }
-  v_ = nullptr;
+  v_.Clear();
 }
-inline const ::darts::DRegexDat_AItem& DRegexDat::_internal_v() const {
-  const ::darts::DRegexDat_AItem* p = v_;
-  return p != nullptr ? *p : reinterpret_cast<const ::darts::DRegexDat_AItem&>(
-      ::darts::_DRegexDat_AItem_default_instance_);
+inline ::darts::DRegexDat_AItem* DRegexDat::mutable_v(int index) {
+  // @@protoc_insertion_point(field_mutable:darts.DRegexDat.V)
+  return v_.Mutable(index);
 }
-inline const ::darts::DRegexDat_AItem& DRegexDat::v() const {
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem >*
+DRegexDat::mutable_v() {
+  // @@protoc_insertion_point(field_mutable_list:darts.DRegexDat.V)
+  return &v_;
+}
+inline const ::darts::DRegexDat_AItem& DRegexDat::_internal_v(int index) const {
+  return v_.Get(index);
+}
+inline const ::darts::DRegexDat_AItem& DRegexDat::v(int index) const {
   // @@protoc_insertion_point(field_get:darts.DRegexDat.V)
-  return _internal_v();
+  return _internal_v(index);
 }
-inline void DRegexDat::unsafe_arena_set_allocated_v(
-    ::darts::DRegexDat_AItem* v) {
-  if (GetArenaForAllocation() == nullptr) {
-    delete reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(v_);
-  }
-  v_ = v;
-  if (v) {
-    
-  } else {
-    
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:darts.DRegexDat.V)
+inline ::darts::DRegexDat_AItem* DRegexDat::_internal_add_v() {
+  return v_.Add();
 }
-inline ::darts::DRegexDat_AItem* DRegexDat::release_v() {
-  
-  ::darts::DRegexDat_AItem* temp = v_;
-  v_ = nullptr;
-#ifdef PROTOBUF_FORCE_COPY_IN_RELEASE
-  auto* old =  reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(temp);
-  temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-  if (GetArenaForAllocation() == nullptr) { delete old; }
-#else  // PROTOBUF_FORCE_COPY_IN_RELEASE
-  if (GetArenaForAllocation() != nullptr) {
-    temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-  }
-#endif  // !PROTOBUF_FORCE_COPY_IN_RELEASE
-  return temp;
+inline ::darts::DRegexDat_AItem* DRegexDat::add_v() {
+  ::darts::DRegexDat_AItem* _add = _internal_add_v();
+  // @@protoc_insertion_point(field_add:darts.DRegexDat.V)
+  return _add;
 }
-inline ::darts::DRegexDat_AItem* DRegexDat::unsafe_arena_release_v() {
-  // @@protoc_insertion_point(field_release:darts.DRegexDat.V)
-  
-  ::darts::DRegexDat_AItem* temp = v_;
-  v_ = nullptr;
-  return temp;
-}
-inline ::darts::DRegexDat_AItem* DRegexDat::_internal_mutable_v() {
-  
-  if (v_ == nullptr) {
-    auto* p = CreateMaybeMessage<::darts::DRegexDat_AItem>(GetArenaForAllocation());
-    v_ = p;
-  }
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem >&
+DRegexDat::v() const {
+  // @@protoc_insertion_point(field_list:darts.DRegexDat.V)
   return v_;
 }
-inline ::darts::DRegexDat_AItem* DRegexDat::mutable_v() {
-  ::darts::DRegexDat_AItem* _msg = _internal_mutable_v();
-  // @@protoc_insertion_point(field_mutable:darts.DRegexDat.V)
-  return _msg;
-}
-inline void DRegexDat::set_allocated_v(::darts::DRegexDat_AItem* v) {
-  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
-  if (message_arena == nullptr) {
-    delete v_;
-  }
-  if (v) {
-    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
-        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::darts::DRegexDat_AItem>::GetOwningArena(v);
-    if (message_arena != submessage_arena) {
-      v = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
-          message_arena, v, submessage_arena);
-    }
-    
-  } else {
-    
-  }
-  v_ = v;
-  // @@protoc_insertion_point(field_set_allocated:darts.DRegexDat.V)
-}
 
-// .darts.DRegexDat.AItem OutPut = 7;
-inline bool DRegexDat::_internal_has_output() const {
-  return this != internal_default_instance() && output_ != nullptr;
+// repeated .darts.DRegexDat.AItem OutPut = 7;
+inline int DRegexDat::_internal_output_size() const {
+  return output_.size();
 }
-inline bool DRegexDat::has_output() const {
-  return _internal_has_output();
+inline int DRegexDat::output_size() const {
+  return _internal_output_size();
 }
 inline void DRegexDat::clear_output() {
-  if (GetArenaForAllocation() == nullptr && output_ != nullptr) {
-    delete output_;
-  }
-  output_ = nullptr;
+  output_.Clear();
 }
-inline const ::darts::DRegexDat_AItem& DRegexDat::_internal_output() const {
-  const ::darts::DRegexDat_AItem* p = output_;
-  return p != nullptr ? *p : reinterpret_cast<const ::darts::DRegexDat_AItem&>(
-      ::darts::_DRegexDat_AItem_default_instance_);
-}
-inline const ::darts::DRegexDat_AItem& DRegexDat::output() const {
-  // @@protoc_insertion_point(field_get:darts.DRegexDat.OutPut)
-  return _internal_output();
-}
-inline void DRegexDat::unsafe_arena_set_allocated_output(
-    ::darts::DRegexDat_AItem* output) {
-  if (GetArenaForAllocation() == nullptr) {
-    delete reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(output_);
-  }
-  output_ = output;
-  if (output) {
-    
-  } else {
-    
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:darts.DRegexDat.OutPut)
-}
-inline ::darts::DRegexDat_AItem* DRegexDat::release_output() {
-  
-  ::darts::DRegexDat_AItem* temp = output_;
-  output_ = nullptr;
-#ifdef PROTOBUF_FORCE_COPY_IN_RELEASE
-  auto* old =  reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(temp);
-  temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-  if (GetArenaForAllocation() == nullptr) { delete old; }
-#else  // PROTOBUF_FORCE_COPY_IN_RELEASE
-  if (GetArenaForAllocation() != nullptr) {
-    temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-  }
-#endif  // !PROTOBUF_FORCE_COPY_IN_RELEASE
-  return temp;
-}
-inline ::darts::DRegexDat_AItem* DRegexDat::unsafe_arena_release_output() {
-  // @@protoc_insertion_point(field_release:darts.DRegexDat.OutPut)
-  
-  ::darts::DRegexDat_AItem* temp = output_;
-  output_ = nullptr;
-  return temp;
-}
-inline ::darts::DRegexDat_AItem* DRegexDat::_internal_mutable_output() {
-  
-  if (output_ == nullptr) {
-    auto* p = CreateMaybeMessage<::darts::DRegexDat_AItem>(GetArenaForAllocation());
-    output_ = p;
-  }
-  return output_;
-}
-inline ::darts::DRegexDat_AItem* DRegexDat::mutable_output() {
-  ::darts::DRegexDat_AItem* _msg = _internal_mutable_output();
+inline ::darts::DRegexDat_AItem* DRegexDat::mutable_output(int index) {
   // @@protoc_insertion_point(field_mutable:darts.DRegexDat.OutPut)
-  return _msg;
+  return output_.Mutable(index);
 }
-inline void DRegexDat::set_allocated_output(::darts::DRegexDat_AItem* output) {
-  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
-  if (message_arena == nullptr) {
-    delete output_;
-  }
-  if (output) {
-    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
-        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::darts::DRegexDat_AItem>::GetOwningArena(output);
-    if (message_arena != submessage_arena) {
-      output = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
-          message_arena, output, submessage_arena);
-    }
-    
-  } else {
-    
-  }
-  output_ = output;
-  // @@protoc_insertion_point(field_set_allocated:darts.DRegexDat.OutPut)
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem >*
+DRegexDat::mutable_output() {
+  // @@protoc_insertion_point(field_mutable_list:darts.DRegexDat.OutPut)
+  return &output_;
+}
+inline const ::darts::DRegexDat_AItem& DRegexDat::_internal_output(int index) const {
+  return output_.Get(index);
+}
+inline const ::darts::DRegexDat_AItem& DRegexDat::output(int index) const {
+  // @@protoc_insertion_point(field_get:darts.DRegexDat.OutPut)
+  return _internal_output(index);
+}
+inline ::darts::DRegexDat_AItem* DRegexDat::_internal_add_output() {
+  return output_.Add();
+}
+inline ::darts::DRegexDat_AItem* DRegexDat::add_output() {
+  ::darts::DRegexDat_AItem* _add = _internal_add_output();
+  // @@protoc_insertion_point(field_add:darts.DRegexDat.OutPut)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::darts::DRegexDat_AItem >&
+DRegexDat::output() const {
+  // @@protoc_insertion_point(field_list:darts.DRegexDat.OutPut)
+  return output_;
 }
 
 // map<string, int32> CodeMap = 8;

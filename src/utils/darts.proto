@@ -2,14 +2,14 @@ syntax="proto3";
 package darts;
 message DRegexDat{
     int32 MaxLen=1;
-    int64  Check=2; 
-    int64  Base=3;
-    int64  Fail=4; 
-    int64  L=5;
+    repeated int64  Check=2; 
+    repeated int64  Base=3;
+    repeated int64  Fail=4; 
+    repeated int64  L=5;
     message AItem {
         repeated int64  item=1;
     }
-    AItem V=6;
-    AItem OutPut=7;              
+    repeated AItem V=6;
+    repeated AItem OutPut=7;              
     map<string,int32> CodeMap=8;
 }

@@ -16,6 +16,7 @@
 #include <queue>
 #include <vector>
 
+#include "darts.pb.h"
 #include "utf8.hpp"
 namespace darts {
 
@@ -134,6 +135,17 @@ class Trie {
             return false;
         });
     }
+    friend std::ostream &operator<<(std::ostream &out, const Trie &my) {
+        darts::DRegexDat dat;
+        dat.set_maxlen(my.MaxLen);
+        dat.set_check()
+        if (!dat.SerializePartialToOstream(&out)) {
+            std::cerr << "Failed to write adress book" << std::endl;
+        }
+        return out;
+    }
+
+    friend std::istream &operator>>(std::istream &in, Trie &my) { return in; }
 }
 
 

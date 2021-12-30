@@ -43,13 +43,17 @@ struct DRegexDat_CodeMapEntry_DoNotUseDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT DRegexDat_CodeMapEntry_DoNotUseDefaultTypeInternal _DRegexDat_CodeMapEntry_DoNotUse_default_instance_;
 constexpr DRegexDat::DRegexDat(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
-  : codemap_(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{})
-  , v_(nullptr)
-  , output_(nullptr)
-  , check_(int64_t{0})
-  , base_(int64_t{0})
-  , fail_(int64_t{0})
-  , l_(int64_t{0})
+  : check_()
+  , _check_cached_byte_size_(0)
+  , base_()
+  , _base_cached_byte_size_(0)
+  , fail_()
+  , _fail_cached_byte_size_(0)
+  , l_()
+  , _l_cached_byte_size_(0)
+  , v_()
+  , output_()
+  , codemap_(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{})
   , maxlen_(0){}
 struct DRegexDatDefaultTypeInternal {
   constexpr DRegexDatDefaultTypeInternal()
@@ -112,9 +116,9 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 
 const char descriptor_table_protodef_darts_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
   "\n\013darts.proto\022\005darts\"\223\002\n\tDRegexDat\022\016\n\006Ma"
-  "xLen\030\001 \001(\005\022\r\n\005Check\030\002 \001(\003\022\014\n\004Base\030\003 \001(\003\022"
-  "\014\n\004Fail\030\004 \001(\003\022\t\n\001L\030\005 \001(\003\022!\n\001V\030\006 \001(\0132\026.da"
-  "rts.DRegexDat.AItem\022&\n\006OutPut\030\007 \001(\0132\026.da"
+  "xLen\030\001 \001(\005\022\r\n\005Check\030\002 \003(\003\022\014\n\004Base\030\003 \003(\003\022"
+  "\014\n\004Fail\030\004 \003(\003\022\t\n\001L\030\005 \003(\003\022!\n\001V\030\006 \003(\0132\026.da"
+  "rts.DRegexDat.AItem\022&\n\006OutPut\030\007 \003(\0132\026.da"
   "rts.DRegexDat.AItem\022.\n\007CodeMap\030\010 \003(\0132\035.d"
   "arts.DRegexDat.CodeMapEntry\032\025\n\005AItem\022\014\n\004"
   "item\030\001 \003(\003\032.\n\014CodeMapEntry\022\013\n\003key\030\001 \001(\t\022"
@@ -345,21 +349,17 @@ void DRegexDat_CodeMapEntry_DoNotUse::MergeFrom(const DRegexDat_CodeMapEntry_DoN
 
 class DRegexDat::_Internal {
  public:
-  static const ::darts::DRegexDat_AItem& v(const DRegexDat* msg);
-  static const ::darts::DRegexDat_AItem& output(const DRegexDat* msg);
 };
 
-const ::darts::DRegexDat_AItem&
-DRegexDat::_Internal::v(const DRegexDat* msg) {
-  return *msg->v_;
-}
-const ::darts::DRegexDat_AItem&
-DRegexDat::_Internal::output(const DRegexDat* msg) {
-  return *msg->output_;
-}
 DRegexDat::DRegexDat(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  check_(arena),
+  base_(arena),
+  fail_(arena),
+  l_(arena),
+  v_(arena),
+  output_(arena),
   codemap_(arena) {
   SharedCtor();
   if (!is_message_owned) {
@@ -368,30 +368,21 @@ DRegexDat::DRegexDat(::PROTOBUF_NAMESPACE_ID::Arena* arena,
   // @@protoc_insertion_point(arena_constructor:darts.DRegexDat)
 }
 DRegexDat::DRegexDat(const DRegexDat& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  : ::PROTOBUF_NAMESPACE_ID::Message(),
+      check_(from.check_),
+      base_(from.base_),
+      fail_(from.fail_),
+      l_(from.l_),
+      v_(from.v_),
+      output_(from.output_) {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
   codemap_.MergeFrom(from.codemap_);
-  if (from._internal_has_v()) {
-    v_ = new ::darts::DRegexDat_AItem(*from.v_);
-  } else {
-    v_ = nullptr;
-  }
-  if (from._internal_has_output()) {
-    output_ = new ::darts::DRegexDat_AItem(*from.output_);
-  } else {
-    output_ = nullptr;
-  }
-  ::memcpy(&check_, &from.check_,
-    static_cast<size_t>(reinterpret_cast<char*>(&maxlen_) -
-    reinterpret_cast<char*>(&check_)) + sizeof(maxlen_));
+  maxlen_ = from.maxlen_;
   // @@protoc_insertion_point(copy_constructor:darts.DRegexDat)
 }
 
 inline void DRegexDat::SharedCtor() {
-::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
-    reinterpret_cast<char*>(&v_) - reinterpret_cast<char*>(this)),
-    0, static_cast<size_t>(reinterpret_cast<char*>(&maxlen_) -
-    reinterpret_cast<char*>(&v_)) + sizeof(maxlen_));
+maxlen_ = 0;
 }
 
 DRegexDat::~DRegexDat() {
@@ -403,8 +394,6 @@ DRegexDat::~DRegexDat() {
 
 inline void DRegexDat::SharedDtor() {
   GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
-  if (this != internal_default_instance()) delete v_;
-  if (this != internal_default_instance()) delete output_;
 }
 
 void DRegexDat::ArenaDtor(void* object) {
@@ -427,18 +416,14 @@ void DRegexDat::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  check_.Clear();
+  base_.Clear();
+  fail_.Clear();
+  l_.Clear();
+  v_.Clear();
+  output_.Clear();
   codemap_.Clear();
-  if (GetArenaForAllocation() == nullptr && v_ != nullptr) {
-    delete v_;
-  }
-  v_ = nullptr;
-  if (GetArenaForAllocation() == nullptr && output_ != nullptr) {
-    delete output_;
-  }
-  output_ = nullptr;
-  ::memset(&check_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&maxlen_) -
-      reinterpret_cast<char*>(&check_)) + sizeof(maxlen_));
+  maxlen_ = 0;
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
@@ -456,51 +441,73 @@ const char* DRegexDat::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // int64 Check = 2;
+      // repeated int64 Check = 2;
       case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          check_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::PackedInt64Parser(_internal_mutable_check(), ptr, ctx);
+          CHK_(ptr);
+        } else if (static_cast<uint8_t>(tag) == 16) {
+          _internal_add_check(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
           CHK_(ptr);
         } else
           goto handle_unusual;
         continue;
-      // int64 Base = 3;
+      // repeated int64 Base = 3;
       case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
-          base_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::PackedInt64Parser(_internal_mutable_base(), ptr, ctx);
+          CHK_(ptr);
+        } else if (static_cast<uint8_t>(tag) == 24) {
+          _internal_add_base(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
           CHK_(ptr);
         } else
           goto handle_unusual;
         continue;
-      // int64 Fail = 4;
+      // repeated int64 Fail = 4;
       case 4:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
-          fail_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::PackedInt64Parser(_internal_mutable_fail(), ptr, ctx);
+          CHK_(ptr);
+        } else if (static_cast<uint8_t>(tag) == 32) {
+          _internal_add_fail(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
           CHK_(ptr);
         } else
           goto handle_unusual;
         continue;
-      // int64 L = 5;
+      // repeated int64 L = 5;
       case 5:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
-          l_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::PackedInt64Parser(_internal_mutable_l(), ptr, ctx);
+          CHK_(ptr);
+        } else if (static_cast<uint8_t>(tag) == 40) {
+          _internal_add_l(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
           CHK_(ptr);
         } else
           goto handle_unusual;
         continue;
-      // .darts.DRegexDat.AItem V = 6;
+      // repeated .darts.DRegexDat.AItem V = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
-          ptr = ctx->ParseMessage(_internal_mutable_v(), ptr);
-          CHK_(ptr);
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_v(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<50>(ptr));
         } else
           goto handle_unusual;
         continue;
-      // .darts.DRegexDat.AItem OutPut = 7;
+      // repeated .darts.DRegexDat.AItem OutPut = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
-          ptr = ctx->ParseMessage(_internal_mutable_output(), ptr);
-          CHK_(ptr);
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_output(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<58>(ptr));
         } else
           goto handle_unusual;
         continue;
@@ -552,44 +559,56 @@ uint8_t* DRegexDat::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_maxlen(), target);
   }
 
-  // int64 Check = 2;
-  if (this->_internal_check() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(2, this->_internal_check(), target);
+  // repeated int64 Check = 2;
+  {
+    int byte_size = _check_cached_byte_size_.load(std::memory_order_relaxed);
+    if (byte_size > 0) {
+      target = stream->WriteInt64Packed(
+          2, _internal_check(), byte_size, target);
+    }
   }
 
-  // int64 Base = 3;
-  if (this->_internal_base() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(3, this->_internal_base(), target);
+  // repeated int64 Base = 3;
+  {
+    int byte_size = _base_cached_byte_size_.load(std::memory_order_relaxed);
+    if (byte_size > 0) {
+      target = stream->WriteInt64Packed(
+          3, _internal_base(), byte_size, target);
+    }
   }
 
-  // int64 Fail = 4;
-  if (this->_internal_fail() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(4, this->_internal_fail(), target);
+  // repeated int64 Fail = 4;
+  {
+    int byte_size = _fail_cached_byte_size_.load(std::memory_order_relaxed);
+    if (byte_size > 0) {
+      target = stream->WriteInt64Packed(
+          4, _internal_fail(), byte_size, target);
+    }
   }
 
-  // int64 L = 5;
-  if (this->_internal_l() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(5, this->_internal_l(), target);
+  // repeated int64 L = 5;
+  {
+    int byte_size = _l_cached_byte_size_.load(std::memory_order_relaxed);
+    if (byte_size > 0) {
+      target = stream->WriteInt64Packed(
+          5, _internal_l(), byte_size, target);
+    }
   }
 
-  // .darts.DRegexDat.AItem V = 6;
-  if (this->_internal_has_v()) {
+  // repeated .darts.DRegexDat.AItem V = 6;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_v_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
-      InternalWriteMessage(
-        6, _Internal::v(this), target, stream);
+      InternalWriteMessage(6, this->_internal_v(i), target, stream);
   }
 
-  // .darts.DRegexDat.AItem OutPut = 7;
-  if (this->_internal_has_output()) {
+  // repeated .darts.DRegexDat.AItem OutPut = 7;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_output_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
-      InternalWriteMessage(
-        7, _Internal::output(this), target, stream);
+      InternalWriteMessage(7, this->_internal_output(i), target, stream);
   }
 
   // map<string, int32> CodeMap = 8;
@@ -650,6 +669,80 @@ size_t DRegexDat::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  // repeated int64 Check = 2;
+  {
+    size_t data_size = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      Int64Size(this->check_);
+    if (data_size > 0) {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+            static_cast<int32_t>(data_size));
+    }
+    int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(data_size);
+    _check_cached_byte_size_.store(cached_size,
+                                    std::memory_order_relaxed);
+    total_size += data_size;
+  }
+
+  // repeated int64 Base = 3;
+  {
+    size_t data_size = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      Int64Size(this->base_);
+    if (data_size > 0) {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+            static_cast<int32_t>(data_size));
+    }
+    int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(data_size);
+    _base_cached_byte_size_.store(cached_size,
+                                    std::memory_order_relaxed);
+    total_size += data_size;
+  }
+
+  // repeated int64 Fail = 4;
+  {
+    size_t data_size = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      Int64Size(this->fail_);
+    if (data_size > 0) {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+            static_cast<int32_t>(data_size));
+    }
+    int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(data_size);
+    _fail_cached_byte_size_.store(cached_size,
+                                    std::memory_order_relaxed);
+    total_size += data_size;
+  }
+
+  // repeated int64 L = 5;
+  {
+    size_t data_size = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      Int64Size(this->l_);
+    if (data_size > 0) {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+            static_cast<int32_t>(data_size));
+    }
+    int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(data_size);
+    _l_cached_byte_size_.store(cached_size,
+                                    std::memory_order_relaxed);
+    total_size += data_size;
+  }
+
+  // repeated .darts.DRegexDat.AItem V = 6;
+  total_size += 1UL * this->_internal_v_size();
+  for (const auto& msg : this->v_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // repeated .darts.DRegexDat.AItem OutPut = 7;
+  total_size += 1UL * this->_internal_output_size();
+  for (const auto& msg : this->output_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
   // map<string, int32> CodeMap = 8;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(this->_internal_codemap_size());
@@ -657,40 +750,6 @@ size_t DRegexDat::ByteSizeLong() const {
       it = this->_internal_codemap().begin();
       it != this->_internal_codemap().end(); ++it) {
     total_size += DRegexDat_CodeMapEntry_DoNotUse::Funcs::ByteSizeLong(it->first, it->second);
-  }
-
-  // .darts.DRegexDat.AItem V = 6;
-  if (this->_internal_has_v()) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
-        *v_);
-  }
-
-  // .darts.DRegexDat.AItem OutPut = 7;
-  if (this->_internal_has_output()) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
-        *output_);
-  }
-
-  // int64 Check = 2;
-  if (this->_internal_check() != 0) {
-    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_check());
-  }
-
-  // int64 Base = 3;
-  if (this->_internal_base() != 0) {
-    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_base());
-  }
-
-  // int64 Fail = 4;
-  if (this->_internal_fail() != 0) {
-    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_fail());
-  }
-
-  // int64 L = 5;
-  if (this->_internal_l() != 0) {
-    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_l());
   }
 
   // int32 MaxLen = 1;
@@ -720,25 +779,13 @@ void DRegexDat::MergeFrom(const DRegexDat& from) {
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
+  check_.MergeFrom(from.check_);
+  base_.MergeFrom(from.base_);
+  fail_.MergeFrom(from.fail_);
+  l_.MergeFrom(from.l_);
+  v_.MergeFrom(from.v_);
+  output_.MergeFrom(from.output_);
   codemap_.MergeFrom(from.codemap_);
-  if (from._internal_has_v()) {
-    _internal_mutable_v()->::darts::DRegexDat_AItem::MergeFrom(from._internal_v());
-  }
-  if (from._internal_has_output()) {
-    _internal_mutable_output()->::darts::DRegexDat_AItem::MergeFrom(from._internal_output());
-  }
-  if (from._internal_check() != 0) {
-    _internal_set_check(from._internal_check());
-  }
-  if (from._internal_base() != 0) {
-    _internal_set_base(from._internal_base());
-  }
-  if (from._internal_fail() != 0) {
-    _internal_set_fail(from._internal_fail());
-  }
-  if (from._internal_l() != 0) {
-    _internal_set_l(from._internal_l());
-  }
   if (from._internal_maxlen() != 0) {
     _internal_set_maxlen(from._internal_maxlen());
   }
@@ -759,13 +806,14 @@ bool DRegexDat::IsInitialized() const {
 void DRegexDat::InternalSwap(DRegexDat* other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  check_.InternalSwap(&other->check_);
+  base_.InternalSwap(&other->base_);
+  fail_.InternalSwap(&other->fail_);
+  l_.InternalSwap(&other->l_);
+  v_.InternalSwap(&other->v_);
+  output_.InternalSwap(&other->output_);
   codemap_.InternalSwap(&other->codemap_);
-  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(DRegexDat, maxlen_)
-      + sizeof(DRegexDat::maxlen_)
-      - PROTOBUF_FIELD_OFFSET(DRegexDat, v_)>(
-          reinterpret_cast<char*>(&v_),
-          reinterpret_cast<char*>(&other->v_));
+  swap(maxlen_, other->maxlen_);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata DRegexDat::GetMetadata() const {
