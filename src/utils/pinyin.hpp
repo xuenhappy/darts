@@ -29,12 +29,12 @@
  */
 
 typedef struct _pinyin {
-    uint32_t code;
+    char32_t code;
     std::string key;
     std::vector<std::string> piyins;
 } PinyinInfo;
 
-static std::map<uint32_t, std::shared_ptr<PinyinInfo>> _WordPinyin;
+static std::map<char32_t, std::shared_ptr<PinyinInfo>> _WordPinyin;
 /**
  * @brief 加载拼音数据
  *
@@ -100,7 +100,7 @@ int loadPinyin() {
  * @param word
  * @return const PinyinInfo*
  */
-const std::shared_ptr<PinyinInfo> pinyin(const uint32_t word) {
+const std::shared_ptr<PinyinInfo> pinyin(const char32_t word) {
     auto it = _WordPinyin.find(word);
     if (it != _WordPinyin.end()) {
         return it->second;

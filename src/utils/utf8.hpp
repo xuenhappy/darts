@@ -28,10 +28,8 @@ typedef struct utf8_iter {
     uint32_t length;    // strlen()
 } utf8_iter;
 
-void utf8_init(utf8_iter* iter,
-               const char* ptr);  // all values to 0 and set ptr.
-void utf8_initEx(utf8_iter* iter, const char* ptr,
-                 uint32_t length);  // allows you to set a custom length.
+void utf8_init(utf8_iter* iter, const char* ptr);                     // all values to 0 and set ptr.
+void utf8_initEx(utf8_iter* iter, const char* ptr, uint32_t length);  // allows you to set a custom length.
 
 uint8_t utf8_next(utf8_iter* iter);      // returns 1 if there is a character in the next
                                          // position. If there is not, return 0.
@@ -219,7 +217,7 @@ const char* unicode_to_utf8(uint32_t codepoint) { return unicode_converter(codep
 
 // Internal use / Advanced use.
 
-////// UTF8 to Unicode
+// UTF8 to Unicode
 
 uint8_t utf8_charsize(const char* character) {
     if (character == NULL) return 0;
@@ -264,7 +262,7 @@ uint32_t utf8_converter(const char* character, uint8_t size) {
     return codepoint;
 }
 
-////// Unicode to UTF8
+// Unicode to UTF8
 
 uint8_t unicode_charsize(uint32_t codepoint) {
     if (codepoint == 0) return 0;
