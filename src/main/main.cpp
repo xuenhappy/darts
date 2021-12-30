@@ -16,6 +16,7 @@
 
 #include "../core/segment.hpp"
 #include "../utils/argparse.hpp"
+#include "../utils/dregex.hpp"
 #include "../utils/file_utils.hpp"
 #include "../utils/utils_base.hpp"
 
@@ -31,8 +32,14 @@ int main(int argc, char *argv[]) {
     std::cout << "normal: " << normals << std::endl;
     std::cout << "--------------------------------" << std::endl;
     std::cout << darts::AtomList(normals) << std::endl;
-
-
+    std::cout << "--------------------------------" << std::endl;
+    darts::Trie dat;
+    std::cout << "write pb file ..." << std::endl;
+    dat.writePb("test.pb");
+    std::cout << "load pb file ..." << std::endl;
+    darts::Trie newdat;
+    newdat.loadPb("test.pb");
+    std::cout << "--------------------------------" << std::endl;
     argparse::ArgumentParser program("darts");
     program.add_argument("square").help("display the square of a given integer").scan<'i', int>();
 
