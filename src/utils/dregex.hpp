@@ -35,7 +35,7 @@ class StringIter {
 
 
 class StringIterPairs {
-    virtual void iter(std::function<void(StringIter &, int64_t)> hit) = 0;
+    virtual void iter(std::function<void(StringIter &, const int64_t *, size_t)> hit) = 0;
     virtual ~StringIterPairs() {}
 };
 
