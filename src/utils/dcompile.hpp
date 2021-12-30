@@ -9,12 +9,17 @@
  * -----
  * Copyright 2021 - 2021 Your Company, Moka
  */
+#ifndef __DCOMPILE__H__
+#define __DCOMPILE__H__
 
-#include "dregex.hpp"
 
+#include <iostream>
 #include <map>
 #include <queue>
+#include <sstream>
 #include <vector>
+
+#include "dregex.hpp"
 
 
 struct State {
@@ -25,16 +30,16 @@ struct State {
     int64_t index;                       // index of the struct
 };
 
-State *newState(depth int) {
+State *newState(int depth) {
     auto S = new State();
     S->depth = depth;
-    return S
+    return S;
 }
 
 void freeState(State *state) {
     if (state == NULL) return;
     for (auto kv : state->success) {
-        freeState(kv->second);
+        freeState(kv.second);
     }
     state->success.clear();
     state->failure = NULL;
@@ -62,12 +67,12 @@ int64_t getMaxValueIDgo(State *s) {
 
 bool isAcceptable(State *s) { return s->depth > 0 && s->emits.size() > 0; }
 
-void setFailure(State *s, State failState, std::vector<int64_t> &fail) {
+void setFailure(State *s, State *failState, std::vector<int64_t> &fail) {
     s->failure = failState;
     fail[s->index] = failState->index;
 }
 
-State *nextState(State *s, int64_t character, bool ignoreRootState bool) {
+State *nextState(State *s, int64_t character, bool ignoreRootState) {
     auto it = s->success.find(character);
     if ((!ignoreRootState) && (it == s->success.end()) && (s->depth == 0)) {
         return s;
@@ -90,7 +95,7 @@ State *addState(State *s, int64_t character) {
 // Builder is inner useed
 struct Builder {
     State *rootState;
-    Trie *trie;
+    darts::Trie *trie;
     /**
      * whether the position has been used
      */
@@ -107,36 +112,36 @@ struct Builder {
      * the size of the key-pair sets
      */
     size_t size;
-}
+};
 
 
-void zipWeight(Builder* b) {
+void zipWeight(Builder *b) {
     size_t msize = b->size;
     b->trie->Base.resize(msize);
-    b.trie->Check.resize(msize);
+    b->trie->Check.resize(msize);
 }
 
 void constructFailureStates(Builder *b) {
-    b->trie->Fail.assign(b->trie->size + 1, 0);
+    b->trie->Fail.assign(b->size + 1, 0);
     b->trie->OutPut.assign(b->size + 1, NULL);
     std::queue<State *> queue;
 
 
     for (auto kv : b->rootState->success) {
-        auto depthOneState = kv->second;
-        setFailure(depthOneState, b->rootState, b->trie.Fail);
+        auto depthOneState = kv.second;
+        setFailure(depthOneState, b->rootState, b->trie->Fail);
         queue.push(depthOneState);
 
         if (!depthOneState->emits.empty()) {
             auto dt = new std::vector<int64_t>(depthOneState->emits.begin(), depthOneState->emits.end());
-            b->trie->OutPut[depthOneState.index] = dt;
+            b->trie->OutPut[depthOneState->index] = dt;
         }
     }
     while (!queue.empty()) {
         auto currentState = queue.front();
         queue.pop();
         for (auto kv : currentState->success) {
-            auto transition = kv->first;
+            auto transition = kv.first;
             auto targetState = nextState(currentState, transition, false);
             queue.push(targetState);
             auto traceFailureState = currentState->failure;
@@ -144,27 +149,27 @@ void constructFailureStates(Builder *b) {
                 traceFailureState = traceFailureState->failure;
             }
             auto newFailureState = nextState(traceFailureState, transition, false);
-            setFailure(targetState, newFailureState, b.trie.Fail);
+            setFailure(targetState, newFailureState, b->trie->Fail);
             for (auto e : newFailureState->emits) {
                 addEmit(targetState, e);
             }
             auto dt = new std::vector<int64_t>(targetState->emits.begin(), targetState->emits.end());
-            b->trie->OutPut[targetState.index] = dt;
+            b->trie->OutPut[targetState->index] = dt;
         }
     }
 }
 
-size_t addAllKeyword(Builder *b, StringIterPairs &kvs) {
-    siez_t maxCode = 0;
+size_t addAllKeyword(Builder *b, darts::StringIterPairs &kvs) {
+    size_t maxCode = 0;
     int64_t index = -1;
-    Trie *t = b.trie;
-    kvs.iter([&](StringIter &k, const int64_t *v, size_t vlen) {
+    auto t = b->trie;
+    kvs.iter([&](darts::StringIter &k, const int64_t *v, size_t vlen) {
         index++;
         size_t lens = 0;
         auto currentState = b->rootState;
-        k([&](const std::string s &, size_t) {
+        k.iter([&](const std::string &s, size_t) {
             lens++;
-            code = t->getcode(s);
+            auto code = t->getcode(s);
             t->CodeMap[s] = code;
             currentState = addState(currentState, code);
             return false;
@@ -172,17 +177,17 @@ size_t addAllKeyword(Builder *b, StringIterPairs &kvs) {
         addEmit(currentState, index);
         t->L.push_back(lens);
         if (lens > t->MaxLen) {
-            t.MaxLen = lens;
+            t->MaxLen = lens;
         }
         maxCode += lens;
         if (v) {
-            for (size_t l = 0; l < vlen; l++) {
-                t->V.push_back(v[l]);
-            }
+            t->V.push_back(new std::vector<int64_t>(v, v + vlen));
+        } else {
+            t->V.push_back(new std::vector<int64_t>(0));
         }
     });
     t->MaxLen++;
-    return size_t(float64(maxCode + len(t->CodeMap)) / 1.5) + 1;
+    return size_t(double(maxCode + t->CodeMap.size()) / 1.5) + 1;
 }
 
 // resize data
@@ -195,57 +200,60 @@ void resize(Builder *b, size_t newSize) {
 
 // Pair si tmp used
 
-void fetch(parent *State)[] Pair {
-    siblings = make([] Pair, 0, parent.success.Size() + 1);
+std::vector<std::pair<int64_t, State *>> *fetch(State *parent) {
+    auto siblings = new std::vector<std::pair<int64_t, State *>>();
+    siblings->reserve(parent->success.size() + 1);
     if (isAcceptable(parent)) {
-        fakeNode = newState(-(parent.depth + 1));
-        fakeNode.addEmit(parent.getMaxValueIDgo());
-        siblings = append(siblings, Pair{0, fakeNode});
+        auto fakeNode = newState(-(parent->depth + 1));
+        addEmit(fakeNode, getMaxValueIDgo(parent));
+        siblings->push_back(std::make_pair<>(0, fakeNode));
     }
-    it = parent.success.Iterator();
-    for (it.Next()) {
-        siblings = append(siblings, Pair{it.Key().(int)+1, it.Value()});
+    for (auto kv : parent->success) {
+        siblings->push_back(std::make_pair<>(kv.first + 1, kv.second));
     }
     return siblings;
 }
 
-void insert(Builder *b, std::queue<State *> queue) {
-    tCurrent = queue.Remove(queue.Front()).(Pair);
-    value, siblings = tCurrent.K.(int), tCurrent.V.([] Pair);
+void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int64_t, State *>> *>> &queue) {
+    auto tCurrent = queue.front();
+    queue.pop();
+    auto value = tCurrent.first;
+    auto siblings = tCurrent.second;
 
-    begin, nonZeroNum = 0, 0;
-    first = true;
-    pos = b.nextCheckPos - 1;
-    if (pos < siblings[0].K.(int)) {
-        pos = siblings[0].K.(int);
+
+    int64_t begin = 0, nonZeroNum = 0;
+    bool first = true;
+    int64_t pos = b->nextCheckPos - 1;
+    if (pos < siblings->front().first) {
+        pos = siblings->front().first;
     }
-    if (b.allocSize <= pos) {
-        b.resize(pos + 1);
+    if (b->allocSize <= pos) {
+        resize(b, pos + 1);
     }
-    t = b.trie;
-    while {
+    auto t = b->trie;
+    while (true) {
         pos++;
-        if (b.allocSize <= pos) {
-            b.resize(pos + 1);
+        if (b->allocSize <= pos) {
+            resize(b, pos + 1);
         }
-        if (t.Check[pos] != 0) {
+        if (t->Check[pos] != 0) {
             nonZeroNum++;
             continue;
         } else if (first) {
-            b.nextCheckPos = pos;
+            b->nextCheckPos = pos;
             first = false;
         }
 
-        begin = pos - siblings[0].K.(int);
-        if (b.allocSize <= (begin + siblings[len(siblings) - 1].K.(int))) {
-            b.resize(begin + siblings[len(siblings) - 1].K.(int)+100);
+        begin = pos - siblings->front().first;
+        if (b->allocSize <= (begin + siblings->back().first)) {
+            resize(b, begin + siblings->back().first + 100);
         }
-        if (b.used[begin]) {
+        if (b->used[begin]) {
             continue;
         }
-        allIszero = true;
-        for (i = 0; i < len(siblings); i++) {
-            if (t.Check[begin + siblings[i].K.(int)] != 0) {
+        auto allIszero = true;
+        for (auto kv : *siblings) {
+            if (t->Check[begin + kv.first] != 0) {
                 allIszero = false;
                 break;
             }
@@ -255,43 +263,47 @@ void insert(Builder *b, std::queue<State *> queue) {
         }
     }
 
-    if (float32(nonZeroNum) / float32(pos - b.nextCheckPos + 1) >= 0.95) {
-        b.nextCheckPos = pos;
+    if (double(nonZeroNum) / double(pos - b->nextCheckPos + 1) >= 0.95) {
+        b->nextCheckPos = pos;
     }
-    b.used[begin] = true;
-    if (b.size < begin + siblings[len(siblings) - 1].K.(int)+1) {
-        b.size = begin + siblings[len(siblings) - 1].K.(int)+1;
+    b->used[begin] = true;
+    if (b->size < begin + siblings->back().first + 1) {
+        b->size = begin + siblings->back().first + 1;
     }
-    for (i = 0; i < len(siblings); i++) {
-        t.Check[begin + siblings[i].K.(int)] = begin;
+    for (auto kv : *siblings) {
+        t->Check[begin + kv.first] = begin;
     }
-    for (i = 0; i < len(siblings); i++) {
-        kv = siblings[i];
-        newSiblings = fetch(kv.V.(*State));
-        if (len(newSiblings) < 1) {
-            t.Base[begin + kv.K.(int)] = -(kv.V.(*State).getMaxValueIDgo() + 1);
+    for (auto kv : *siblings) {
+        auto newSiblings = fetch(kv.second);
+        if (newSiblings->empty()) {
+            t->Base[begin + kv.first] = -(getMaxValueIDgo(kv.second) + 1);
+            delete newSiblings;
         } else {
-            queue.PushBack(Pair{begin + kv.K.(int), newSiblings});
+            queue.push(std::make_pair<>(begin + kv.first, newSiblings));
         }
-        kv.V.(*State).index = begin + kv.K.(int);
+        kv.second->index = begin + kv.first;
     }
     if (value >= 0) {
-        t.Base[value] = begin;
+        t->Base[value] = begin;
     }
+    siblings->clear();
+    delete siblings;
 }
 
-void build(Builder *b, StringIterPairs &kvs) {
+void build(Builder *b, darts::StringIterPairs &kvs) {
     size_t maxCode = addAllKeyword(b, kvs);
     // build double array tire base on tire
     resize(b, maxCode + 10);
-    b.trie.Base[0] = 1;
-    siblings = fetch(b.rootState);
-    if (len(siblings) > 0) {
-        queue = list.New();
-        queue.PushBack(Pair{-1, siblings});
-        for (queue.Len() > 0) {
-            b.insert(queue);
+    b->trie->Base[0] = 1;
+    auto siblings = fetch(b->rootState);
+    if (!siblings->empty()) {
+        std::queue<std::pair<int64_t, std::vector<std::pair<int64_t, State *>> *>> queue;
+        queue.push(std::make_pair<>(-1, siblings));
+        while (!queue.empty()) {
+            insert(b, queue);
         }
+    } else {
+        delete siblings;
     }
     // build failure table and merge output table
     constructFailureStates(b);
@@ -299,13 +311,16 @@ void build(Builder *b, StringIterPairs &kvs) {
 }
 
 
-void compile(StringIterPairs &pairs, Trie &trie) {
+void compile(darts::StringIterPairs &pairs, darts::Trie &trie) {
     Builder builder;
     builder.rootState = newState(0);
     builder.trie = &trie;
-    build(&builder, kvs);
+    build(&builder, pairs);
     // clear mem
     builder.trie = NULL;
     freeState(builder.rootState);
     builder.rootState = NULL;
 }
+
+
+#endif  //!__DCOMPILE__H__

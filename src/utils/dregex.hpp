@@ -12,6 +12,8 @@
 #ifndef SRC_UTILS_DREGEX_HPP_
 #define SRC_UTILS_DREGEX_HPP_
 
+
+#include <fstream>
 #include <map>
 #include <queue>
 #include <string>
@@ -35,6 +37,7 @@ class StringIter {
 
 
 class StringIterPairs {
+   public:
     virtual void iter(std::function<void(StringIter &, const int64_t *, size_t)> hit) = 0;
     virtual ~StringIterPairs() {}
 };
@@ -72,14 +75,6 @@ class Trie {
     Trie() : MaxLen(0) {}
 
    private:
-    int64_t getcode(const std::string &word) const {
-        auto it = this->CodeMap.find(word);
-        if (it == this->CodeMap.end()) {
-            return this->CodeMap.size() + 1;
-        }
-        return it->second;
-    }
-
     // trans
     int64_t transitionWithRoot(int64_t nodePos, int64_t c) const {
         int64_t b = 0;
@@ -125,6 +120,13 @@ class Trie {
         }
         this->V.clear();
         this->OutPut.clear();
+    }
+    int64_t getcode(const std::string &word) const {
+        auto it = this->CodeMap.find(word);
+        if (it == this->CodeMap.end()) {
+            return this->CodeMap.size() + 1;
+        }
+        return it->second;
     }
     // ParseText parse a text list hit ( [start,end),tagidx)
     void parse(StringIter &text, std::function<bool(size_t, size_t, const std::vector<int64_t> *)> hit) {
@@ -212,7 +214,7 @@ class Trie {
      * @param path
      */
     void loadPb(const std::string &path) {
-        std::ifstream f_in(path.c_str(), std::ios::in | std::ios::binary);
+        std::ifstream f_in(path, std::ios::in | std::ios::binary);
         if (!f_in.is_open()) {
             std::cerr << "load trie file failed:" << path << std::endl;
             return;
@@ -236,13 +238,6 @@ class Trie {
     }
 };
 
-/**
- * @brief compile a trie
- *
- * @param pairs
- * @param trie
- */
-void compile(StringIterPairs &pairs, Trie &trie);
 
 }  // namespace darts
 #endif  // SRC_UTILS_DREGEX_HPP_
