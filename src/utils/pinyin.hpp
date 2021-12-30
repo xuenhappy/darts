@@ -53,6 +53,7 @@ int loadPinyin() {
         if (line.empty() || line.length() < 4) {
             continue;
         }
+        if (line[0] == '#') continue;  // comment
         if (line[0] != 'U' || line[1] != '+') {
             std::cerr << "WARN:Bad line input " << line << std::endl;
             continue;
