@@ -11,6 +11,8 @@
  * Copyright 2021 - 2021 Your Company, Moka
  */
 #ifndef SRC_UTILS_NORM_CHR_HPP_
+#define SRC_UTILS_NORM_CHR_HPP_
+
 
 #include <json/json.h>
 #include <stdint.h>

@@ -12,4 +12,5 @@ message DRegexDat{
     repeated AItem V=6;
     repeated AItem OutPut=7;              
     map<string,int32> CodeMap=8;
+    repeated string Labels=9;
 }

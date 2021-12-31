@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "./darts.pb.h"
-#include "utf8.hpp"
+
 namespace darts {
 
 class StringIter {
@@ -42,31 +42,10 @@ class StringIterPairs {
     virtual ~StringIterPairs() {}
 };
 
-class UTF8StrIterator : public StringIter {
-   private:
-    const char32_t *str;
-    size_t len;
-
-   public:
-    explicit UTF8StrIterator(const char32_t *str, size_t len) {
-        this->str = str;
-        this->len = len;
-    }
-    void iter(std::function<bool(const std::string &, size_t)> hit) {
-        if (!this->str) return;
-        std::string tmp;
-        for (size_t i = 0; i < this->len; ++i) {
-            tmp = unicode_to_utf8(this->str[i]);
-            if (hit(tmp, i)) {
-                return;
-            }
-        }
-    }
-};
-
 
 class Trie {
    public:
+    std::vector<std::string> Labels;
     std::vector<int64_t> Check, Base, Fail, L;
     std::vector<std::vector<int64_t> *> V, OutPut;
     size_t MaxLen;
@@ -121,7 +100,19 @@ class Trie {
         this->V.clear();
         this->OutPut.clear();
     }
-    int64_t getcode(const std::string &word) const {
+    /**
+     * @brief Get the Label object
+     *
+     * @param label_idx
+     * @return const std::string&
+     */
+    const char *getLabel(size_t label_idx) const {
+        if (label_idx < this->Labels.size()) {
+            return this->Labels[label_idx].c_str();
+        }
+        return "";
+    }
+    int64_t getCode(const std::string &word) const {
         auto it = this->CodeMap.find(word);
         if (it == this->CodeMap.end()) {
             return this->CodeMap.size() + 1;
@@ -136,7 +127,7 @@ class Trie {
         text.iter([&](const std::string &seq, size_t position) -> bool {
             indexBufer[indexBufferPos % this->MaxLen] = position;
             indexBufferPos++;
-            currentState = this->getstate(currentState, this->getcode(seq));
+            currentState = this->getstate(currentState, this->getCode(seq));
             auto hitArray = this->OutPut[currentState];
             for (auto h : *hitArray) {
                 auto preIndex = (indexBufferPos - this->L[h]) % this->MaxLen;
@@ -150,20 +141,32 @@ class Trie {
     friend std::ostream &operator<<(std::ostream &out, const Trie &my) {
         darts::DRegexDat dat;
         dat.set_maxlen(my.MaxLen);
+        dat.mutable_labels()->Add(my.Labels.begin(), my.Labels.end());
         dat.mutable_check()->Add(my.Check.begin(), my.Check.end());
         dat.mutable_base()->Add(my.Base.begin(), my.Base.end());
         dat.mutable_fail()->Add(my.Fail.begin(), my.Fail.end());
         dat.mutable_l()->Add(my.L.begin(), my.L.end());
 
+
         for (auto s : my.V) {
+            if (!s) {
+                dat.add_v();
+                continue;
+            }
             dat.add_v()->mutable_item()->Add(s->begin(), s->end());
         }
+
         for (auto s : my.OutPut) {
+            if (!s) {
+                dat.add_output();
+                continue;
+            }
             dat.add_output()->mutable_item()->Add(s->begin(), s->end());
         }
 
         auto cmap = dat.mutable_codemap();
         cmap->insert(my.CodeMap.begin(), my.CodeMap.end());
+
 
         if (!dat.SerializePartialToOstream(&out)) {
             std::cerr << "Failed to write Trie" << std::endl;
@@ -177,7 +180,8 @@ class Trie {
             std::cerr << "Failed to read Trie" << std::endl;
         }
         my.MaxLen = dat.maxlen();
-
+        auto labels = dat.labels();
+        my.Labels.insert(my.Labels.end(), labels.begin(), labels.end());
         auto check = dat.check();
         my.Check.insert(my.Check.end(), check.begin(), check.end());
 
@@ -193,6 +197,10 @@ class Trie {
         auto size = dat.v_size();
         my.V.assign(size, NULL);
         for (size_t i = 0; i < size; i++) {
+            if (dat.v(i).item_size() < 1) {
+                my.V[i] = NULL;
+                continue;
+            }
             auto vlist = dat.v(i).item();
             my.V[i] = new std::vector<int64_t>(vlist.begin(), vlist.end());
         }
@@ -200,6 +208,10 @@ class Trie {
         size = dat.output_size();
         my.OutPut.assign(size, NULL);
         for (size_t i = 0; i < size; i++) {
+            if (dat.output(i).item_size() < 1) {
+                my.OutPut[i] = NULL;
+                continue;
+            }
             auto vlist = dat.output(i).item();
             my.OutPut[i] = new std::vector<int64_t>(vlist.begin(), vlist.end());
         }

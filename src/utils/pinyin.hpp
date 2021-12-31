@@ -61,7 +61,7 @@ int loadPinyin() {
 
         s = line.find(":");
         e = line.find("#", s + 1);
-        if (s < 0 || e <= s) {
+        if (s == std::string::npos || e <= s) {
             std::cerr << "WARN:Bad line input " << line << std::endl;
             continue;
         }

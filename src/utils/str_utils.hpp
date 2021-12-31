@@ -85,6 +85,17 @@ static inline std::string trim_copy(const char *cs) {
     return trim(s);
 }
 
+static inline std::string &tolower(std::string &data) {
+    std::transform(data.begin(), data.end(), data.begin(), [](unsigned char c) { return std::tolower(c); });
+    return data;
+}
+
+static inline std::string &toupper(std::string &data) {
+    std::transform(data.begin(), data.end(), data.begin(), [](unsigned char c) { return std::toupper(c); });
+    return data;
+}
+
+
 /**
  * @brief split a give line by a delimiter
  *
