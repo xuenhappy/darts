@@ -53,17 +53,17 @@ const std::string getResource(const std::string &spath) {
     if (!dllpath.empty()) {
         // check the dll path
         fs::path dpath1(dllpath);
-        dpath1.append(spath);
-        if (fs::exists(dpath1) && fs::is_regular_file(dpath1)) {
-            return dpath1.string();
+        auto bin_dir = dpath1.parent_path();
+        bin_dir.append(spath);
+        if (fs::exists(bin_dir) && fs::is_regular_file(bin_dir)) {
+            return bin_dir.string();
         }
 
         // check dll parent
-        fs::path dpath2(dllpath);
-        dpath2.append("../");
-        dpath2.append(spath);
-        if (fs::exists(dpath2) && fs::is_regular_file(dpath2)) {
-            return dpath2.string();
+        bin_dir = dpath1.parent_path();
+        bin_dir.append("../").append(spath);
+        if (fs::exists(bin_dir) && fs::is_regular_file(bin_dir)) {
+            return bin_dir.string();
         }
     }
 

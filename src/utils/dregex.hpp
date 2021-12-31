@@ -104,6 +104,10 @@ class Trie {
     }
     // ParseText parse a text list hit ( [start,end),tagidx)
     void parse(StringIter &text, std::function<bool(size_t, size_t, const std::vector<int64_t> *)> hit) {
+        if (this->MaxLen < 1 || this->V.empty()) {
+            std::cerr << "WARN:parse on empty trie!" << std::endl;
+            return;
+        }
         auto currentState = 0, indexBufferPos = 0;
         std::vector<int64_t> indexBufer;
         indexBufer.assign(this->MaxLen, 0);
@@ -111,6 +115,7 @@ class Trie {
             indexBufer[indexBufferPos % this->MaxLen] = position;
             indexBufferPos++;
             currentState = this->getstate(currentState, this->getCode(seq));
+            if (currentState >= this->OutPut.size()) return false;
             auto hitArray = this->OutPut[currentState];
             if (!hitArray) return false;
             for (auto h : *hitArray) {
@@ -139,6 +144,7 @@ class Trie {
             }
             dat.add_v()->mutable_item()->Add(s->begin(), s->end());
         }
+
 
         for (auto s : my.OutPut) {
             if (!s) {
@@ -177,7 +183,6 @@ class Trie {
 
         auto l = dat.l();
         my.L.insert(my.L.end(), l.begin(), l.end());
-
         auto size = dat.v_size();
         my.V.assign(size, NULL);
         for (size_t i = 0; i < size; i++) {
@@ -188,7 +193,6 @@ class Trie {
             auto vlist = dat.v(i).item();
             my.V[i] = new std::vector<int64_t>(vlist.begin(), vlist.end());
         }
-
         size = dat.output_size();
         my.OutPut.assign(size, NULL);
         for (size_t i = 0; i < size; i++) {
@@ -224,6 +228,10 @@ class Trie {
      * @param path
      */
     void writePb(const std::string &path) const {
+        if (this->Base.empty() || this->V.empty()) {
+            std::cerr << "WARN:this trie is empty,won't write anything!" << std::endl;
+            return;
+        }
         std::fstream f_out(path, std::ios::out | std::ios::trunc | std::ios::binary);
         if (!f_out.is_open()) {
             std::cerr << "write trie file failed:" << path << std::endl;
