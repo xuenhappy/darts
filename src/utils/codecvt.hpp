@@ -9,6 +9,10 @@
  *
  */
 
+#ifndef SRC_UTILS_CODECVT_HPP_
+#define SRC_UTILS_CODECVT_HPP_
+
+
 #include <codecvt>
 #include <locale>
 #include <string>
@@ -146,3 +150,4 @@ std::u32string read_with_bom(std::istream &src) {
             return to_utf32(buffer);
     }
 }
+#endif  // SRC_UTILS_CODECVT_HPP_
