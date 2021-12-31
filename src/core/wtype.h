@@ -18,6 +18,7 @@
 enum WordType {
     NONE,
     WUNK,
+    NLINE,
     POS,
     NUM,
     ENG,
@@ -51,8 +52,8 @@ enum WordType {
 
 static const char* EnumStrings[] = {
     "NONE",  "WUNK", "POS",  "NUM",  "ENG",  "CJK",  "EMPTY", "SYMBOLS", "FACE", "ARROW", "RUSH",
-    "ORDER", "IP",  "CNUM", "KEYW", "TIME", "MOTH", "DAY",   "EMAIL",   "URL",  "TMS",   "TMR",
-    "NAME",  "LOC", "CAM",  "ACD",  "SCH",  "MAJ",  "COM",   "TIL",     "DPT",
+    "ORDER", "IP",   "CNUM", "KEYW", "TIME", "MOTH", "DAY",   "EMAIL",   "URL",  "TMS",   "TMR",
+    "NAME",  "LOC",  "CAM",  "ACD",  "SCH",  "MAJ",  "COM",   "TIL",     "DPT",
 };
 
 const char* getWordTypeText(int enumVal) { return EnumStrings[enumVal]; }

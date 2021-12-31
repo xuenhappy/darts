@@ -71,14 +71,14 @@ void _addWordMap() {
         {"❮", "《"},  {"❯", "》"},  {"❰", "《"},  {"❱", "》"},  {"〘", "《"}, {"〙", "》"}, {"〚", "《"},
         {"〛", "》"}, {"〉", "》"}, {"《", "《"}, {"》", "》"}, {"「", "《"}, {"」", "》"}, {"『", "《"},
         {"』", "》"}, {"【", "《"}, {"】", "》"}, {"〔", "《"}, {"〕", "》"}, {"〖", "《"}, {"〗", "》"}};
-    for (auto kv : special) {
+    for (auto &kv : special) {
         _WordMap[kv.first] = kv.second;
     }
 
 
     // check wordmap and fix it
     std::map<std::string, std::string> _TMP;
-    for (auto kv : _WordMap) {
+    for (auto &kv : _WordMap) {
         if (kv.first != kv.second) {
             _TMP[kv.first] = kv.second;
         }
@@ -91,7 +91,7 @@ void _addWordMap() {
     _TMP.erase(" ");
 
     _WordMap.clear();
-    for (auto kv : _TMP) {
+    for (auto &kv : _TMP) {
         if (_TMP.find(kv.second) != _TMP.end()) {
             _WordMap[kv.first] = _TMP[kv.second];
         } else {

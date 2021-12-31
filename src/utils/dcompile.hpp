@@ -47,7 +47,7 @@ State *newState(int depth, bool fake) {
 
 void freeState(State *state) {
     if (state == NULL) return;
-    for (auto kv : state->success) {
+    for (auto &kv : state->success) {
         freeState(kv.second);
     }
     state->success.clear();
@@ -136,7 +136,7 @@ void constructFailureStates(Builder *b) {
     std::queue<State *> queue;
 
 
-    for (auto kv : b->rootState->success) {
+    for (auto &kv : b->rootState->success) {
         auto depthOneState = kv.second;
         setFailure(depthOneState, b->rootState, b->trie->Fail);
         queue.push(depthOneState);
@@ -149,7 +149,7 @@ void constructFailureStates(Builder *b) {
     while (!queue.empty()) {
         auto currentState = queue.front();
         queue.pop();
-        for (auto kv : currentState->success) {
+        for (auto &kv : currentState->success) {
             auto transition = kv.first;
             auto targetState = nextState(currentState, transition, false);
             queue.push(targetState);
@@ -217,7 +217,7 @@ std::vector<std::pair<int64_t, State *>> *fetch(State *parent) {
         addEmit(fakeNode, getMaxValueID(parent));
         siblings->push_back(std::pair<int64_t, State *>(0, fakeNode));
     }
-    for (auto kv : parent->success) {
+    for (auto &kv : parent->success) {
         siblings->push_back(std::pair<int64_t, State *>(kv.first + 1, kv.second));
     }
     return siblings;
@@ -261,7 +261,7 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
             continue;
         }
         auto allIszero = true;
-        for (auto kv : *siblings) {
+        for (auto &kv : *siblings) {
             if (t->Check[begin + kv.first] != 0) {
                 allIszero = false;
                 break;
@@ -279,10 +279,10 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
     if (b->size < begin + siblings->back().first + 1) {
         b->size = begin + siblings->back().first + 1;
     }
-    for (auto kv : *siblings) {
+    for (auto &kv : *siblings) {
         t->Check[begin + kv.first] = begin;
     }
-    for (auto kv : *siblings) {
+    for (auto &kv : *siblings) {
         auto newSiblings = fetch(kv.second);
         if (newSiblings->empty()) {
             t->Base[begin + kv.first] = -(getMaxValueID(kv.second) + 1);
@@ -296,7 +296,7 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
         t->Base[value] = begin;
     }
     // free memory
-    for (auto item : *siblings) {
+    for (auto &item : *siblings) {
         if (item.second->fake) {
             delete item.second;
             item.second = NULL;
@@ -416,7 +416,7 @@ class FileStringPairIter : public darts::StringIterPairs {
     }
     virtual void iter(std::function<void(darts::StringIter &, const int64_t *, size_t)> hit) {
         int64_t vlabels[1];
-        for (auto fpath : *this->files) {
+        for (auto &fpath : *this->files) {
             std::ifstream f_in(fpath);
             if (!f_in.is_open()) {
                 std::cerr << "read open file error," << fpath << std::endl;
@@ -477,7 +477,7 @@ void compileStringDict(const std::vector<std::string> &paths, const std::string 
     compile(pairs, trie);
     // set labels
     trie.Labels.resize(labels.size());
-    for (auto kv : labels) {
+    for (auto &kv : labels) {
         trie.Labels[kv.second] = kv.first;
     }
     trie.writePb(pbfile);

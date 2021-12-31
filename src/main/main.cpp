@@ -44,8 +44,8 @@ int main(int argc, char *argv[]) {
     newdat.loadPb("test.pb");
     std::cout << "----------------4----------------" << std::endl;
     darts::Trie schoolsdat;
-    std::vector<std::string> paths = {"/Users/xuen/school_zh.txt"};
-    dregex::compileStringDict(paths, "schools.pb", NULL);
+    std::set<WordType> skipTypes = {WordType::POS, WordType::EMPTY, WordType::NLINE};
+    dregex::compileStringDict({"/Users/xuen/school_zh.txt"}, "schools.pb", &skipTypes);
     darts::Trie newTrie;
     newTrie.loadPb("schools.pb");
     std::string teststr = "dd清华大学的学在北京大学的中国人民解放军海军广州舰艇学院k安徽大学里面有个北大II";
@@ -58,9 +58,14 @@ int main(int argc, char *argv[]) {
         return false;
     });
     std::cout << "----------------5----------------" << std::endl;
-    google::protobuf::ShutdownProtobufLibrary();
+
     argparse::ArgumentParser program("darts");
-    program.add_argument("square").help("display the square of a given integer").scan<'i', int>();
+    program.add_argument("--compile")
+        .help("does need compile a trie, switch")
+        .default_value(false)
+        .implicit_value(false);
+    program.add_argument("-f", "--input_files").help("The list of input files used for build trie");
+    program.add_argument("-o", "--output_file").help("trie pb file output dir").default_value("build_trie.pb");
 
     try {
         program.parse_args(argc, argv);
@@ -69,10 +74,21 @@ int main(int argc, char *argv[]) {
         std::cerr << program;
         std::exit(1);
     }
-
-    auto input = program.get<int>("square");
-    std::cout << (input * input) << std::endl;
-
+    if (program["--compile"] == true) {
+        auto files = program.get<std::vector<std::string>>("--input_files");
+        auto outfile = program.get<std::string>("--output_file");
+        if (outfile.empty()) {
+            outfile = "build_trie.pb";
+        }
+        if (!files.empty()) {
+            std::cout << "compile  files to trie:\n" << darts::join(files, "\n") << std::endl;
+            std::set<WordType> skipType = {WordType::POS, WordType::EMPTY, WordType::NLINE};
+            dregex::compileStringDict(files, outfile, &skipType);
+        }
+    } else {
+        std::cout << program << std::endl;
+    }
+    google::protobuf::ShutdownProtobufLibrary();
     return 0;
 }
 
