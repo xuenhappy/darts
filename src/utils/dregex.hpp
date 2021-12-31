@@ -21,26 +21,9 @@
 #include <vector>
 
 #include "./darts.pb.h"
+#include "str_utils.hpp"
 
 namespace darts {
-
-class StringIter {
-   public:
-    /**
-     * @brief iter string
-     *
-     * @param hit
-     */
-    virtual void iter(std::function<bool(const std::string &, size_t)> hit) = 0;
-    virtual ~StringIter() {}
-};
-
-
-class StringIterPairs {
-   public:
-    virtual void iter(std::function<void(StringIter &, const int64_t *, size_t)> hit) = 0;
-    virtual ~StringIterPairs() {}
-};
 
 
 class Trie {
@@ -129,6 +112,7 @@ class Trie {
             indexBufferPos++;
             currentState = this->getstate(currentState, this->getCode(seq));
             auto hitArray = this->OutPut[currentState];
+            if (!hitArray) return false;
             for (auto h : *hitArray) {
                 auto preIndex = (indexBufferPos - this->L[h]) % this->MaxLen;
                 if (hit(indexBufer[preIndex], position + 1, this->V[h])) {

@@ -23,6 +23,24 @@
 #include <vector>
 
 namespace darts {
+class StringIter {
+   public:
+    /**
+     * @brief iter string
+     *
+     * @param hit
+     */
+    virtual void iter(std::function<bool(const std::string &, size_t)> hit) = 0;
+    virtual ~StringIter() {}
+};
+
+
+class StringIterPairs {
+   public:
+    virtual void iter(std::function<void(StringIter &, const int64_t *, size_t)> hit) = 0;
+    virtual ~StringIterPairs() {}
+};
+
 
 /**
  * @brief 字符串连接

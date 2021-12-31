@@ -16,6 +16,7 @@
 
 #include "../core/segment.hpp"
 #include "../utils/argparse.hpp"
+#include "../utils/codecvt.hpp"
 #include "../utils/dcompile.hpp"
 #include "../utils/dregex.hpp"
 #include "../utils/file_utils.hpp"
@@ -44,8 +45,20 @@ int main(int argc, char *argv[]) {
     std::cout << "----------------4----------------" << std::endl;
     darts::Trie schoolsdat;
     std::vector<std::string> paths = {"/Users/xuen/school_zh.txt"};
-    dregex::compileStringDict(paths, "schools.ph", NULL);
+    dregex::compileStringDict(paths, "schools.pb", NULL);
+    darts::Trie newTrie;
+    newTrie.loadPb("schools.pb");
+    std::string teststr = "dd清华大学的学在北京大学的中国人民解放军海军广州舰艇学院k安徽大学里面有个北大II";
+    std::u32string text = to_utf32(teststr);
+
+    dregex::UTF8StrIterator testStr(&text[0], text.size());
+    newTrie.parse(testStr, [&](size_t s, size_t e, const std::vector<int64_t> *label) -> bool {
+        std::cout << to_utf8(text.substr(s, e - s)) << ",s:" << s << ",e:" << e << "," << (*label)[0] << "|"
+                  << newTrie.getLabel((*label)[0]) << std::endl;
+        return false;
+    });
     std::cout << "----------------5----------------" << std::endl;
+    google::protobuf::ShutdownProtobufLibrary();
     argparse::ArgumentParser program("darts");
     program.add_argument("square").help("display the square of a given integer").scan<'i', int>();
 
