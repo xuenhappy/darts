@@ -43,29 +43,28 @@ int main(int argc, char *argv[]) {
     darts::Trie newdat;
     newdat.loadPb("test.pb");
     std::cout << "----------------4----------------" << std::endl;
-    darts::Trie schoolsdat;
-    std::set<WordType> skipTypes = {WordType::POS, WordType::EMPTY, WordType::NLINE};
-    dregex::compileStringDict({"/Users/xuen/school_zh.txt"}, "schools.pb", &skipTypes);
     darts::Trie newTrie;
     newTrie.loadPb("schools.pb");
     std::string teststr = "dd清华大学的学在北京大学的中国人民解放军海军广州舰艇学院k安徽大学里面有个北大II";
     std::u32string text = to_utf32(teststr);
-
     dregex::UTF8StrIterator testStr(&text[0], text.size());
     newTrie.parse(testStr, [&](size_t s, size_t e, const std::vector<int64_t> *label) -> bool {
         std::cout << to_utf8(text.substr(s, e - s)) << ",s:" << s << ",e:" << e << "," << (*label)[0] << "|"
                   << newTrie.getLabel((*label)[0]) << std::endl;
         return false;
     });
-    std::cout << "----------------5----------------" << std::endl;
 
+    std::cout << "----------------5----------------" << std::endl;
     argparse::ArgumentParser program("darts");
     program.add_argument("--compile")
         .help("does need compile a trie, switch")
         .default_value(false)
-        .implicit_value(false);
-    program.add_argument("-f", "--input_files").help("The list of input files used for build trie");
-    program.add_argument("-o", "--output_file").help("trie pb file output dir").default_value("build_trie.pb");
+        .implicit_value(true)
+        .nargs(0);
+    program.add_argument("-f", "--input_files").help("The list of input files used for build trie").remaining();
+    program.add_argument("-o", "--output_file")
+        .help("trie pb file output dir")
+        .default_value(std::string("build_trie.pb"));
 
     try {
         program.parse_args(argc, argv);
@@ -74,18 +73,18 @@ int main(int argc, char *argv[]) {
         std::cerr << program;
         std::exit(1);
     }
-    if (program["--compile"] == true) {
-        auto files = program.get<std::vector<std::string>>("--input_files");
-        auto outfile = program.get<std::string>("--output_file");
-        if (outfile.empty()) {
-            outfile = "build_trie.pb";
+    try {
+        if (program["--compile"] == true) {
+            auto files = program.get<std::vector<std::string>>("--input_files");
+            auto outfile = program.get<std::string>("--output_file");
+            if (!files.empty()) {
+                std::cout << "compile files to trie [" << darts::join(files, " , ") << "] " << std::endl;
+                std::set<WordType> skipType = {WordType::POS, WordType::EMPTY, WordType::NLINE};
+                dregex::compileStringDict(files, outfile, &skipType);
+                std::cout << "build tire success, pb out file path:" << outfile << std::endl;
+            }
         }
-        if (!files.empty()) {
-            std::cout << "compile  files to trie:\n" << darts::join(files, "\n") << std::endl;
-            std::set<WordType> skipType = {WordType::POS, WordType::EMPTY, WordType::NLINE};
-            dregex::compileStringDict(files, outfile, &skipType);
-        }
-    } else {
+    } catch (std::logic_error &e) {
         std::cout << program << std::endl;
     }
     google::protobuf::ShutdownProtobufLibrary();

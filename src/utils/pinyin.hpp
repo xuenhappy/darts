@@ -43,7 +43,7 @@ int loadPinyin() {
     std::string dat = getResource("data/pinyin.txt");
     std::ifstream in(dat.c_str());
     if (!in.is_open()) {
-        std::cerr << "open data " << dat << " file failed " << std::endl;
+        std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
     std::string line;
@@ -55,14 +55,14 @@ int loadPinyin() {
         }
         if (line[0] == '#') continue;  // comment
         if (line[0] != 'U' || line[1] != '+') {
-            std::cerr << "WARN:Bad line input " << line << std::endl;
+            std::cerr << "WARN: Bad line input " << line << std::endl;
             continue;
         }
 
         s = line.find(":");
         e = line.find("#", s + 1);
         if (s == std::string::npos || e <= s) {
-            std::cerr << "WARN:Bad line input " << line << std::endl;
+            std::cerr << "WARN: Bad line input " << line << std::endl;
             continue;
         }
         std::string nums = line.substr(2, s);

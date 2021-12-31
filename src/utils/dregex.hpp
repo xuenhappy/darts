@@ -105,7 +105,7 @@ class Trie {
     // ParseText parse a text list hit ( [start,end),tagidx)
     void parse(StringIter &text, std::function<bool(size_t, size_t, const std::vector<int64_t> *)> hit) {
         if (this->MaxLen < 1 || this->V.empty()) {
-            std::cerr << "WARN:parse on empty trie!" << std::endl;
+            std::cerr << "ERROR: parse on empty trie!" << std::endl;
             return;
         }
         auto currentState = 0, indexBufferPos = 0;
@@ -159,7 +159,7 @@ class Trie {
 
 
         if (!dat.SerializePartialToOstream(&out)) {
-            std::cerr << "Failed to write Trie" << std::endl;
+            std::cerr << "ERROR: Failed to write Trie" << std::endl;
         }
         return out;
     }
@@ -167,7 +167,8 @@ class Trie {
     friend std::istream &operator>>(std::istream &in, Trie &my) {
         darts::DRegexDat dat;
         if (!dat.ParseFromIstream(&in)) {
-            std::cerr << "Failed to read Trie" << std::endl;
+            std::cerr << "ERROR: Failed to read Trie" << std::endl;
+            return in;
         }
         my.MaxLen = dat.maxlen();
         auto labels = dat.labels();
@@ -216,7 +217,7 @@ class Trie {
     void loadPb(const std::string &path) {
         std::ifstream f_in(path, std::ios::in | std::ios::binary);
         if (!f_in.is_open()) {
-            std::cerr << "load trie file failed:" << path << std::endl;
+            std::cerr << "ERROR: load trie file failed:" << path << std::endl;
             return;
         }
         f_in >> *this;
@@ -229,12 +230,12 @@ class Trie {
      */
     void writePb(const std::string &path) const {
         if (this->Base.empty() || this->V.empty()) {
-            std::cerr << "WARN:this trie is empty,won't write anything!" << std::endl;
+            std::cerr << "WARN: this trie is empty,won't write anything!" << std::endl;
             return;
         }
         std::fstream f_out(path, std::ios::out | std::ios::trunc | std::ios::binary);
         if (!f_out.is_open()) {
-            std::cerr << "write trie file failed:" << path << std::endl;
+            std::cerr << "ERROE: write trie file failed:" << path << std::endl;
             return;
         }
         f_out << *this;

@@ -109,7 +109,7 @@ int initializeMap() {
     std::string dat = getResource("data/confuse.json");
     std::ifstream in(dat.c_str());
     if (!in.is_open()) {
-        std::cerr << "open data " << dat << " file failed " << std::endl;
+        std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
     std::stringstream sin;
@@ -129,7 +129,7 @@ int initializeMap() {
     res = jsonReader->parse(data.c_str(), data.c_str() + data.length(), &root, &errs);
 
     if (!res || !errs.empty()) {
-        std::cerr << "parseJson err. " << errs << std::endl;
+        std::cerr << "ERROR: parseJson err. " << errs << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -144,7 +144,7 @@ int initializeMap() {
                 _WordMap[val] = *iter;
             }
         } else {
-            std::cerr << "open json data " << dat << "key:" << *iter << "  failed " << std::endl;
+            std::cerr << "ERROR: open json data " << dat << "key:" << *iter << "  failed " << std::endl;
             return EXIT_FAILURE;
         }
     }
@@ -159,7 +159,7 @@ int initializeMap() {
  * @param str
  * @return std::string
  */
-std::string normalizeStr(const std::string& str) {
+std::string normalizeStr(const std::string &str) {
     std::stringstream output;
     utf8_iter ITER;
     utf8_init(&ITER, str.c_str());

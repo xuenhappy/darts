@@ -419,7 +419,7 @@ class FileStringPairIter : public darts::StringIterPairs {
         for (auto &fpath : *this->files) {
             std::ifstream f_in(fpath);
             if (!f_in.is_open()) {
-                std::cerr << "read open file error," << fpath << std::endl;
+                std::cerr << "ERROR: read open file error," << fpath << std::endl;
                 break;
             }
 
@@ -432,7 +432,7 @@ class FileStringPairIter : public darts::StringIterPairs {
                 }
                 auto pos = line.find_first_of(',');
                 if (pos == std::string::npos || pos < 1 || pos >= line.size() - 1) {
-                    std::cout << "bad line:[" << line << "]" << std::endl;
+                    std::cerr << "WARN: bad line:[" << line << "]" << std::endl;
                     continue;
                 }
                 auto key = line.substr(0, pos);
@@ -440,7 +440,7 @@ class FileStringPairIter : public darts::StringIterPairs {
                 auto strs = line.substr(pos + 1);
                 darts::trim(strs);
                 if (key.empty() || strs.empty() || key.front() != '<' || key.back() != '>') {
-                    std::cout << "bad line:[" << line << "]" << std::endl;
+                    std::cerr << "WARN: bad line:[" << line << "]" << std::endl;
                     continue;
                 }
                 darts::tolower(strs);

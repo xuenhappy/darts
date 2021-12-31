@@ -35,7 +35,7 @@ int loadCharMap() {
     std::string dat = getResource("data/chars.tmap");
     std::ifstream in(dat.c_str());
     if (!in.is_open()) {
-        std::cerr << "open data " << dat << " file failed " << std::endl;
+        std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
     std::string head("-%");
@@ -49,7 +49,7 @@ int loadCharMap() {
         if (!strncmp(line.c_str(), head.c_str(), head.size())) {
             prefix = getWordType(line.substr(head.size()).c_str());
             if (prefix == WordType::NONE) {
-                std::cerr << "WARN:Bad word type tag name" << line.substr(head.size()) << std::endl;
+                std::cerr << "WARN: Bad word type tag name" << line.substr(head.size()) << std::endl;
             }
             continue;
         }
