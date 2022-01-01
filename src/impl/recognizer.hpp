@@ -43,7 +43,8 @@ class AtomListStrIterator : public StringIter {
             if (a->hasType(&skiptypes)) {
                 continue;
             }
-            if (hit(a->image, i)) {
+            tmp = a->image;
+            if (hit(tolower(tmp), i)) {
                 break;
             }
         }
