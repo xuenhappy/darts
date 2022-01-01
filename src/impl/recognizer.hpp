@@ -24,13 +24,13 @@
 
 
 namespace darts {
-class AtomListStrIterator : public StringIter {
+class AtomListIterator : public StringIter {
    private:
     AtomList *m_list;
     std::set<WordType> skiptypes;
 
    public:
-    explicit AtomListStrIterator(AtomList *m_list) {
+    explicit AtomListIterator(AtomList *m_list) {
         this->m_list = m_list;
         this->skiptypes.insert(WordType::EMPTY);
     }
@@ -70,7 +70,7 @@ class DictWordRecongnizer : public CellRecognizer {
 
     void addSomeCells(AtomList *dstSrc, CellMap *cmap) const {
         auto cur = cmap->Head();
-        AtomListStrIterator iter(dstSrc);
+        AtomListIterator iter(dstSrc);
         this->trie.parse(iter, [&](size_t s, size_t e, const std::vector<int64_t> *labels) -> bool {
             auto word = std::make_shared<Word>(dstSrc->at(s, e), s, e);
             if (labels) {
