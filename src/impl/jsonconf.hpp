@@ -22,10 +22,10 @@
  * @brief load the configuration
  *
  * @param jsonpath
- * @param segment
+ * @param segment point val pointer
  * @return int 1 error ,0 success
  */
-int parseJsonConf(const char* json_conf_file, darts::Segment& segment) {
+int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
     std::ifstream in(json_conf_file);
     if (!in.is_open()) {
         std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
