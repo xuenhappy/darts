@@ -409,17 +409,52 @@ class FileStringPairIter : public darts::StringIterPairs {
     const std::vector<std::string> *files;
     const std::set<WordType> *skiptypes;
     std::map<std::string, int64_t> *labels;
+    std::function<std::string(std::string &, std::vector<int64_t> &, std::map<std::string, int64_t> *)> lineFix;
 
 
    public:
-    FileStringPairIter(const std::vector<std::string> *files, std::map<std::string, int64_t> *labels,
-                       const std::set<WordType> *skiptypes) {
+    FileStringPairIter(
+        const std::vector<std::string> *files, std::map<std::string, int64_t> *labels,
+        const std::set<WordType> *skiptypes,
+        std::function<std::string(std::string &, std::vector<int64_t> &, std::map<std::string, int64_t> *)> lineFix) {
         this->files = files;
         this->labels = labels;
         this->skiptypes = skiptypes;
+        this->lineFix = lineFix;
+        if (!lineFix) {
+            this->lineFix = [&](std::string &line, std::vector<int64_t> &lidxes,
+                                std::map<std::string, int64_t> *lmap) -> std::string {
+                auto pos = line.find_first_of(',');
+                if (pos == std::string::npos || pos < 1 || pos >= line.size() - 1) {
+                    std::cerr << "WARN: bad line:[" << line << "]" << std::endl;
+                    return "";
+                }
+                auto key = line.substr(0, pos);
+                darts::trim(key);
+                auto strs = line.substr(pos + 1);
+                darts::trim(strs);
+                if (key.empty() || strs.empty() || key.front() != '<' || key.back() != '>') {
+                    std::cerr << "WARN: bad line:[" << line << "]" << std::endl;
+                    return "";
+                }
+                darts::tolower(strs);
+                key = key.substr(1, key.size() - 2);
+                darts::toupper(key);
+                // set keystr
+                auto it = lmap->find(key);
+                if (it != lmap->end()) {
+                    lidxes.push_back(it->second);
+                } else {
+                    auto idx = labels->size();
+                    (*lmap)[key] = idx;
+                    lidxes.push_back(idx);
+                }
+                return strs;
+            };
+        }
     }
     virtual void iter(std::function<void(darts::StringIter &, const int64_t *, size_t)> hit) {
-        int64_t vlabels[1];
+        std::vector<int64_t> lidxes;
         for (auto &fpath : *this->files) {
             std::ifstream f_in(fpath);
             if (!f_in.is_open()) {
@@ -434,33 +469,15 @@ class FileStringPairIter : public darts::StringIterPairs {
                 if (line.empty()) {
                     continue;
                 }
-                auto pos = line.find_first_of(',');
-                if (pos == std::string::npos || pos < 1 || pos >= line.size() - 1) {
-                    std::cerr << "WARN: bad line:[" << line << "]" << std::endl;
-                    continue;
-                }
-                auto key = line.substr(0, pos);
-                darts::trim(key);
-                auto strs = line.substr(pos + 1);
-                darts::trim(strs);
-                if (key.empty() || strs.empty() || key.front() != '<' || key.back() != '>') {
-                    std::cerr << "WARN: bad line:[" << line << "]" << std::endl;
-                    continue;
-                }
-                darts::tolower(strs);
-                key = key.substr(1, key.size() - 2);
-                darts::toupper(key);
-                // set keystr
-                auto it = labels->find(key);
-                if (it != labels->end()) {
-                    vlabels[0] = it->second;
+                lidxes.clear();
+                auto key = this->lineFix(line, lidxes, this->labels);
+                if (key.empty()) continue;
+                WordStrIterator atom(key.c_str(), this->skiptypes);
+                if (lidxes.empty()) {
+                    hit(atom, NULL, 0);
                 } else {
-                    vlabels[0] = labels->size();
-                    (*labels)[key] = vlabels[0];
+                    hit(atom, &lidxes[0], lidxes.size());
                 }
-
-                WordStrIterator atom(strs.c_str(), this->skiptypes);
-                hit(atom, vlabels, 1);
             }
             f_in.close();
         }
@@ -473,13 +490,16 @@ class FileStringPairIter : public darts::StringIterPairs {
  * @param paths 需要被编译的原始文件，文件内容必须符合特定规范 ，单行内容形如: "<LABEL>,清华大学"
  * @param pbfile pb文件输出的地方
  * @param skiptypes 编译过程需要跳过的一些词
+ * @param lineFix 行处理函数
  */
-void compileStringDict(const std::vector<std::string> &paths, const std::string &pbfile,
-                       const std::set<WordType> *skiptypes) {
+void compileStringDict(
+    const std::vector<std::string> &paths, const std::string &pbfile, const std::set<WordType> *skiptypes = NULL,
+    std::function<std::string(std::string &, std::vector<int64_t> &, std::map<std::string, int64_t> *)> lineFix =
+        NULL) {
     darts::Trie trie;
     std::map<std::string, int64_t> labels;
     // build trie
-    FileStringPairIter pairs(&paths, &labels, skiptypes);
+    FileStringPairIter pairs(&paths, &labels, skiptypes, lineFix);
     compile(pairs, trie);
     // set labels
     trie.Labels.resize(labels.size());

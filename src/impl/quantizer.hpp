@@ -42,6 +42,23 @@ class MinCoverPersenter {
 
 REGISTER_Persenter(MinCoverPersenter);
 
+class BigramPersenter {
+   public:
+    int initalize(const std::map<std::string, std::string> &param) { return EXIT_SUCCESS; }
+    void embed(AtomList *dstSrc, CellMap *cmap) {}
+    /**
+     * @brief
+     *
+     * @param pre
+     * @param next
+     * @return double must >=0
+     */
+    double ranging(const Word *pre, const Word *next) { return 0.0; }
+    ~BigramPersenter() {}
+};
+
+REGISTER_Persenter(BigramPersenter);
+
 class ElmoPersenter {
    private:
     static const char *MODEL_PATH_KEY;

@@ -220,7 +220,10 @@ class Segment {
     }
 
    public:
-    explicit Segment(std::shared_ptr<CellPersenter> quantizer) { this->quantizer = quantizer; }
+    explicit Segment(std::shared_ptr<CellPersenter> quantizer) {
+        assert(!quantizer);  // quantizer must be not null
+        this->quantizer = quantizer;
+    }
     ~Segment() {
         if (this->quantizer) {
             this->quantizer = nullptr;
@@ -238,8 +241,8 @@ class Segment {
      * @param ret
      * @param maxMode
      */
-    void smartCut(AtomList *atomList, std::vector<std::shared_ptr<Word>> &ret, bool maxMode) {
-        if (atomList->size() < 1) {
+    void smartCut(AtomList *atomList, std::vector<std::shared_ptr<Word>> &ret, bool maxMode = false) {
+        if (!atomList || atomList->size() < 1) {
             return;
         }
         if (atomList->size() == 1) {
@@ -250,8 +253,7 @@ class Segment {
         auto cmap = new CellMap();
         buildMap(atomList, cmap);
         if (maxMode) {
-            auto call = [&ret](Cursor cur) { ret.push_back(cur->val); };
-            cmap->iterRow(NULL, -1, call);
+            cmap->iterRow(NULL, -1, [&ret](Cursor cur) { ret.push_back(cur->val); });
         } else {
             splitContent(atomList, cmap, ret);
         }
