@@ -117,7 +117,7 @@ int initializeMap() {
     in.close();
     std::string data(sin.str());
     if (data.empty()) {
-        return EXIT_SUCCESS;
+        return EXIT_FAILURE;
     }
 
     bool res;

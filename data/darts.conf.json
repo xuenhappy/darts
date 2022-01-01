@@ -1,0 +1,23 @@
+{
+    "recognizers": {
+        "inner.dict": {
+            "type": "DictWordRecongnizer",
+            "pbfile.path": "data/darts.inner.pb"
+        }
+    },
+    "persenters": {
+        "min.path.rule": {},
+        "net.lstm": {}
+    },
+    "modes": {
+        "smart": {
+            "recognizers": [],
+            "persenter": ""
+        },
+        "fast": {
+            "recognizers": [],
+            "persenter": ""
+        }
+    },
+    "start.mode": "smart"
+}

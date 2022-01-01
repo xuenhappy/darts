@@ -79,7 +79,20 @@ class Segment {
     std::vector<std::shared_ptr<CellRecognizer>> cellRecognizers;
     std::shared_ptr<CellPersenter> quantizer;
 
+   public:
+    /**
+     * @brief  add a
+     *
+     * @param reg
+     */
+    void addRecognizer(std::shared_ptr<CellRecognizer> reg) {
+        if (reg) {
+            cellRecognizers.push_back(reg);
+        }
+    }
 
+
+   private:
     /**
      * @brief build map
      *
