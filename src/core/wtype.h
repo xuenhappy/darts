@@ -58,6 +58,12 @@ static const char* EnumStrings[] = {
 
 const char* getWordTypeText(int enumVal) { return EnumStrings[enumVal]; }
 
+/**
+ * @brief Get the Word Type object
+ *
+ * @param name
+ * @return WordType
+ */
 WordType getWordType(const char* name) {
     int n = sizeof(EnumStrings) / sizeof(EnumStrings[0]);
     size_t i = 0;

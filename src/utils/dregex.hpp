@@ -103,7 +103,7 @@ class Trie {
         return it->second;
     }
     // ParseText parse a text list hit ( [start,end),tagidx)
-    void parse(StringIter &text, std::function<bool(size_t, size_t, const std::vector<int64_t> *)> hit) {
+    void parse(StringIter &text, std::function<bool(size_t, size_t, const std::vector<int64_t> *)> hit) const {
         if (this->MaxLen < 1 || this->V.empty()) {
             std::cerr << "ERROR: parse on empty trie!" << std::endl;
             return;
@@ -214,32 +214,34 @@ class Trie {
      *
      * @param path
      */
-    void loadPb(const std::string &path) {
+    int loadPb(const std::string &path) {
         std::ifstream f_in(path, std::ios::in | std::ios::binary);
         if (!f_in.is_open()) {
             std::cerr << "ERROR: load trie file failed:" << path << std::endl;
-            return;
+            return EXIT_FAILURE;
         }
         f_in >> *this;
         f_in.close();
+        return EXIT_SUCCESS;
     }
     /**
      * @brief write this conf into a file
      *
      * @param path
      */
-    void writePb(const std::string &path) const {
+    int writePb(const std::string &path) const {
         if (this->Base.empty() || this->V.empty()) {
             std::cerr << "WARN: this trie is empty,won't write anything!" << std::endl;
-            return;
+            return EXIT_FAILURE;
         }
         std::fstream f_out(path, std::ios::out | std::ios::trunc | std::ios::binary);
         if (!f_out.is_open()) {
             std::cerr << "ERROE: write trie file failed:" << path << std::endl;
-            return;
+            return EXIT_FAILURE;
         }
         f_out << *this;
         f_out.close();
+        return EXIT_SUCCESS;
     }
 };
 

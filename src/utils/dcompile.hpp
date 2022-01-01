@@ -444,6 +444,7 @@ class FileStringPairIter : public darts::StringIterPairs {
                     continue;
                 }
                 darts::tolower(strs);
+                key = key.substr(1, key.size() - 2);
                 darts::toupper(key);
                 // set keystr
                 auto it = labels->find(key);

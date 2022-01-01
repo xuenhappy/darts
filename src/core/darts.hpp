@@ -50,6 +50,25 @@ class Atom {
         }
     }
 
+    bool hasType(WordType type) const {
+        if (this->tags != NULL) {
+            return this->tags->find(type) != this->tags->end();
+        }
+        return false;
+    }
+
+    bool hasType(std::set<WordType> *otags) const {
+        if (otags == NULL || this->tags == NULL) {
+            return false;
+        }
+        for (auto &t : *otags) {
+            if (this->tags->find(t) != this->tags->end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void addTag(WordType type) {
         if (this->tags == NULL) {
             this->tags = new std::set<WordType>();
@@ -58,6 +77,15 @@ class Atom {
     }
 
     void addTags(std::set<WordType> *otags) {
+        if (otags) {
+            if (this->tags == NULL) {
+                this->tags = new std::set<WordType>();
+            }
+            this->tags->insert(otags->begin(), otags->end());
+        }
+    }
+
+    void addTags(std::vector<WordType> *otags) {
         if (otags) {
             if (this->tags == NULL) {
                 this->tags = new std::set<WordType>();
@@ -243,6 +271,15 @@ class Word {
      * @param tags
      */
     void addTags(std::set<WordType> *tags) { this->word->addTags(tags); }
+
+    void addTag(WordType tag) { this->word->addTag(tag); }
+
+    /**
+     * @brief add tags into words
+     *
+     * @param tags
+     */
+    void addTags(std::vector<WordType> *tags) { this->word->addTags(tags); }
 };
 
 typedef struct _Cursor {
@@ -440,7 +477,7 @@ class CellMap {
      * @param cur
      * @return Cursor*
      */
-    Cursor AddCell(std::shared_ptr<Word> cell, Cursor cur) {
+    Cursor addCell(std::shared_ptr<Word> cell, Cursor cur) {
         if (!cur) {
             return addNext(this->head, cell);
         }

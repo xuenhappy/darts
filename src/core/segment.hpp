@@ -17,13 +17,27 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "../core/darts.hpp"
+#include "../utils/registerer.hpp"
 namespace darts {
 
-class CellPersenter {
+class SegmentPlugin {
+   public:
+    /**
+     * @brief init this pulg by dict map
+     *
+     * @param param
+     * @return int
+     */
+    virtual int initalize(const std::map<std::string, std::string> &param) = 0;
+    virtual ~SegmentPlugin() {}
+};
+
+class CellPersenter : public SegmentPlugin {
    public:
     /***
      * 对每个Word进行向量表示
@@ -36,16 +50,23 @@ class CellPersenter {
      * @param next
      * @return double must >=0
      */
-    virtual double ranging(Word *pre, Word *next) = 0;
+    virtual double ranging(Word *pre, Word *next) const = 0;
     virtual ~CellPersenter() {}
 };
 
-class CellRecognizer {
+class CellRecognizer : public SegmentPlugin {
    public:
     // recognizer all Wcell possable in the atomlist
-    virtual void addSomeCells(AtomList *dstSrc, CellMap *cmap) = 0;
+    virtual void addSomeCells(AtomList *dstSrc, CellMap *cmap) const = 0;
     virtual ~CellRecognizer() {}
 };
+
+// define some registerer
+REGISTER_REGISTERER(CellRecognizer);
+REGISTER_REGISTERER(CellPersenter);
+#define REGISTER_Recognizer(name) REGISTER_CLASS(CellRecognizer, name)
+#define REGISTER_Persenter(name) REGISTER_CLASS(CellPersenter, name)
+// end defined
 
 typedef struct _GraphEdge {
     int et;
