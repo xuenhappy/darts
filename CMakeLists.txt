@@ -8,6 +8,7 @@ else()
 endif()
 
 #some self define function
+message("find required package path....")
 function(DARTS_PROTOBUF_GENERATE_CPP PATH SRCS HDRS)
   if(NOT ARGN)
     message(SEND_ERROR "Error: PROTOBUF_GENERATE_CPP() called without any proto files")
@@ -86,11 +87,11 @@ set(proto_gen_path proto_gen)
 DARTS_PROTOBUF_GENERATE_CPP(${proto_gen_path} PROTO_SRCS PROTO_HDRS ${ProtoFiles})
 
 message("-----------------include----path----------------")
-message("gen proto src file:${ProtoFiles}")
-message("gen proto cpp file:${PROTO_HDRS}")
-message("${Jsoncpp_INCLUDE_DIR}")
-message("${EIGEN3_INCLUDE_DIR}")
-message("${HDF5_INCLUDE_DIR}")
+message("proto src file: ${ProtoFiles}")
+message("gen proto head file: ${PROTO_HDRS}")
+message("jsoncpp path: ${Jsoncpp_INCLUDE_DIR}")
+message("eigen3 path: ${EIGEN3_INCLUDE_DIR}")
+message("hdf5 path: ${HDF5_INCLUDE_DIR}")
 message("-----------------================")
 
 #set bin ouput dir
