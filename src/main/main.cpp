@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
     });
     std::cout << "----------------5----------------" << std::endl;
     darts::DictWordRecongnizer dict(std::string("schools.pb"));
-
+    std::cout << darts::CellRecognizerRegisterer::IsValid("DictWordRecongnizer") << std::endl;
     std::cout << "----------------6----------------" << std::endl;
     argparse::ArgumentParser program("darts");
     program.add_argument("--compile")
