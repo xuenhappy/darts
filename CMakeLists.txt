@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.0.2)
-project (darts VERSION 1.2 LANGUAGES CXX)
+project (darts VERSION 1.2 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(IS_ROOT_PROJECT ON)
@@ -7,8 +7,8 @@ else()
     set(IS_ROOT_PROJECT OFF)
 endif()
 
-
-function(MY_PROTOBUF_GENERATE_CPP PATH SRCS HDRS)
+#some self define function
+function(DARTS_PROTOBUF_GENERATE_CPP PATH SRCS HDRS)
   if(NOT ARGN)
     message(SEND_ERROR "Error: PROTOBUF_GENERATE_CPP() called without any proto files")
     return()
@@ -64,43 +64,45 @@ function(MY_PROTOBUF_GENERATE_CPP PATH SRCS HDRS)
   set(${HDRS} ${${HDRS}} PARENT_SCOPE)
 endfunction()
 
+
+# search the package use
 find_path(Jsoncpp_INCLUDE_DIR
   NAMES json/json.h
   PATH_SUFFIXES jsoncpp
   PATHS ${Jsoncpp_PKGCONF_INCLUDE_DIRS} # /usr/include/jsoncpp/json
 )
-# Finally the library itself
+
 find_library(Jsoncpp_LIBRARY
   NAMES jsoncpp
   PATHS ${Jsoncpp_PKGCONF_LIBRARY_DIRS}
 )
 
-
-# searched when the following is executed
 find_package (Eigen3 REQUIRED NO_MODULE)
 find_package(Protobuf REQUIRED)
+find_package(HDF5 REQUIRED)
+set(_hdf5_libs hdf5 hdf5_cpp)
 file(GLOB ProtoFiles "${CMAKE_CURRENT_LIST_DIR}/src/utils/*.proto")
-message("gen proto cpp file:${ProtoFiles}")
-MY_PROTOBUF_GENERATE_CPP("../src/utils" PROTO_SRCS PROTO_HDRS ${ProtoFiles})
+set(proto_gen_path proto_gen)
+DARTS_PROTOBUF_GENERATE_CPP(${proto_gen_path} PROTO_SRCS PROTO_HDRS ${ProtoFiles})
+
+message("-----------------include----path----------------")
+message("gen proto src file:${ProtoFiles}")
 message("gen proto cpp file:${PROTO_HDRS}")
-
-
-
-
-
-message("${EIGEN3_INCLUDE_DIR}")
 message("${Jsoncpp_INCLUDE_DIR}")
+message("${EIGEN3_INCLUDE_DIR}")
+message("${HDF5_INCLUDE_DIR}")
+message("-----------------================")
 
-
+#set bin ouput dir
 add_compile_options(-fPIC)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-
-include_directories(src ${EIGEN3_INCLUDE_DIR} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS})
+#set build target
+include_directories(src ${EIGEN3_INCLUDE_DIR} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS} "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}" ${HDF5_INCLUDE_DIR})
 add_executable(darts ${PROTO_SRCS} src/main/main.cpp)
-target_link_libraries(darts Eigen3::Eigen ${Jsoncpp_LIBRARY} ${PROTOBUF_LIBRARY})
+target_link_libraries(darts Eigen3::Eigen ${Jsoncpp_LIBRARY} ${PROTOBUF_LIBRARY} ${HDF5_LIBRARY})
 set_property(TARGET darts PROPERTY CXX_STANDARD 17)
 
 # add_library(ocr SHARED src/main/darts4py.cpp)

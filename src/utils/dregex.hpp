@@ -13,6 +13,8 @@
 #define SRC_UTILS_DREGEX_HPP_
 
 
+#include <darts.pb.h>
+
 #include <fstream>
 #include <map>
 #include <queue>
@@ -20,7 +22,6 @@
 #include <utility>
 #include <vector>
 
-#include "./darts.pb.h"
 #include "str_utils.hpp"
 
 namespace darts {
