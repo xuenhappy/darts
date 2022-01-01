@@ -350,13 +350,13 @@ void compile(darts::StringIterPairs &pairs, darts::Trie &trie) {
     builder.rootState = NULL;
 }
 
-class UTF8StrIterator : public darts::StringIter {
+class U32StrIterator : public darts::StringIter {
    private:
     const char32_t *str;
     size_t len;
 
    public:
-    UTF8StrIterator(const char32_t *str, size_t len) {
+    U32StrIterator(const char32_t *str, size_t len) {
         this->str = str;
         this->len = len;
     }
@@ -374,13 +374,13 @@ class UTF8StrIterator : public darts::StringIter {
 };
 
 
-class AtomStrIterator : public darts::StringIter {
+class WordStrIterator : public darts::StringIter {
    private:
     const char *str;
     const std::set<WordType> *skiptypes;
 
    public:
-    AtomStrIterator(const char *str, const std::set<WordType> *skiptypes) {
+    WordStrIterator(const char *str, const std::set<WordType> *skiptypes) {
         this->str = str;
         this->skiptypes = skiptypes;
     }
@@ -400,6 +400,10 @@ class AtomStrIterator : public darts::StringIter {
     }
 };
 
+/**
+ * @brief 标准行文件迭代器
+ *
+ */
 class FileStringPairIter : public darts::StringIterPairs {
    private:
     const std::vector<std::string> *files;
@@ -455,7 +459,7 @@ class FileStringPairIter : public darts::StringIterPairs {
                     (*labels)[key] = vlabels[0];
                 }
 
-                AtomStrIterator atom(strs.c_str(), this->skiptypes);
+                WordStrIterator atom(strs.c_str(), this->skiptypes);
                 hit(atom, vlabels, 1);
             }
             f_in.close();
@@ -466,8 +470,9 @@ class FileStringPairIter : public darts::StringIterPairs {
 /**
  * @brief 编译一些词典文件
  *
- * @param paths
- * @param pbfile
+ * @param paths 需要被编译的原始文件，文件内容必须符合特定规范 ，单行内容形如: "<LABEL>,清华大学"
+ * @param pbfile pb文件输出的地方
+ * @param skiptypes 编译过程需要跳过的一些词
  */
 void compileStringDict(const std::vector<std::string> &paths, const std::string &pbfile,
                        const std::set<WordType> *skiptypes) {

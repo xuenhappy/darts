@@ -96,6 +96,12 @@ class Trie {
         }
         return "";
     }
+    /**
+     * @brief Get the ori word code in this trie
+     *
+     * @param word
+     * @return int64_t
+     */
     int64_t getCode(const std::string &word) const {
         auto it = this->CodeMap.find(word);
         if (it == this->CodeMap.end()) {
@@ -103,7 +109,12 @@ class Trie {
         }
         return it->second;
     }
-    // ParseText parse a text list hit ( [start,end),tagidx)
+    /**
+     * @brief match a gvie word list
+     *
+     * @param text src word list
+     * @param hit match call back function
+     */
     void parse(StringIter &text, std::function<bool(size_t, size_t, const std::vector<int64_t> *)> hit) const {
         if (this->MaxLen < 1 || this->V.empty()) {
             std::cerr << "ERROR: parse on empty trie!" << std::endl;
