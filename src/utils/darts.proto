@@ -14,3 +14,14 @@ message DRegexDat{
     map<string,int32> CodeMap=8;
     repeated string Labels=9;
 }
+
+
+message BigramDat{
+    map<int64,int64> freq=1;
+    message bigram{
+        int64 x=1;
+        int64 y=2;
+        int64 freq=3;
+    }
+    repeated bigram table=2;
+}

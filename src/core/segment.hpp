@@ -42,7 +42,7 @@ class CellPersenter : public SegmentPlugin {
     /***
      * 对每个Word进行向量表示
      **/
-    virtual void embed(AtomList *dstSrc, CellMap *cmap) = 0;
+    virtual void embed(AtomList *dstSrc, CellMap *cmap) const = 0;
     /**
      * @brief
      *
