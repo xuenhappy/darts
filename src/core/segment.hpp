@@ -50,7 +50,7 @@ class CellPersenter : public SegmentPlugin {
      * @param next
      * @return double must >=0
      */
-    virtual double ranging(Word *pre, Word *next) const = 0;
+    virtual double ranging(const Word *pre, const Word *next) const = 0;
     virtual ~CellPersenter() {}
 };
 

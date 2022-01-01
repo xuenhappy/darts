@@ -6,8 +6,21 @@
         }
     },
     "persenters": {
-        "min.path.rule": {},
-        "net.lstm": {}
+        "min.rule": {
+            "type": "MinCoverPersenter"
+        },
+        "elmo.embed": {
+            "type": "ElmoPersenter",
+            "model.path": ""
+        },
+        "bert.embed": {
+            "type": "TinyBertPersenter",
+            "model.path": ""
+        },
+        "wordvec.embed": {
+            "type": "",
+            "model.path": ""
+        }
     },
     "modes": {
         "smart": {
