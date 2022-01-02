@@ -59,8 +59,7 @@ int main(int argc, char *argv[]) {
     darts::DictWordRecongnizer dict(std::string("schools.pb"));
     std::cout << darts::CellRecognizerRegisterer::IsValid("DictWordRecongnizer") << std::endl;
     std::cout << "----------------6----------------" << std::endl;
-    darts::BigramPersenter::buildDict("/Users/xuen/Downloads/SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt",
-                                      "bigram");
+    darts::BigramPersenter::buildDict("SogouLabDic.txt", "SogouR.txt", "bigram");
     std::cout << "----------------7----------------" << std::endl;
     argparse::ArgumentParser program("darts");
     program.add_argument("--compile")

@@ -424,7 +424,7 @@ class FileStringPairIter : public darts::StringIterPairs {
         if (!lineFix) {
             this->lineFix = [&](std::string &line, std::vector<int64_t> &lidxes,
                                 std::map<std::string, int64_t> *lmap) -> std::string {
-                auto pos = line.find_first_of(',');
+                auto pos = line.find_first_of(':');
                 if (pos == std::string::npos || pos < 1 || pos >= line.size() - 1) {
                     std::cerr << "WARN: bad line:[" << line << "]" << std::endl;
                     return "";
@@ -438,16 +438,23 @@ class FileStringPairIter : public darts::StringIterPairs {
                     return "";
                 }
                 darts::tolower(strs);
-                key = key.substr(1, key.size() - 2);
+                // convert key
                 darts::toupper(key);
-                // set keystr
-                auto it = lmap->find(key);
-                if (it != lmap->end()) {
-                    lidxes.push_back(it->second);
-                } else {
-                    auto idx = labels->size();
-                    (*lmap)[key] = idx;
-                    lidxes.push_back(idx);
+                std::vector<std::string> keys;
+                darts::split(key, ",", keys);
+                for (auto &kstr : keys) {
+                    darts::trim(kstr);
+                    if (kstr.size() < 3) continue;
+                    auto key_str = kstr.substr(1, kstr.size() - 2);
+                    // set keystr
+                    auto it = lmap->find(key_str);
+                    if (it != lmap->end()) {
+                        lidxes.push_back(it->second);
+                    } else {
+                        auto idx = labels->size();
+                        (*lmap)[key_str] = idx;
+                        lidxes.push_back(idx);
+                    }
                 }
                 return strs;
             };

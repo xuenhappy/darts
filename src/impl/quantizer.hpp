@@ -233,7 +233,6 @@ class BigramPersenter {
             std::cerr << "create out dir error: " << outdir << std::endl;
             return EXIT_FAILURE;
         }
-        return 0;
         BigramPersenter persenter;
         // get output file
         namespace fs = std::filesystem;
