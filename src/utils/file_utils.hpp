@@ -39,14 +39,20 @@ const char *dllPath(void) {
 /**
  * @brief Get the Resource object
  *
- * @param spath
+ * @param spath ori source path
+ * @param isDir if this resouce is dir otherwise is file
  * @return const std::string
  */
-const std::string getResource(const std::string &spath) {
+const std::string getResource(const std::string &spath, bool isDir = false) {
     namespace fs = std::filesystem;
     fs::path ori_path(spath);
-    if (fs::exists(ori_path) && fs::is_regular_file(ori_path)) {
-        return ori_path.string();
+    if (fs::exists(ori_path)) {
+        if ((!isDir) && fs::is_regular_file(ori_path)) {
+            return ori_path.string();
+        }
+        if (isDir && fs::is_directory(ori_path)) {
+            return ori_path.string();
+        }
     }
 
     std::string dllpath(dllPath());
@@ -55,15 +61,27 @@ const std::string getResource(const std::string &spath) {
         fs::path dpath1(dllpath);
         auto bin_dir = dpath1.parent_path();
         bin_dir.append(spath);
-        if (fs::exists(bin_dir) && fs::is_regular_file(bin_dir)) {
-            return bin_dir.string();
+
+        if (fs::exists(bin_dir)) {
+            if ((!isDir) && fs::is_regular_file(bin_dir)) {
+                return bin_dir.string();
+            }
+            if (isDir && fs::is_directory(bin_dir)) {
+                return bin_dir.string();
+            }
         }
+
 
         // check dll parent
         bin_dir = dpath1.parent_path();
         bin_dir.append("../").append(spath);
-        if (fs::exists(bin_dir) && fs::is_regular_file(bin_dir)) {
-            return bin_dir.string();
+        if (fs::exists(bin_dir)) {
+            if ((!isDir) && fs::is_regular_file(bin_dir)) {
+                return bin_dir.string();
+            }
+            if (isDir && fs::is_directory(bin_dir)) {
+                return bin_dir.string();
+            }
         }
     }
 
@@ -75,8 +93,13 @@ const std::string getResource(const std::string &spath) {
     if (!darts_env.empty()) {
         fs::path p1(darts_env);
         p1.append(spath);
-        if (fs::exists(p1) && fs::is_regular_file(p1)) {
-            return p1.string();
+        if (fs::exists(p1)) {
+            if ((!isDir) && fs::is_regular_file(p1)) {
+                return p1.string();
+            }
+            if (isDir && fs::is_directory(p1)) {
+                return p1.string();
+            }
         }
     }
 
