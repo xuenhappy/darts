@@ -50,9 +50,16 @@ int main(int argc, char *argv[]) {
     std::string teststr = "dd清华大学的学在北京大学的中国人民解放军海军广州舰艇学院k安徽大学里面有个北大II";
     std::u32string text = to_utf32(teststr);
     dregex::U32StrIterator testStr(&text[0], text.size());
-    newTrie.parse(testStr, [&](size_t s, size_t e, const std::vector<int64_t> *label) -> bool {
-        std::cout << to_utf8(text.substr(s, e - s)) << ",s:" << s << ",e:" << e << "," << (*label)[0] << "|"
-                  << newTrie.getLabel((*label)[0]) << std::endl;
+    std::vector<std::string> labels;
+    newTrie.parse(testStr, [&](size_t s, size_t e, const std::set<int64_t> *label) -> bool {
+        labels.clear();
+        if (label) {
+            for (auto lidx : *label) {
+                labels.push_back(newTrie.getLabel(lidx));
+            }
+        }
+        std::cout << to_utf8(text.substr(s, e - s)) << ",s:" << s << ",e:" << e << "," << darts::join(labels, "|")
+                  << std::endl;
         return false;
     });
     std::cout << "----------------5----------------" << std::endl;

@@ -18,6 +18,7 @@
 #include <fstream>
 #include <map>
 #include <queue>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -31,7 +32,7 @@ class Trie {
    public:
     std::vector<std::string> Labels;
     std::vector<int64_t> Check, Base, Fail, L;
-    std::vector<std::vector<int64_t> *> V, OutPut;
+    std::vector<std::set<int64_t> *> V, OutPut;
     size_t MaxLen;
     std::map<std::string, int> CodeMap;
 
@@ -115,7 +116,7 @@ class Trie {
      * @param text src word list
      * @param hit match call back function
      */
-    void parse(StringIter &text, std::function<bool(size_t, size_t, const std::vector<int64_t> *)> hit) const {
+    void parse(StringIter &text, std::function<bool(size_t, size_t, const std::set<int64_t> *)> hit) const {
         if (this->MaxLen < 1 || this->V.empty()) {
             std::cerr << "ERROR: parse on empty trie!" << std::endl;
             return;
@@ -204,7 +205,7 @@ class Trie {
                 continue;
             }
             auto vlist = dat.v(i).item();
-            my.V[i] = new std::vector<int64_t>(vlist.begin(), vlist.end());
+            my.V[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
         }
         size = dat.output_size();
         my.OutPut.assign(size, NULL);
@@ -214,7 +215,7 @@ class Trie {
                 continue;
             }
             auto vlist = dat.output(i).item();
-            my.OutPut[i] = new std::vector<int64_t>(vlist.begin(), vlist.end());
+            my.OutPut[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
         }
         auto cmap = dat.codemap();
         my.CodeMap.insert(cmap.begin(), cmap.end());

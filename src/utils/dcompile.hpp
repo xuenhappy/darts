@@ -142,7 +142,7 @@ void constructFailureStates(Builder *b) {
         queue.push(depthOneState);
 
         if (!depthOneState->emits.empty()) {
-            auto dt = new std::vector<int64_t>(depthOneState->emits.begin(), depthOneState->emits.end());
+            auto dt = new std::set<int64_t>(depthOneState->emits.begin(), depthOneState->emits.end());
             b->trie->OutPut[depthOneState->index] = dt;
         }
     }
@@ -162,7 +162,7 @@ void constructFailureStates(Builder *b) {
             for (auto e : newFailureState->emits) {
                 addEmit(targetState, e);
             }
-            auto dt = new std::vector<int64_t>(targetState->emits.begin(), targetState->emits.end());
+            auto dt = new std::set<int64_t>(targetState->emits.begin(), targetState->emits.end());
             b->trie->OutPut[targetState->index] = dt;
         }
     }
@@ -190,9 +190,9 @@ size_t addAllKeyword(Builder *b, darts::StringIterPairs &kvs) {
         }
         maxCode += lens;
         if (v) {
-            t->V.push_back(new std::vector<int64_t>(v, v + vlen));
+            t->V.push_back(new std::set<int64_t>(v, v + vlen));
         } else {
-            t->V.push_back(new std::vector<int64_t>(0));
+            t->V.push_back(new std::set<int64_t>());
         }
     });
     t->MaxLen++;

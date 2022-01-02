@@ -71,7 +71,7 @@ class DictWordRecongnizer : public CellRecognizer {
     void addSomeCells(AtomList *dstSrc, CellMap *cmap) const {
         auto cur = cmap->Head();
         AtomListIterator iter(dstSrc);
-        this->trie.parse(iter, [&](size_t s, size_t e, const std::vector<int64_t> *labels) -> bool {
+        this->trie.parse(iter, [&](size_t s, size_t e, const std::set<int64_t> *labels) -> bool {
             auto word = std::make_shared<Word>(dstSrc->at(s, e), s, e);
             if (labels) {
                 for (auto tidx : *labels) {
