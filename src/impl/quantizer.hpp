@@ -23,9 +23,9 @@
 #include <vector>
 
 #include "../core/segment.hpp"
-#include "../utils/cedar.h"
 #include "../utils/file_utils.hpp"
 #include "../utils/str_utils.hpp"
+#include "cedar/cedar.h"
 
 namespace darts {
 class MinCoverPersenter {

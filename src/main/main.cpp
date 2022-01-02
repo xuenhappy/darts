@@ -17,12 +17,12 @@
 #include "../core/segment.hpp"
 #include "../impl/quantizer.hpp"
 #include "../impl/recognizer.hpp"
-#include "../utils/argparse.hpp"
 #include "../utils/codecvt.hpp"
 #include "../utils/dcompile.hpp"
 #include "../utils/dregex.hpp"
 #include "../utils/file_utils.hpp"
 #include "../utils/utils_base.hpp"
+#include "argparse/argparse.hpp"
 
 int main(int argc, char *argv[]) {
     initUtils();
