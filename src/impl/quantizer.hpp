@@ -61,6 +61,7 @@ struct bigram_key {
 };
 struct bigram_data {
     size_t count;  // n(ij)
+    explicit bigram_data(size_t n_ij) : count(n_ij) {}
 };
 
 /**
@@ -134,7 +135,8 @@ class BigramPersenter {
             if (it == bigrams.end()) {
                 n_ij = min(a, b, avg_union_freq) / 2.0;
             } else {
-                n_ij = it->second.count * 0.85 + 0.15 * min(a, b);
+                double m = min(a, b);
+                n_ij = min(m, it->second.count) * 0.85 + 0.15 * m;
             }
         }
         return log((1.0 + a) / (1.0 + n_ij));
@@ -159,17 +161,59 @@ class BigramPersenter {
      */
     void embed(AtomList *dstSrc, CellMap *cmap) const {}
 
-    static int readTable(BigramPersenter &dat, const std::string &outfile) {
-        // idx.update(line, std::strlen(line) - 1, n++);
-        // idx.save("");
-        // protobuf save the dict
+    static int readTable(BigramPersenter &persenter, const std::string &ifile) {
+        std::ifstream f_in(ifile, std::ios::in | std::ios::binary);
+        if (!f_in.is_open()) {
+            std::cerr << "ERROR: load table file failed:" << ifile << std::endl;
+            return EXIT_FAILURE;
+        }
+        darts::BigramDat dat;
+        if (!dat.ParseFromIstream(&f_in)) {
+            std::cerr << "ERROR: Failed to read table file:" << ifile << std::endl;
+            f_in.close();
+            return EXIT_FAILURE;
+        }
+        f_in.close();
+        persenter.avg_single_freq = dat.avg_single_freq();
+        persenter.avg_union_freq = dat.avg_union_freq();
+        persenter.max_single_freq = dat.max_single_freq();
+
+        auto freq = dat.freq();
+        persenter.freqs.insert(freq.begin(), freq.end());
+
+        auto size = dat.table_size();
+        for (size_t i = 0; i < size; i++) {
+            auto tuple = dat.table(i);
+            persenter[bigram_key(tuple.x(), tuple.y())] = bigram_data(tuple.freq());
+        }
         return EXIT_SUCCESS;
     }
 
-    static int writeTable(const BigramPersenter &dat, const std::string &outfile) {
-        // idx.update(line, std::strlen(line) - 1, n++);
-        // idx.save("");
-        // protobuf save the dict
+    static int writeTable(const BigramPersenter &persenter, const std::string &outfile) {
+        std::fstream f_out(outfile, std::ios::out | std::ios::trunc | std::ios::binary);
+        if (!f_out.is_open()) {
+            std::cerr << "ERROE: write table file failed:" << outfile << std::endl;
+            return EXIT_FAILURE;
+        }
+        darts::BigramDat dat;
+        dat.set_avg_single_freq(persenter.avg_single_freq);
+        dat.set_avg_union_freq(persenter.avg_union_freq);
+        dat.set_max_single_freq(persenter.max_single_freq);
+
+        auto freq = dat.mutable_freq();
+        freq->insert(persenter.freqs.begin(), persenter.freqs.end());
+        for (auto &kv : persenter.bigrams) {
+            auto table = dat.add_table();
+            table->set_x(kv.first.i);
+            table->set_y(kv.first.j);
+            table->set_freq(kv.second.count);
+        }
+        if (!dat.SerializePartialToOstream(&f_out)) {
+            std::cerr << "ERROR: Failed to write table file: " << outfile << std::endl;
+            f_out.close();
+            return EXIT_FAILURE;
+        }
+        f_out.close();
         return EXIT_SUCCESS;
     }
 
@@ -183,6 +227,11 @@ class BigramPersenter {
      */
     static int buildDict(const std::string &single_freq_dict, const std::string &union_freq_dict,
                          const std::string &outdir) {
+        // create dir
+        if (createDirectory(outdir)) {
+            std::cerr << "create out dir error: " << outdir << std::endl;
+            return EXIT_FAILURE;
+        }
         // get output file
         namespace fs = fs::filesystem;
         fs::path widx_path(outdir);
@@ -190,22 +239,92 @@ class BigramPersenter {
         fs::path table_path(outdir);
         table_path.append(TABLE_FILE);
 
-        // read data
+        // read freq data
         std::ifstream idx_in(single_freq_dict.c_str());
         if (!idx_in.is_open()) {
-            std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
+            std::cerr << "ERROR: open data " << single_freq_dict << " file failed " << std::endl;
             return EXIT_FAILURE;
         }
+        uint64_t freq_sum = 0, max_freq = 0, union_freq_sum = 0;
         std::string line;
         size_t n = 0;
+        std::vector<std::string> coloums;
         while (std::getline(idx_in, line)) {
             darts::trim(line);
             if (line.empty()) {
                 continue;
             }
+            coloums.clear();
+            split(line, "\t", coloums);
+            if (coloums.size() < 2) {
+                std::cerr << "WARN:bad line for freq " << line << std::endl;
+                continue;
+            }
+            std::string word = coloums[0];
+            size_t freq = atol(coloums[1].c_str());
+            if (freq < 1) {
+                std::cerr << "WARN:bad line freq for freq " << line << std::endl;
+                continue;
+            }
+            freq_sum += freq;
+            if (freq > max_freq) max_freq = freq;
             idx.update(line, line.length(), n++);
+            this->freqs[n - 1] = freq;
         }
+        idx_in.close();
 
+        // read table file
+        std::vector<std::string> tmpkey;
+        std::ifstream table_in(union_freq_dict.c_str());
+        if (!table_in.is_open()) {
+            std::cerr << "ERROR: open data " << union_freq_dict << " file failed " << std::endl;
+            return EXIT_FAILURE;
+        }
+        size_t unum = 0;
+        while (std::getline(table_in, line)) {
+            darts::trim(line);
+            if (line.empty()) {
+                continue;
+            }
+            coloums.clear();
+            split(line, "\t", coloums);
+            if (coloums.size() != 2) {
+                std::cerr << "WARN:bad line for table " << line << std::endl;
+                continue;
+            }
+            std::string word = coloums[0];
+            size_t freq = atol(coloums[1].c_str());
+            if (freq < 1) {
+                std::cerr << "WARN:bad line freq for table " << line << std::endl;
+                continue;
+            }
+            tmpkey.clear();
+            split(word, "-", tmpkey);
+            if (tmpkey.size() != 2) {
+                std::cerr << "WARN:bad line words for table " << line << std::endl;
+                continue;
+            }
+            trim(tmpkey[0]);
+            trim(tmpkey[1]);
+            if (tmpkey[0].empty() || tmpkey[1].empty()) {
+                std::cerr << "WARN:bad line words for table " << line << std::endl;
+                continue;
+            }
+            auto pidx = getWordKey(tmpkey[0]);
+            auto nidx = getWordKey(tmpkey[1]);
+            if (pidx < 0 || nidx < 0) {
+                std::cerr << "WARN:bad line words for table,words not in freq txt: " << line << std::endl;
+                continue;
+            }
+            this->bigrams[bigram_key(pidx, nidx)] = bigram_data(freq);
+            union_freq_sum += freq;
+            unum++;
+        }
+        table_in.close();
+        // set static info
+        this->avg_single_freq = freq_sum / (1 + n);
+        this->avg_union_freq = union_freq_sum / (1 + unum);
+        this->max_single_freq = max_freq;
 
         // save data
         if (idx.save(widx_path.string())) {

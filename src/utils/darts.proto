@@ -24,4 +24,7 @@ message BigramDat{
         int64 freq=3;
     }
     repeated bigram table=2;
+    int64 avg_single_freq = 3;
+    int64 max_single_freq = 4;
+    int64 avg_union_freq = 5;
 }

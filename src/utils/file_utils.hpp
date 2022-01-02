@@ -14,13 +14,72 @@
 #ifndef SRC_UTILS_FILE_UTILS_HPP_
 #define SRC_UTILS_FILE_UTILS_HPP_
 
+#ifdef WIN32
+#include <direct.h>
+#include <io.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 #include <dlfcn.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+
+
+#define MAX_PATH_LEN 256
+
+#ifdef WIN32
+#define ACCESS(fileName, accessMode) _access(fileName, accessMode)
+#define MKDIR(path) _mkdir(path)
+#else
+#define ACCESS(fileName, accessMode) access(fileName, accessMode)
+#define MKDIR(path) mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#endif
+
+
+/**
+ * @brief Create a Directory object
+ *
+ * @param directoryPath
+ * @return int32_t
+ */
+int32_t createDirectory(const std::string &directoryPath) {
+    namespace fs = std::filesystem;
+    // check ori path
+    fs::path ori_path(directoryPath);
+    if (fs::exists(ori_path)) {
+        if (fs::is_directory(ori_path)) return 0;
+        if (fs::is_regular_file(ori_path)) {
+            std::cerr << ori_path << " is a file exits!" << std::endl;
+            return 1;
+        }
+    }
+    // get abs path
+    std::string dir = fs::absolute_path(ori_path).string();
+    // mkdir
+    uint32_t dirPathLen = dir.length();
+    if (dirPathLen > MAX_PATH_LEN) {
+        return -1;
+    }
+    char tmpDirPath[MAX_PATH_LEN] = {0};
+    for (uint32_t i = 0; i < dirPathLen; ++i) {
+        tmpDirPath[i] = dir[i];
+        if (tmpDirPath[i] == '\\' || tmpDirPath[i] == '/') {
+            if (ACCESS(tmpDirPath, 0) != 0) {
+                int32_t ret = MKDIR(tmpDirPath);
+                if (ret != 0) {
+                    return ret;
+                }
+            }
+        }
+    }
+    return 0;
+}
 
 /**
  * @brief get a dll path
