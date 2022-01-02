@@ -101,8 +101,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 #set build target
-set(THIRD_INCLUDE thirds)
-include_directories(src ${THIRD_INCLUDE} ${EIGEN3_INCLUDE_DIR} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS} "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}" ${HDF5_INCLUDE_DIR})
+include_directories(src ${EIGEN3_INCLUDE_DIR} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS} "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}" ${HDF5_INCLUDE_DIR})
 add_executable(darts ${PROTO_SRCS} src/main/main.cpp)
 target_link_libraries(darts Eigen3::Eigen ${Jsoncpp_LIBRARY} ${PROTOBUF_LIBRARY} ${HDF5_LIBRARY})
 set_property(TARGET darts PROPERTY CXX_STANDARD 17)
