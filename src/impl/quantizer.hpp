@@ -61,6 +61,7 @@ struct bigram_key {
 };
 struct bigram_data {
     size_t count;  // n(ij)
+    bigram_data() : count(0) {}
     explicit bigram_data(size_t n_ij) : count(n_ij) {}
 };
 
@@ -89,7 +90,7 @@ class BigramPersenter {
      */
     int getWordKey(const std::string &word) const {
         auto widx = idx.exactMatchSearch<int>(word.c_str(), word.length());
-        if (widx != cedar::da<int>::CEDAR_NO_VALUE) {
+        if (widx == cedar::da<int>::CEDAR_NO_VALUE) {
             return -1;
         }
         return widx;
@@ -107,7 +108,7 @@ class BigramPersenter {
         if (widx < 0) {
             return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq / 2));
         }
-        return log((1000.0 + max_single_freq) / (1.0 + freqs[widx]));
+        return log((1000.0 + max_single_freq) / (1.0 + freqs.at(widx)));
     }
 
     /**
@@ -127,16 +128,16 @@ class BigramPersenter {
             if (b_widx < 0) {
                 b = avg_single_freq / 2;
             }
-            n_ij = min(a, b, avg_union_freq) / 2.0;
+            n_ij = std::min(std::min(a, b), double(avg_union_freq)) / 2.0;
         } else {
-            a = freqs[a_widx], b = freqs[b_widx];
+            a = freqs.at(a_widx), b = freqs.at(b_widx);
             bigram_key key(a_widx, b_widx);
             auto it = bigrams.find(key);
             if (it == bigrams.end()) {
-                n_ij = min(a, b, avg_union_freq) / 2.0;
+                n_ij = std::min(std::min(a, b), double(avg_union_freq)) / 2.0;
             } else {
-                double m = min(a, b);
-                n_ij = min(m, it->second.count) * 0.85 + 0.15 * m;
+                double m = std::min(a, b);
+                n_ij = std::min(m, double(it->second.count)) * 0.85 + 0.15 * m;
             }
         }
         return log((1.0 + a) / (1.0 + n_ij));
@@ -146,7 +147,7 @@ class BigramPersenter {
    public:
     int initalize(const std::map<std::string, std::string> &param) {
         auto it = param.find(DAT_DIR_KEY);
-        if (it == param.end() || it->second == NULL) {
+        if (it == param.end() || it->second.empty()) {
             std::cerr << "ERROR: could not find key:" << DAT_DIR_KEY << std::endl;
             return EXIT_FAILURE;
         }
@@ -184,7 +185,7 @@ class BigramPersenter {
         auto size = dat.table_size();
         for (size_t i = 0; i < size; i++) {
             auto tuple = dat.table(i);
-            persenter[bigram_key(tuple.x(), tuple.y())] = bigram_data(tuple.freq());
+            persenter.bigrams[bigram_key(tuple.x(), tuple.y())] = bigram_data(tuple.freq());
         }
         return EXIT_SUCCESS;
     }
@@ -232,8 +233,10 @@ class BigramPersenter {
             std::cerr << "create out dir error: " << outdir << std::endl;
             return EXIT_FAILURE;
         }
+        return 0;
+        BigramPersenter persenter;
         // get output file
-        namespace fs = fs::filesystem;
+        namespace fs = std::filesystem;
         fs::path widx_path(outdir);
         widx_path.append(KEY_IDX_FILE);
         fs::path table_path(outdir);
@@ -257,21 +260,22 @@ class BigramPersenter {
             coloums.clear();
             split(line, "\t", coloums);
             if (coloums.size() < 2) {
-                std::cerr << "WARN:bad line for freq " << line << std::endl;
+                std::cerr << "WARN:bad line for freq [" << line << "] coloum size:" << coloums.size() << std::endl;
                 continue;
             }
-            std::string word = coloums[0];
+            std::string word = trim(coloums[0]);
             size_t freq = atol(coloums[1].c_str());
-            if (freq < 1) {
-                std::cerr << "WARN:bad line freq for freq " << line << std::endl;
+            if (freq < 1 || word.empty()) {
+                std::cerr << "WARN:bad line freq for freq: " << line << std::endl;
                 continue;
             }
             freq_sum += freq;
             if (freq > max_freq) max_freq = freq;
-            idx.update(line, line.length(), n++);
-            this->freqs[n - 1] = freq;
+            persenter.idx.update(word.c_str(), word.length(), n++);
+            persenter.freqs[n - 1] = freq;
         }
         idx_in.close();
+
 
         // read table file
         std::vector<std::string> tmpkey;
@@ -289,49 +293,51 @@ class BigramPersenter {
             coloums.clear();
             split(line, "\t", coloums);
             if (coloums.size() != 2) {
-                std::cerr << "WARN:bad line for table " << line << std::endl;
+                std::cerr << "WARN:bad line for table [" << line << "] coloum size:" << coloums.size() << std::endl;
                 continue;
             }
             std::string word = coloums[0];
             size_t freq = atol(coloums[1].c_str());
             if (freq < 1) {
-                std::cerr << "WARN:bad line freq for table " << line << std::endl;
+                std::cerr << "WARN:bad line freq for table: " << line << std::endl;
                 continue;
             }
             tmpkey.clear();
             split(word, "-", tmpkey);
             if (tmpkey.size() != 2) {
-                std::cerr << "WARN:bad line words for table " << line << std::endl;
+                std::cerr << "WARN:bad line words for table: " << line << std::endl;
                 continue;
             }
             trim(tmpkey[0]);
             trim(tmpkey[1]);
             if (tmpkey[0].empty() || tmpkey[1].empty()) {
-                std::cerr << "WARN:bad line words for table " << line << std::endl;
+                std::cerr << "WARN:bad line words for table: " << line << std::endl;
                 continue;
             }
-            auto pidx = getWordKey(tmpkey[0]);
-            auto nidx = getWordKey(tmpkey[1]);
+            auto pidx = persenter.getWordKey(tmpkey[0]);
+            auto nidx = persenter.getWordKey(tmpkey[1]);
             if (pidx < 0 || nidx < 0) {
-                std::cerr << "WARN:bad line words for table,words not in freq txt: " << line << std::endl;
+                std::cerr << "WARN:bad line words for table,words not in freq txt: "
+                          << "key1:" << tmpkey[0] << "," << pidx << " key2:" << tmpkey[1] << "," << nidx << "|" << line
+                          << std::endl;
                 continue;
             }
-            this->bigrams[bigram_key(pidx, nidx)] = bigram_data(freq);
+            persenter.bigrams[bigram_key(pidx, nidx)] = bigram_data(freq);
             union_freq_sum += freq;
             unum++;
         }
         table_in.close();
         // set static info
-        this->avg_single_freq = freq_sum / (1 + n);
-        this->avg_union_freq = union_freq_sum / (1 + unum);
-        this->max_single_freq = max_freq;
+        persenter.avg_single_freq = freq_sum / (1 + n);
+        persenter.avg_union_freq = union_freq_sum / (1 + unum);
+        persenter.max_single_freq = max_freq;
 
         // save data
-        if (idx.save(widx_path.string())) {
+        if (persenter.idx.save(widx_path.string().c_str())) {
             std::cerr << "ERROR: cannot save trie: " << widx_path.string() << std::endl;
             return EXIT_FAILURE;
         }
-        return writeTable(table_path.string());
+        return writeTable(persenter, table_path.string());
     }
 
 
@@ -342,12 +348,12 @@ class BigramPersenter {
      * @return int
      */
     int loadDict(const std::string &dictionary_dir) {
-        namespace fs = fs::filesystem;
+        namespace fs = std::filesystem;
         fs::path widx_path(dictionary_dir);
         widx_path.append(KEY_IDX_FILE);
         fs::path table_path(dictionary_dir);
         table_path.append(TABLE_FILE);
-        if (idx.open(widx_path.string())) {
+        if (idx.open(widx_path.string().c_str())) {
             std::cerr << "cannot open word idx: " << widx_path.string() << std::endl;
             return EXIT_FAILURE;
         }
@@ -374,7 +380,7 @@ class BigramPersenter {
     }
 
     ~BigramPersenter() {
-        idx.close();
+        idx.clear();
         bigrams.clear();
         freqs.clear();
     }

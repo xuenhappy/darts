@@ -31,8 +31,6 @@
 #include <string>
 
 
-#define MAX_PATH_LEN 256
-
 #ifdef WIN32
 #define ACCESS(fileName, accessMode) _access(fileName, accessMode)
 #define MKDIR(path) _mkdir(path)
@@ -59,24 +57,23 @@ int32_t createDirectory(const std::string &directoryPath) {
             return 1;
         }
     }
+
     // get abs path
-    std::string dir = fs::absolute_path(ori_path).string();
+    std::string dir = fs::absolute(ori_path).string();
     // mkdir
-    uint32_t dirPathLen = dir.length();
-    if (dirPathLen > MAX_PATH_LEN) {
-        return -1;
-    }
-    char tmpDirPath[MAX_PATH_LEN] = {0};
-    for (uint32_t i = 0; i < dirPathLen; ++i) {
-        tmpDirPath[i] = dir[i];
-        if (tmpDirPath[i] == '\\' || tmpDirPath[i] == '/') {
-            if (ACCESS(tmpDirPath, 0) != 0) {
-                int32_t ret = MKDIR(tmpDirPath);
+    for (size_t i = 2; i < dir.size(); ++i) {
+        if (dir[i] == '\\' || dir[i] == '/') {
+            auto tmpdir = dir.substr(0, i);
+            if (ACCESS(tmpdir.c_str(), 0)) {
+                int32_t ret = MKDIR(tmpdir.c_str());
                 if (ret != 0) {
                     return ret;
                 }
             }
         }
+    }
+    if (ACCESS(dir.c_str(), 0)) {
+        return MKDIR(dir.c_str());
     }
     return 0;
 }

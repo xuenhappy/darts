@@ -127,7 +127,7 @@ static inline void split(const std::string &s, const std::string &delimiter, std
         res.push_back(s.substr(pos_start, pos_end - pos_start));
         pos_start = pos_end + delim_len;
     }
-    if (pos_end < s.length()) {
+    if (pos_start < s.length()) {
         res.push_back(s.substr(pos_start));
     }
 }

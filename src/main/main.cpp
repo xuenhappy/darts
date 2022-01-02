@@ -15,6 +15,7 @@
 #define SRC_MAIN_MAIN_HPP_
 
 #include "../core/segment.hpp"
+#include "../impl/quantizer.hpp"
 #include "../impl/recognizer.hpp"
 #include "../utils/argparse.hpp"
 #include "../utils/codecvt.hpp"
@@ -58,6 +59,9 @@ int main(int argc, char *argv[]) {
     darts::DictWordRecongnizer dict(std::string("schools.pb"));
     std::cout << darts::CellRecognizerRegisterer::IsValid("DictWordRecongnizer") << std::endl;
     std::cout << "----------------6----------------" << std::endl;
+    darts::BigramPersenter::buildDict("/Users/xuen/Downloads/SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt",
+                                      "bigram");
+    std::cout << "----------------7----------------" << std::endl;
     argparse::ArgumentParser program("darts");
     program.add_argument("--compile")
         .help("does need compile a trie, switch")
