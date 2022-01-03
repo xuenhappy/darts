@@ -11,6 +11,7 @@
  * Copyright 2021 - 2021 Your Company, Moka
  */
 
+#include <functional>
 
 #include "../core/segment.hpp"
 #include "../impl/quantizer.hpp"
@@ -22,40 +23,77 @@
 #include "../utils/file_utils.hpp"
 #include "../utils/utils_base.hpp"
 
-int main(int argc, char *argv[]) {
-    initUtils();
-    argparse::ArgumentParser program("darts");
-    program.add_argument("--compile")
-        .help("does need compile a trie, switch")
-        .default_value(false)
-        .implicit_value(true)
-        .nargs(0);
-    program.add_argument("-f", "--input_files").help("The list of input files used for build trie").remaining();
-    program.add_argument("-o", "--output_file")
-        .help("trie pb file output dir")
-        .default_value(std::string("build_dregex.pb.gz"));
+int main(int argc, char **argv) {
+    std::map<std::string, std::function<void()>> functions;
+    // dregex-build
+    argparse::ArgumentParser program1("dregex-build");
+    program1.add_argument("files").help("The list of input files used for build trie").remaining();
+    program1.add_argument("-o").help("trie pb file output path").default_value(std::string("build_dregex.pb.gz"));
 
-    try {
-        program.parse_args(argc, argv);
-    } catch (const std::runtime_error &err) {
-        std::cerr << err.what() << std::endl;
-        std::cerr << program;
-        std::exit(1);
-    }
-    try {
-        if (program["--compile"] == true) {
-            auto files = program.get<std::vector<std::string>>("--input_files");
-            auto outfile = program.get<std::string>("--output_file");
+    functions[program1.pname()] = [&]() {
+        try {
+            program1.parse_args(argc - 1, argv + 1);
+            auto files = program1.get<std::vector<std::string>>("files");
+            auto outfile = program1.get<std::string>("-o");
             if (!files.empty()) {
                 std::cout << "compile files to trie [" << darts::join(files, " , ") << "] " << std::endl;
                 std::set<WordType> skipType = {WordType::POS, WordType::EMPTY, WordType::NLINE};
                 dregex::compileStringDict(files, outfile, &skipType);
                 std::cout << "build tire success, pb out file path:" << outfile << std::endl;
             }
+        } catch (const std::runtime_error &err) {
+            std::cerr << err.what() << std::endl;
+            std::cerr << program1;
+            std::exit(1);
+        } catch (std::logic_error &e) {
+            std::cout << program1 << std::endl;
         }
-    } catch (std::logic_error &e) {
-        std::cout << program << std::endl;
+    };
+
+    // gram-build
+    argparse::ArgumentParser program2("ngram-build");
+    program2.add_argument("-f").help("freq file and the union gram freq file,[freq file,union freq file]").nargs(2);
+    program2.add_argument("-o").help("output dir").default_value(std::string("ngram"));
+
+    functions[program2.pname()] = [&]() {
+        try {
+            program2.parse_args(argc - 1, argv + 1);
+            auto files = program2.get<std::vector<std::string>>("-f");
+            auto outdir = program2.get<std::string>("-o");
+            if (files.size() == 2) {
+                if (darts::BigramPersenter::buildDict(files[0], files[1], outdir)) {
+                    std::cout << "compile ngram files error[" << darts::join(files, " , ") << "] " << std::endl;
+                }
+                std::cout << "compile ngram files to dir " << outdir << std::endl;
+            }
+        } catch (const std::runtime_error &err) {
+            std::cerr << err.what() << std::endl;
+            std::cerr << program2;
+            std::exit(1);
+        } catch (std::logic_error &e) {
+            std::cout << program2 << std::endl;
+        }
+    };
+
+
+    // check function
+    std::vector<std::string> func_names;
+    for (auto &kv : functions) {
+        func_names.push_back(kv.first);
     }
+
+    if (argc < 2) {
+        std::cout << argv[0] << " [" << darts::join(func_names, "|") << "]" << std::endl;
+        exit(0);
+    }
+    auto it = functions.find(std::string(argv[1]));
+    if (it == functions.end()) {
+        std::cout << argv[0] << " [" << darts::join(func_names, "|") << "]" << std::endl;
+        exit(1);
+    }
+    // call function
+    initUtils();
+    it->second();
     google::protobuf::ShutdownProtobufLibrary();
     return 0;
 }
