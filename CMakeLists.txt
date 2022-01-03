@@ -82,7 +82,6 @@ find_package (Eigen3 REQUIRED NO_MODULE)
 find_package(Protobuf REQUIRED)
 find_package(HDF5 REQUIRED)
 find_package(ZLIB REQUIRED)
-set(_hdf5_libs hdf5 hdf5_cpp)
 file(GLOB ProtoFiles "${CMAKE_CURRENT_LIST_DIR}/src/utils/*.proto")
 set(proto_gen_path proto_gen)
 DARTS_PROTOBUF_GENERATE_CPP(${proto_gen_path} PROTO_SRCS PROTO_HDRS ${ProtoFiles})
@@ -100,12 +99,18 @@ add_compile_options(-fPIC)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-#set build target
 include_directories(src ${ZLIB_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS} "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}" ${HDF5_INCLUDE_DIR})
+set(darts_libs Eigen3::Eigen ${Jsoncpp_LIBRARY} ${PROTOBUF_LIBRARY} ${HDF5_LIBRARY} ${ZLIB_LIBRARIES})
+
+#build darts
 add_executable(darts ${PROTO_SRCS} src/main/main.cpp)
-target_link_libraries(darts Eigen3::Eigen ${Jsoncpp_LIBRARY} ${PROTOBUF_LIBRARY} ${HDF5_LIBRARY} ${ZLIB_LIBRARIES})
+target_link_libraries(darts  ${darts_libs})
 set_property(TARGET darts PROPERTY CXX_STANDARD 17)
+
+#build test
+add_executable(test_darts ${PROTO_SRCS} test/test_func.cc)
+target_link_libraries(test_darts ${darts_libs})
+set_property(TARGET test_darts PROPERTY CXX_STANDARD 17)
 
 # add_library(ocr SHARED src/main/darts4py.cpp)
 # target_link_libraries(ocr obase  "${OpenCV_LIBS}" "${TORCH_LIBRARIES}" "${CUDA_LIBRARIES}")

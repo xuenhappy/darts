@@ -26,6 +26,7 @@
 #include "../utils/cedar.h"
 #include "../utils/file_utils.hpp"
 #include "../utils/str_utils.hpp"
+#include "../utils/zstr.hpp"
 
 namespace darts {
 class MinCoverPersenter {
@@ -143,6 +144,77 @@ class BigramPersenter {
         return log((1.0 + a) / (1.0 + n_ij));
     }
 
+    /**
+     * @brief read table file
+     *
+     * @param ifile
+     * @return int
+     */
+    int readTable(const std::string &ifile) {
+        std::ifstream f_in(ifile, std::ios::in | std::ios::binary);
+        if (!f_in.is_open()) {
+            std::cerr << "ERROR: load table file failed:" << ifile << std::endl;
+            return EXIT_FAILURE;
+        }
+        darts::BigramDat dat;
+        zstr::istream zipIn(f_in, 1024 * 1024 * 10);
+        if (!dat.ParseFromIstream(&zipIn)) {
+            std::cerr << "ERROR: Failed to read table file:" << ifile << std::endl;
+            f_in.close();
+            return EXIT_FAILURE;
+        }
+        f_in.close();
+        this->avg_single_freq = dat.avg_single_freq();
+        this->avg_union_freq = dat.avg_union_freq();
+        this->max_single_freq = dat.max_single_freq();
+
+        auto freq = dat.freq();
+        this->freqs.insert(freq.begin(), freq.end());
+
+        auto size = dat.table_size();
+        for (size_t i = 0; i < size; i++) {
+            auto tuple = dat.table(i);
+            this->bigrams[bigram_key(tuple.x(), tuple.y())] = bigram_data(tuple.freq());
+        }
+        return EXIT_SUCCESS;
+    }
+
+    /**
+     * @brief write table file
+     *
+     * @param outfile
+     * @return int
+     */
+    int writeTable(const std::string &outfile) const {
+        std::fstream f_out(outfile, std::ios::out | std::ios::trunc | std::ios::binary);
+        if (!f_out.is_open()) {
+            std::cerr << "ERROE: write table file failed:" << outfile << std::endl;
+            return EXIT_FAILURE;
+        }
+        darts::BigramDat dat;
+        dat.set_avg_single_freq(this->avg_single_freq);
+        dat.set_avg_union_freq(this->avg_union_freq);
+        dat.set_max_single_freq(this->max_single_freq);
+
+        auto freq = dat.mutable_freq();
+        freq->insert(this->freqs.begin(), this->freqs.end());
+        for (auto &kv : this->bigrams) {
+            auto table = dat.add_table();
+            table->set_x(kv.first.i);
+            table->set_y(kv.first.j);
+            table->set_freq(kv.second.count);
+        }
+        zstr::ostream zipOut(f_out, 1024 * 1024 * 20, Z_BEST_COMPRESSION);
+        if (!dat.SerializePartialToOstream(&zipOut)) {
+            std::cerr << "ERROR: Failed to write table file: " << outfile << std::endl;
+            f_out.close();
+            return EXIT_FAILURE;
+        }
+        zipOut.flush();
+        f_out.close();
+        return EXIT_SUCCESS;
+    }
+
 
    public:
     int initalize(const std::map<std::string, std::string> &param) {
@@ -162,61 +234,6 @@ class BigramPersenter {
      */
     void embed(AtomList *dstSrc, CellMap *cmap) const {}
 
-    static int readTable(BigramPersenter &persenter, const std::string &ifile) {
-        std::ifstream f_in(ifile, std::ios::in | std::ios::binary);
-        if (!f_in.is_open()) {
-            std::cerr << "ERROR: load table file failed:" << ifile << std::endl;
-            return EXIT_FAILURE;
-        }
-        darts::BigramDat dat;
-        if (!dat.ParseFromIstream(&f_in)) {
-            std::cerr << "ERROR: Failed to read table file:" << ifile << std::endl;
-            f_in.close();
-            return EXIT_FAILURE;
-        }
-        f_in.close();
-        persenter.avg_single_freq = dat.avg_single_freq();
-        persenter.avg_union_freq = dat.avg_union_freq();
-        persenter.max_single_freq = dat.max_single_freq();
-
-        auto freq = dat.freq();
-        persenter.freqs.insert(freq.begin(), freq.end());
-
-        auto size = dat.table_size();
-        for (size_t i = 0; i < size; i++) {
-            auto tuple = dat.table(i);
-            persenter.bigrams[bigram_key(tuple.x(), tuple.y())] = bigram_data(tuple.freq());
-        }
-        return EXIT_SUCCESS;
-    }
-
-    static int writeTable(const BigramPersenter &persenter, const std::string &outfile) {
-        std::fstream f_out(outfile, std::ios::out | std::ios::trunc | std::ios::binary);
-        if (!f_out.is_open()) {
-            std::cerr << "ERROE: write table file failed:" << outfile << std::endl;
-            return EXIT_FAILURE;
-        }
-        darts::BigramDat dat;
-        dat.set_avg_single_freq(persenter.avg_single_freq);
-        dat.set_avg_union_freq(persenter.avg_union_freq);
-        dat.set_max_single_freq(persenter.max_single_freq);
-
-        auto freq = dat.mutable_freq();
-        freq->insert(persenter.freqs.begin(), persenter.freqs.end());
-        for (auto &kv : persenter.bigrams) {
-            auto table = dat.add_table();
-            table->set_x(kv.first.i);
-            table->set_y(kv.first.j);
-            table->set_freq(kv.second.count);
-        }
-        if (!dat.SerializePartialToOstream(&f_out)) {
-            std::cerr << "ERROR: Failed to write table file: " << outfile << std::endl;
-            f_out.close();
-            return EXIT_FAILURE;
-        }
-        f_out.close();
-        return EXIT_SUCCESS;
-    }
 
     /**
      * @brief
@@ -230,7 +247,7 @@ class BigramPersenter {
                          const std::string &outdir) {
         // create dir
         if (createDirectory(outdir)) {
-            std::cerr << "create out dir error: " << outdir << std::endl;
+            std::cerr << "ERROR:create out dir error: " << outdir << std::endl;
             return EXIT_FAILURE;
         }
         BigramPersenter persenter;
@@ -336,7 +353,7 @@ class BigramPersenter {
             std::cerr << "ERROR: cannot save trie: " << widx_path.string() << std::endl;
             return EXIT_FAILURE;
         }
-        return writeTable(persenter, table_path.string());
+        return persenter.writeTable(table_path.string());
     }
 
 
@@ -353,10 +370,10 @@ class BigramPersenter {
         fs::path table_path(dictionary_dir);
         table_path.append(TABLE_FILE);
         if (idx.open(widx_path.string().c_str())) {
-            std::cerr << "cannot open word idx: " << widx_path.string() << std::endl;
+            std::cerr << "ERROR:cannot open word idx: " << widx_path.string() << std::endl;
             return EXIT_FAILURE;
         }
-        return readTable(*this, table_path.string());
+        return this->readTable(table_path.string());
     }
     /**
      * @brief
@@ -384,8 +401,8 @@ class BigramPersenter {
         freqs.clear();
     }
 };
-const char *BigramPersenter::KEY_IDX_FILE = "keyidx.da";
-const char *BigramPersenter::TABLE_FILE = "table.pb";
+const char *BigramPersenter::KEY_IDX_FILE = "words.da";
+const char *BigramPersenter::TABLE_FILE = "table.pb.gz";
 const char *BigramPersenter::DAT_DIR_KEY = "dat.dir";
 REGISTER_Persenter(BigramPersenter);
 

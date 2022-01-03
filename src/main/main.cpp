@@ -11,8 +11,6 @@
  * Copyright 2021 - 2021 Your Company, Moka
  */
 
-#ifndef SRC_MAIN_MAIN_HPP_
-#define SRC_MAIN_MAIN_HPP_
 
 #include "../core/segment.hpp"
 #include "../impl/quantizer.hpp"
@@ -26,48 +24,6 @@
 
 int main(int argc, char *argv[]) {
     initUtils();
-    std::cout << "----------------0----------------" << std::endl;
-    std::cout << getResource("test1") << std::endl;
-    std::cout << getResource("/test1") << std::endl;
-    std::cout << getResource("test1/tst") << std::endl;
-    std::cout << "----------------1----------------" << std::endl;
-    std::string ori("这是一段123 ss中文测试；看】🅿Ａ,Ｂ,Ｃ,Ｄ,Ｅ,Ｆ,Ｇ,Ｈ,Ｉ,   Ｊ,Ｋ,Ｌ,Ｍ,Ｎ,Ｏ,看？ ss");
-    std::string normals = normalizeStr(ori);
-    std::cout << "ori: " << ori << std::endl;
-    std::cout << "normal: " << normals << std::endl;
-    std::cout << "---------------2-----------------" << std::endl;
-    std::cout << darts::AtomList(normals) << std::endl;
-    std::cout << "---------------3-----------------" << std::endl;
-    darts::Trie dat;
-    std::cout << "write pb file ..." << std::endl;
-    dat.writePb("test.pb");
-    std::cout << "load pb file ..." << std::endl;
-    darts::Trie newdat;
-    newdat.loadPb("test.pb");
-    std::cout << "----------------4----------------" << std::endl;
-    darts::Trie newTrie;
-    newTrie.loadPb("schools.pb");
-    std::string teststr = "dd清华大学的学在北京大学的中国人民解放军海军广州舰艇学院k安徽大学里面有个北大II";
-    std::u32string text = to_utf32(teststr);
-    dregex::U32StrIterator testStr(&text[0], text.size());
-    std::vector<std::string> labels;
-    newTrie.parse(testStr, [&](size_t s, size_t e, const std::set<int64_t> *label) -> bool {
-        labels.clear();
-        if (label) {
-            for (auto lidx : *label) {
-                labels.push_back(newTrie.getLabel(lidx));
-            }
-        }
-        std::cout << to_utf8(text.substr(s, e - s)) << ",s:" << s << ",e:" << e << "," << darts::join(labels, "|")
-                  << std::endl;
-        return false;
-    });
-    std::cout << "----------------5----------------" << std::endl;
-    darts::DictWordRecongnizer dict(std::string("schools.pb"));
-    std::cout << darts::CellRecognizerRegisterer::IsValid("DictWordRecongnizer") << std::endl;
-    std::cout << "----------------6----------------" << std::endl;
-    darts::BigramPersenter::buildDict("SogouLabDic.txt", "SogouR.txt", "bigram");
-    std::cout << "----------------7----------------" << std::endl;
     argparse::ArgumentParser program("darts");
     program.add_argument("--compile")
         .help("does need compile a trie, switch")
@@ -103,5 +59,3 @@ int main(int argc, char *argv[]) {
     google::protobuf::ShutdownProtobufLibrary();
     return 0;
 }
-
-#endif  // SRC_MAIN_MAIN_HPP_
