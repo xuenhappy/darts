@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     program.add_argument("-f", "--input_files").help("The list of input files used for build trie").remaining();
     program.add_argument("-o", "--output_file")
         .help("trie pb file output dir")
-        .default_value(std::string("build_trie.pb"));
+        .default_value(std::string("build_dregex.pb.gz"));
 
     try {
         program.parse_args(argc, argv);
