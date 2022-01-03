@@ -17,6 +17,7 @@
 #include <iostream>
 
 #include "core/segment.hpp"
+#include "impl/jsonconf.hpp"
 #include "impl/quantizer.hpp"
 #include "impl/recognizer.hpp"
 #include "utils/argparse.hpp"
@@ -93,6 +94,19 @@ void testBigramPersenterDictMake() {
     darts::BigramPersenter::buildDict("SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt", "bigram");
 }
 
+void testJsonConfLoad() {
+    printf("----- test function %s-----------------\n", "testJsonConfLoad");
+    darts::Segment *segment = NULL;
+    if (parseJsonConf(getResource("data/darts.conf.json").c_str(), &segment)) {
+        std::cout << "load segment error!" << std::endl;
+    } else {
+        std::cout << "load segment success!" << std::endl;
+    }
+    if (segment) {
+        delete segment;
+    }
+}
+
 int main(int argc, char *argv[]) {
     initUtils();
     testGetResource();
@@ -102,6 +116,7 @@ int main(int argc, char *argv[]) {
     testDregexParse();
     testDictWordRecongnizer();
     testBigramPersenterDictMake();
+    testJsonConfLoad();
     google::protobuf::ShutdownProtobufLibrary();
     return 0;
 }

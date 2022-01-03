@@ -2,12 +2,16 @@
     "recognizers": {
         "inner.dict": {
             "type": "DictWordRecongnizer",
-            "pbfile.path": "data/darts.inner.pb"
+            "pbfile.path": "data/model-dict/mini_dict.pb.gz"
         }
     },
     "persenters": {
-        "min.rule": {
+        "mini.rule": {
             "type": "MinCoverPersenter"
+        },
+        "mini.ngram": {
+            "type": "BigramPersenter",
+            "dat.dir": "data/model-dict/bigram"
         },
         "elmo.embed": {
             "type": "ElmoPersenter",
