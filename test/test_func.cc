@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
 #include <iostream>
 
 #include "core/segment.hpp"
@@ -61,7 +62,7 @@ void testDregexRW() {
 void testDregexParse() {
     printf("----- test function %s-----------------\n", "testDregexParse");
     darts::Trie newTrie;
-    newTrie.loadPb("mini_dict.pb.gz");
+    newTrie.loadPb(getResource("data/model-dict/mini_dict.pb.gz"));
     std::string teststr = "dd清华大学的学在北京大学的中国人民解放军海军广州舰艇学院k安徽大学里面有个北大II";
     std::cout << "ori str: " << teststr << std::endl;
     std::u32string text = to_utf32(teststr);
