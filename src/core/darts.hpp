@@ -125,7 +125,7 @@ class Atom {
         std::vector<std::string> tags;
         if (D.tags) {
             for (auto t : *D.tags) {
-                tags.push_back(getWordTypeText(t));
+                tags.push_back(wordType2str(t));
             }
         }
         output << "Atom['" << D.image << "',{" << join(tags, ",") << "}]";

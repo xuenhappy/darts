@@ -77,7 +77,7 @@ class DictWordRecongnizer : public CellRecognizer {
                 for (auto tidx : *labels) {
                     auto tag = this->trie.getLabel(tidx);
                     if (!tag) continue;
-                    auto h = getWordType(tag);
+                    auto h = str2wordType(tag);
                     if (h == WordType::NONE) continue;
                     word->addTag(h);
                 }

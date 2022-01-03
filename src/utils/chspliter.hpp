@@ -47,7 +47,7 @@ int loadCharMap() {
             continue;
         }
         if (!strncmp(line.c_str(), head.c_str(), head.size())) {
-            prefix = getWordType(line.substr(head.size()).c_str());
+            prefix = str2wordType(line.substr(head.size()));
             if (prefix == WordType::NONE) {
                 std::cerr << "WARN: Bad word type tag name" << line.substr(head.size()) << std::endl;
             }

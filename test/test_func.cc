@@ -42,7 +42,7 @@ void testNormalization() {
 }
 
 void testAtomListSplit() {
-    printf("----- test function %s-----------------\n", "testNormalization");
+    printf("----- test function %s-----------------\n", "testAtomListSplit");
     std::string ori("使用zlib做压缩,先调用deflateInit(),这个函数必须在使用deflate之前.");
     std::cout << "ori: " << ori << std::endl;
     std::cout << darts::AtomList(ori) << std::endl;
