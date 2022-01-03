@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "str_utils.hpp"
+#include "zstr.hpp"
 
 namespace darts {
 
@@ -68,6 +69,90 @@ class Trie {
         }
         return newCurrentState;
     }
+
+    int writePb(std::ostream &out) const {
+        darts::DRegexDat dat;
+        dat.set_maxlen(this->MaxLen);
+        dat.mutable_labels()->Add(this->Labels.begin(), this->Labels.end());
+        dat.mutable_check()->Add(this->Check.begin(), this->Check.end());
+        dat.mutable_base()->Add(this->Base.begin(), this->Base.end());
+        dat.mutable_fail()->Add(this->Fail.begin(), this->Fail.end());
+        dat.mutable_l()->Add(this->L.begin(), this->L.end());
+
+
+        for (auto s : this->V) {
+            if (!s) {
+                dat.add_v();
+                continue;
+            }
+            dat.add_v()->mutable_item()->Add(s->begin(), s->end());
+        }
+
+
+        for (auto s : this->OutPut) {
+            if (!s) {
+                dat.add_output();
+                continue;
+            }
+            dat.add_output()->mutable_item()->Add(s->begin(), s->end());
+        }
+
+        auto cmap = dat.mutable_codemap();
+        cmap->insert(this->CodeMap.begin(), this->CodeMap.end());
+
+
+        if (!dat.SerializePartialToOstream(&out)) {
+            std::cerr << "ERROR: Failed to write Trie" << std::endl;
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
+    }
+
+    int loadPb(std::istream &in) {
+        darts::DRegexDat dat;
+        if (!dat.ParseFromIstream(&in)) {
+            std::cerr << "ERROR: Failed to read Trie" << std::endl;
+            return EXIT_FAILURE;
+        }
+        this->MaxLen = dat.maxlen();
+        auto labels = dat.labels();
+        this->Labels.insert(this->Labels.end(), labels.begin(), labels.end());
+        auto check = dat.check();
+        this->Check.insert(this->Check.end(), check.begin(), check.end());
+
+        auto base = dat.base();
+        this->Base.insert(this->Base.end(), base.begin(), base.end());
+
+        auto fail = dat.fail();
+        this->Fail.insert(this->Fail.end(), fail.begin(), fail.end());
+
+        auto l = dat.l();
+        this->L.insert(this->L.end(), l.begin(), l.end());
+        auto size = dat.v_size();
+        this->V.assign(size, NULL);
+        for (size_t i = 0; i < size; i++) {
+            if (dat.v(i).item_size() < 1) {
+                this->V[i] = NULL;
+                continue;
+            }
+            auto vlist = dat.v(i).item();
+            this->V[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
+        }
+        size = dat.output_size();
+        this->OutPut.assign(size, NULL);
+        for (size_t i = 0; i < size; i++) {
+            if (dat.output(i).item_size() < 1) {
+                this->OutPut[i] = NULL;
+                continue;
+            }
+            auto vlist = dat.output(i).item();
+            this->OutPut[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
+        }
+        auto cmap = dat.codemap();
+        this->CodeMap.insert(cmap.begin(), cmap.end());
+        return EXIT_SUCCESS;
+    }
+
 
    public:
     ~Trie() {
@@ -140,87 +225,7 @@ class Trie {
             return false;
         });
     }
-    friend std::ostream &operator<<(std::ostream &out, const Trie &my) {
-        darts::DRegexDat dat;
-        dat.set_maxlen(my.MaxLen);
-        dat.mutable_labels()->Add(my.Labels.begin(), my.Labels.end());
-        dat.mutable_check()->Add(my.Check.begin(), my.Check.end());
-        dat.mutable_base()->Add(my.Base.begin(), my.Base.end());
-        dat.mutable_fail()->Add(my.Fail.begin(), my.Fail.end());
-        dat.mutable_l()->Add(my.L.begin(), my.L.end());
 
-
-        for (auto s : my.V) {
-            if (!s) {
-                dat.add_v();
-                continue;
-            }
-            dat.add_v()->mutable_item()->Add(s->begin(), s->end());
-        }
-
-
-        for (auto s : my.OutPut) {
-            if (!s) {
-                dat.add_output();
-                continue;
-            }
-            dat.add_output()->mutable_item()->Add(s->begin(), s->end());
-        }
-
-        auto cmap = dat.mutable_codemap();
-        cmap->insert(my.CodeMap.begin(), my.CodeMap.end());
-
-
-        if (!dat.SerializePartialToOstream(&out)) {
-            std::cerr << "ERROR: Failed to write Trie" << std::endl;
-        }
-        return out;
-    }
-
-    friend std::istream &operator>>(std::istream &in, Trie &my) {
-        darts::DRegexDat dat;
-        if (!dat.ParseFromIstream(&in)) {
-            std::cerr << "ERROR: Failed to read Trie" << std::endl;
-            return in;
-        }
-        my.MaxLen = dat.maxlen();
-        auto labels = dat.labels();
-        my.Labels.insert(my.Labels.end(), labels.begin(), labels.end());
-        auto check = dat.check();
-        my.Check.insert(my.Check.end(), check.begin(), check.end());
-
-        auto base = dat.base();
-        my.Base.insert(my.Base.end(), base.begin(), base.end());
-
-        auto fail = dat.fail();
-        my.Fail.insert(my.Fail.end(), fail.begin(), fail.end());
-
-        auto l = dat.l();
-        my.L.insert(my.L.end(), l.begin(), l.end());
-        auto size = dat.v_size();
-        my.V.assign(size, NULL);
-        for (size_t i = 0; i < size; i++) {
-            if (dat.v(i).item_size() < 1) {
-                my.V[i] = NULL;
-                continue;
-            }
-            auto vlist = dat.v(i).item();
-            my.V[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
-        }
-        size = dat.output_size();
-        my.OutPut.assign(size, NULL);
-        for (size_t i = 0; i < size; i++) {
-            if (dat.output(i).item_size() < 1) {
-                my.OutPut[i] = NULL;
-                continue;
-            }
-            auto vlist = dat.output(i).item();
-            my.OutPut[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
-        }
-        auto cmap = dat.codemap();
-        my.CodeMap.insert(cmap.begin(), cmap.end());
-        return in;
-    }
 
     /**
      * @brief load data from a pb file
@@ -233,9 +238,10 @@ class Trie {
             std::cerr << "ERROR: load trie file failed:" << path << std::endl;
             return EXIT_FAILURE;
         }
-        f_in >> *this;
+        zstr::istream zstream(f_in, 1024 * 1024 * 10);
+        auto ret = this->loadPb(zstream);
         f_in.close();
-        return EXIT_SUCCESS;
+        return ret;
     }
     /**
      * @brief write this conf into a file
@@ -252,9 +258,11 @@ class Trie {
             std::cerr << "ERROE: write trie file failed:" << path << std::endl;
             return EXIT_FAILURE;
         }
-        f_out << *this;
+        zstr::ostream zipOut(f_out, 1024 * 1024 * 20, Z_BEST_COMPRESSION);
+        auto ret = this->writePb(zipOut);
+        zipOut.flush();
         f_out.close();
-        return EXIT_SUCCESS;
+        return ret;
     }
 };
 
