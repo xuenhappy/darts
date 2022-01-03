@@ -14,7 +14,6 @@
 #define SRC_UTILS_NORM_CHR_HPP_
 
 
-#include <json/json.h>
 #include <stdint.h>
 
 #include <fstream>
@@ -25,6 +24,7 @@
 #include <utility>
 
 #include "file_utils.hpp"
+#include "str_utils.hpp"
 #include "utf8.hpp"
 
 /**
@@ -107,33 +107,16 @@ void _addWordMap() {
  */
 int initializeMap() {
     std::string dat = getResource("data/confuse.json");
-    std::ifstream in(dat.c_str());
-    if (!in.is_open()) {
-        std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
+    std::string data;
+    if (getFileText(dat, data)) {
+        std::cerr << "ERROR: open json data " << dat << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
-    std::stringstream sin;
-    sin << in.rdbuf();
-    in.close();
-    std::string data(sin.str());
-    if (data.empty()) {
-        return EXIT_FAILURE;
-    }
-
-    bool res;
-    JSONCPP_STRING errs;
     Json::Value root;
-    Json::CharReaderBuilder readerBuilder;
-
-    std::unique_ptr<Json::CharReader> const jsonReader(readerBuilder.newCharReader());
-    res = jsonReader->parse(data.c_str(), data.c_str() + data.length(), &root, &errs);
-
-    if (!res || !errs.empty()) {
-        std::cerr << "ERROR: parseJson err. " << errs << std::endl;
+    if (darts::getJsonRoot(data, root)) {
+        std::cerr << "ERROR: parse json data " << dat << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
-
-
     auto mem = root.getMemberNames();
     for (auto iter = mem.begin(); iter != mem.end(); iter++) {
         if (root[*iter].type() == Json::arrayValue) {

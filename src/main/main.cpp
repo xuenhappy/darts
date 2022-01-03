@@ -38,8 +38,9 @@ int main(int argc, char **argv) {
             if (!files.empty()) {
                 std::cout << "compile files to trie [" << darts::join(files, " , ") << "] " << std::endl;
                 std::set<WordType> skipType = {WordType::POS, WordType::EMPTY, WordType::NLINE};
-                dregex::compileStringDict(files, outfile, &skipType);
-                std::cout << "build tire success, pb out file path:" << outfile << std::endl;
+                if (!dregex::compileStringDict(files, outfile, &skipType)) {
+                    std::cout << "build tire success, pb out file path:" << outfile << std::endl;
+                }
             }
         } catch (const std::runtime_error &err) {
             std::cerr << err.what() << std::endl;
@@ -62,9 +63,8 @@ int main(int argc, char **argv) {
             auto outdir = program2.get<std::string>("-o");
             if (files.size() == 2) {
                 if (darts::BigramPersenter::buildDict(files[0], files[1], outdir)) {
-                    std::cout << "compile ngram files error[" << darts::join(files, " , ") << "] " << std::endl;
+                    std::cout << "compile ngram files to dir " << outdir << std::endl;
                 }
-                std::cout << "compile ngram files to dir " << outdir << std::endl;
             }
         } catch (const std::runtime_error &err) {
             std::cerr << err.what() << std::endl;
@@ -74,6 +74,8 @@ int main(int argc, char **argv) {
             std::cout << program2 << std::endl;
         }
     };
+    // tokenize
+    argparse::ArgumentParser program3("tokenize");
 
 
     // check function

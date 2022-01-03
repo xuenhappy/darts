@@ -14,6 +14,7 @@
 #ifndef SRC_UTILS_FILE_UTILS_HPP_
 #define SRC_UTILS_FILE_UTILS_HPP_
 
+
 #ifdef WIN32
 #include <direct.h>
 #include <io.h>
@@ -161,4 +162,26 @@ const std::string getResource(const std::string &spath, bool isDir = false) {
 
     return spath;
 }
+
+/**
+ * @brief Get the File Text object
+ *
+ * @param path ori path
+ * @param out out string
+ * @return int if success
+ */
+int getFileText(const std::string &path, std::string &out) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        std::cerr << "ERROR: open data " << path << " file failed " << std::endl;
+        return EXIT_FAILURE;
+    }
+    std::stringstream sin;
+    sin << in.rdbuf();
+    in.close();
+    out.append(sin.str());
+    return EXIT_SUCCESS;
+}
+
+
 #endif  // SRC_UTILS_FILE_UTILS_HPP_

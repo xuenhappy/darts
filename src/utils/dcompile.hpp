@@ -168,11 +168,11 @@ void constructFailureStates(Builder *b) {
     }
 }
 
-size_t addAllKeyword(Builder *b, darts::StringIterPairs &kvs) {
+size_t addAllKeyword(Builder *b, darts::StringIterPairs &kvs, int *ret) {
     size_t maxCode = 0;
     int64_t index = -1;
     auto t = b->trie;
-    kvs.iter([&](darts::StringIter &k, const int64_t *v, size_t vlen) {
+    *ret = kvs.iter([&](darts::StringIter &k, const int64_t *v, size_t vlen) {
         index++;
         size_t lens = 0;
         auto currentState = b->rootState;
@@ -306,13 +306,18 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
     delete siblings;
 }
 
-void build(Builder *b, darts::StringIterPairs &kvs) {
-    size_t maxCode = addAllKeyword(b, kvs);
+int build(Builder *b, darts::StringIterPairs &kvs) {
+    int ret;
+    size_t maxCode = addAllKeyword(b, kvs, &ret);
+    if (ret) {
+        std::cerr << "ERROR: build trie failed!" << std::endl;
+        return EXIT_FAILURE;
+    }
     if (maxCode < 2) {
-        return;
+        std::cerr << "WARN: nothing to compile!" << std::endl;
+        return EXIT_SUCCESS;
     }
     // build double array tire base on tire
-
     resize(b, maxCode + 10);
     b->trie->Base[0] = 1;
     auto siblings = fetch(b->rootState);
@@ -328,6 +333,7 @@ void build(Builder *b, darts::StringIterPairs &kvs) {
     // build failure table and merge output table
     constructFailureStates(b);
     zipWeight(b);
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -336,18 +342,19 @@ void build(Builder *b, darts::StringIterPairs &kvs) {
  * @param pairs
  * @param trie
  */
-void compile(darts::StringIterPairs &pairs, darts::Trie &trie) {
+int compile(darts::StringIterPairs &pairs, darts::Trie &trie) {
     Builder builder;
     builder.size = 0;
     builder.allocSize = 0;
     builder.nextCheckPos = 0;
     builder.rootState = newState(0, false);
     builder.trie = &trie;
-    build(&builder, pairs);
+    auto ret = build(&builder, pairs);
     // clear mem
     builder.trie = NULL;
     freeState(builder.rootState);
     builder.rootState = NULL;
+    return ret;
 }
 
 class U32StrIterator : public darts::StringIter {
@@ -460,13 +467,14 @@ class FileStringPairIter : public darts::StringIterPairs {
             };
         }
     }
-    virtual void iter(std::function<void(darts::StringIter &, const int64_t *, size_t)> hit) {
+
+    int iter(std::function<void(darts::StringIter &, const int64_t *, size_t)> hit) {
         std::vector<int64_t> lidxes;
         for (auto &fpath : *this->files) {
             std::ifstream f_in(fpath);
             if (!f_in.is_open()) {
                 std::cerr << "ERROR: read open file error," << fpath << std::endl;
-                break;
+                return EXIT_FAILURE;
             }
 
             std::string line;
@@ -488,6 +496,8 @@ class FileStringPairIter : public darts::StringIterPairs {
             }
             f_in.close();
         }
+
+        return EXIT_SUCCESS;
     }
 };
 
@@ -499,7 +509,7 @@ class FileStringPairIter : public darts::StringIterPairs {
  * @param skiptypes 编译过程需要跳过的一些词
  * @param lineFix 行处理函数
  */
-void compileStringDict(
+int compileStringDict(
     const std::vector<std::string> &paths, const std::string &pbfile, const std::set<WordType> *skiptypes = NULL,
     std::function<std::string(std::string &, std::vector<int64_t> &, std::map<std::string, int64_t> *)> lineFix =
         NULL) {
@@ -507,13 +517,15 @@ void compileStringDict(
     std::map<std::string, int64_t> labels;
     // build trie
     FileStringPairIter pairs(&paths, &labels, skiptypes, lineFix);
-    compile(pairs, trie);
+    if (compile(pairs, trie)) {
+        return EXIT_FAILURE;
+    }
     // set labels
     trie.Labels.resize(labels.size());
     for (auto &kv : labels) {
         trie.Labels[kv.second] = kv.first;
     }
-    trie.writePb(pbfile);
+    return trie.writePb(pbfile);
 }
 
 }  // namespace dregex

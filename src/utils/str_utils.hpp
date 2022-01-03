@@ -14,10 +14,13 @@
 #ifndef SRC_UTILS_STR_UTILS_HPP_
 #define SRC_UTILS_STR_UTILS_HPP_
 
+#include <json/json.h>
+
 #include <algorithm>
 #include <cctype>
 #include <functional>
 #include <locale>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -26,9 +29,11 @@ namespace darts {
 class StringIter {
    public:
     /**
-     * @brief iter string
+     * @brief iter this string is success
+     *
      *
      * @param hit
+     * @return int 0 if successful else 1
      */
     virtual void iter(std::function<bool(const std::string &, size_t)> hit) = 0;
     virtual ~StringIter() {}
@@ -37,7 +42,13 @@ class StringIter {
 
 class StringIterPairs {
    public:
-    virtual void iter(std::function<void(StringIter &, const int64_t *, size_t)> hit) = 0;
+    /**
+     * @brief iter kv pairs
+     *
+     * @param hit
+     * @return int 0 if successful, otherwise 1
+     */
+    virtual int iter(std::function<void(StringIter &, const int64_t *, size_t)> hit) = 0;
     virtual ~StringIterPairs() {}
 };
 
@@ -131,6 +142,27 @@ static inline void split(const std::string &s, const std::string &delimiter, std
         res.push_back(s.substr(pos_start));
     }
 }
+/**
+ * @brief Get the Json Root object
+ *
+ * @param data
+ * @param root
+ * @return int
+ */
+static inline int getJsonRoot(const std::string &data, Json::Value &root) {
+    bool res;
+    JSONCPP_STRING errs;
+    Json::CharReaderBuilder readerBuilder;
+    std::unique_ptr<Json::CharReader> const jsonReader(readerBuilder.newCharReader());
+    res = jsonReader->parse(data.c_str(), data.c_str() + data.length(), &root, &errs);
+
+    if (!res || !errs.empty()) {
+        std::cerr << "ERROR: parseJson err. " << errs << std::endl;
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
 
 }  // namespace darts
 #endif  // SRC_UTILS_STR_UTILS_HPP_

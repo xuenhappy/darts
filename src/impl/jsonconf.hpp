@@ -11,12 +11,14 @@
  */
 #ifndef SRC_IMPL_JSONCONF_HPP_
 #define SRC_IMPL_JSONCONF_HPP_
-#include <json/json.h>
+
 
 #include <memory>
 #include <string>
 
 #include "../core/segment.hpp"
+#include "../utils/file_utils.hpp"
+#include "../utils/str_utils.hpp"
 
 /**
  * @brief load the configuration
@@ -26,29 +28,15 @@
  * @return int 1 error ,0 success
  */
 int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
-    std::ifstream in(json_conf_file);
-    if (!in.is_open()) {
-        std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
-        return EXIT_FAILURE;
-    }
-    std::stringstream sin;
-    sin << in.rdbuf();
-    in.close();
-    std::string data(sin.str());
-    if (data.empty()) {
+    std::string data;
+    if (getFileText(json_conf_file, data)) {
+        std::cerr << "ERROR: open conf data " << json_conf_file << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
 
-    bool res;
-    JSONCPP_STRING errs;
     Json::Value root;
-    Json::CharReaderBuilder readerBuilder;
-
-    std::unique_ptr<Json::CharReader> const jsonReader(readerBuilder.newCharReader());
-    res = jsonReader->parse(data.c_str(), data.c_str() + data.length(), &root, &errs);
-
-    if (!res || !errs.empty()) {
-        std::cerr << "ERROR: parseJson err. " << errs << std::endl;
+    if (darts::getJsonRoot(data, root)) {
+        std::cerr << "ERROR: parse json data " << json_conf_file << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
 
