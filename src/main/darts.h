@@ -14,27 +14,11 @@
 #define SRC_MAIN_DARTS_H_
 #include <stdlib.h>
 extern "C" {
-typedef struct _dregex* dregex;
 
+typedef void* darts_ext;
+typedef struct _dregex* dregex;
 typedef struct _segment* segment;
 
-typedef struct _atom {
-    char* word;
-    size_t postion;
-} * atom;
-
-
-typedef struct _dergex_group {
-    size_t s, e;
-    int64_t* labels;
-    size_t labels_num;
-} * dergex_group;
-
-typedef struct _token {
-    char* word;
-    size_t s, e;
-    char* type;
-} * token;
 
 /**
  * @brief normalize ori string
@@ -70,22 +54,20 @@ void free_dregex(dregex regex);
  * @param ret
  * @return int,匹配的结果数，如果-1失败
  */
-int parse(dregex regex, const atom* atomlist, size_t len, dergex_group* ret);
+
+typedef bool (*atom_iter)(char* word, size_t postion, darts_ext user_data);
+typedef bool (*dregex_hit)(size_t s, size_t e, int64_t* labels, size_t labels_num, darts_ext user_data);
 
 /**
- * @brief
+ * @brief  parse a atom list
  *
- * @param group
- */
-void free_dregex_ret(dergex_group* group, size_t len);
-
-/**
- * @brief
- *
+ * @param regex
  * @param atomlist
- * @param size
+ * @param user_data
+ * @return int
  */
-void free_atomlist(atom* atomlist, size_t size);
+int parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data);
+
 
 /**
  * @brief load the dregex from json conf file
@@ -97,6 +79,11 @@ void free_atomlist(atom* atomlist, size_t size);
 int load_segment(const char* json_conf_file, segment* sg);
 
 /**
+ * @brief token匹配函数
+ *
+ */
+typedef bool (*token_hit)(const char* str, const char* label, size_t s, size_t e, darts_ext user_data);
+/**
  * @brief 分词
  *
  * @param sg
@@ -105,7 +92,7 @@ int load_segment(const char* json_conf_file, segment* sg);
  * @param ret
  * @return int 分词的结果数，如果-1失败
  */
-int tokenize(segment sg, const char* txt, size_t len, token* ret, bool max_mode);
+void tokenize(segment sg, const char* txt, size_t len, token_hit hit, bool max_mode, darts_ext user_data);
 
 /**
  * @brief free segment
@@ -119,18 +106,19 @@ void free_segment(segment sg);
  * @brief 某个词的词类型
  *
  * @param word
- * @return char*
+ * @return char* 某个字符的字符类型
  */
 char* word_type(const char* word);
 
+
 /**
- * @brief 对原始的
+ * @brief char list
  *
  * @param str
  * @param len
- * @param ret
- * @return int 返回单词的结果数
+ * @param hit
+ * @param user_data
  */
-int word_split(const char* str, size_t len, atom* ret);
+void word_split(const char* str, size_t len, token_hit hit, darts_ext user_data);
 }
 #endif  // SRC_MAIN_DARTS_H_
