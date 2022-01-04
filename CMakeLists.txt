@@ -122,8 +122,5 @@ add_executable(test_darts ${PROTO_SRCS} test/test_func.cc)
 target_link_libraries(test_darts PRIVATE ${darts_libs})
 set_property(TARGET test_darts PROPERTY CXX_STANDARD 17)
 
-# add_library(ocr SHARED src/main/darts4py.cpp)
-# target_link_libraries(ocr obase  "${OpenCV_LIBS}" "${TORCH_LIBRARIES}" "${CUDA_LIBRARIES}")
-# set_property(TARGET ocr PROPERTY CXX_STANDARD 11)
 
 
