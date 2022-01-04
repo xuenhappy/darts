@@ -12,8 +12,11 @@
 
 #ifndef SRC_MAIN_DARTS_H_
 #define SRC_MAIN_DARTS_H_
-#include <stdlib.h>
+#ifdef __cplusplus
 extern "C" {
+#endif /* __cplusplus */
+#include <stdlib.h>
+
 
 typedef void* darts_ext;
 typedef struct _dregex* dregex;
@@ -120,5 +123,8 @@ char* word_type(const char* word);
  * @param user_data
  */
 void word_split(const char* str, size_t len, token_hit hit, darts_ext user_data);
+
+#ifdef __cplusplus
 }
+#endif  /* __cplusplus */
 #endif  // SRC_MAIN_DARTS_H_

@@ -12,5 +12,7 @@
  */
 #ifndef SRC_MAIN_DARTS4PY_HPP_
 #define SRC_MAIN_DARTS4PY_HPP_
+#include "./darts.h"
+
 
 #endif  // SRC_MAIN_DARTS4PY_HPP_

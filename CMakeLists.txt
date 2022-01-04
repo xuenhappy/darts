@@ -99,17 +99,27 @@ add_compile_options(-fPIC)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/dist)
+
 include_directories(src ${ZLIB_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS} "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}" ${HDF5_INCLUDE_DIR})
 set(darts_libs Eigen3::Eigen ${Jsoncpp_LIBRARY} ${PROTOBUF_LIBRARY} ${HDF5_LIBRARY} ${ZLIB_LIBRARIES})
 
+#build darts c libray 
+add_library(cdarts STATIC src/main/darts.cxx)
+target_link_libraries(cdarts PRIVATE ${darts_libs})
+set_target_properties(cdarts PROPERTIES PUBLIC_HEADER "src/main/darts.h")
+set_property(TARGET cdarts PROPERTY CXX_STANDARD 17)
+
 #build darts
 add_executable(darts ${PROTO_SRCS} src/main/main.cpp)
-target_link_libraries(darts  ${darts_libs})
+target_link_libraries(darts PRIVATE ${darts_libs})
 set_property(TARGET darts PROPERTY CXX_STANDARD 17)
 
+INSTALL(TARGETS cdarts darts)
+INSTALL(DIRECTORY data DESTINATION .)
 #build test
 add_executable(test_darts ${PROTO_SRCS} test/test_func.cc)
-target_link_libraries(test_darts ${darts_libs})
+target_link_libraries(test_darts PRIVATE ${darts_libs})
 set_property(TARGET test_darts PROPERTY CXX_STANDARD 17)
 
 # add_library(ocr SHARED src/main/darts4py.cpp)
