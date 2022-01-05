@@ -24,6 +24,7 @@ extensions = [
               library_dirs=["../build/dist/lib"],
               libraries=["cdarts", ],
               language="c++",
+              extra_compile_args=["-std=c++17", "-Wall", "-Wextra", "-stdlib=libc++"],
               extra_objects=[],),
 ]
 
