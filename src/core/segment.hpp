@@ -182,7 +182,8 @@ class Segment {
      * @param cmap
      * @param ret
      */
-    void splitContent(AtomList *context, CellMap *cmap, std::vector<std::shared_ptr<Word>> &ret) {
+    void splitContent(AtomList *context, CellMap *cmap, std::vector<std::shared_ptr<Word>> &ret,
+                      int atom_start_pos = 0) {
         // get best path
         std::map<int, std::vector<GraphEdge> *> graph;
         buildGraph(context, cmap, graph);
@@ -191,7 +192,10 @@ class Segment {
         // output result
         cmap->iterRow(NULL, -1, [&](Cursor cur) {
             if (std::binary_search(bestPaths.begin(), bestPaths.end(), cur->idx)) {
-                ret.push_back(cur->val);
+                auto word = cur->val;
+                word->st += atom_start_pos;
+                word->et += atom_start_pos;
+                ret.push_back(word);
             }
         });
         // clear memory
@@ -241,21 +245,27 @@ class Segment {
      * @param ret
      * @param maxMode
      */
-    void smartCut(AtomList *atomList, std::vector<std::shared_ptr<Word>> &ret, bool maxMode = false) {
+    void smartCut(AtomList *atomList, std::vector<std::shared_ptr<Word>> &ret, bool maxMode = false,
+                  int atom_start_pos = 0) {
         if (!atomList || atomList->size() < 1) {
             return;
         }
         if (atomList->size() == 1) {
             auto atom = atomList->at(0);
-            ret.push_back(std::make_shared<Word>(atom, 0, 1));
+            ret.push_back(std::make_shared<Word>(atom, atom_start_pos, atom_start_pos + 1));
             return;
         }
         auto cmap = new CellMap();
         buildMap(atomList, cmap);
         if (maxMode) {
-            cmap->iterRow(NULL, -1, [&ret](Cursor cur) { ret.push_back(cur->val); });
+            cmap->iterRow(NULL, -1, [&](Cursor cur) {
+                auto word = cur->val;
+                word->st += atom_start_pos;
+                word->et += atom_start_pos;
+                ret.push_back(word);
+            });
         } else {
-            splitContent(atomList, cmap, ret);
+            splitContent(atomList, cmap, ret, atom_start_pos);
         }
         delete cmap;
     }
@@ -286,7 +296,7 @@ void tokenize(Segment &sg, const char *src, std::vector<std::shared_ptr<Word>> &
         if (pos - pre >= maxLineLength) {
             continue;
             AtomList temp(ori, pre, pos + 1);
-            sg.smartCut(&temp, ret, maxMode);
+            sg.smartCut(&temp, ret, maxMode, pre);
             pre = pos + 1;
         }
 
@@ -297,12 +307,12 @@ void tokenize(Segment &sg, const char *src, std::vector<std::shared_ptr<Word>> &
             continue;
         }
         AtomList temp(ori, pre, pos + 1);
-        sg.smartCut(&temp, ret, maxMode);
+        sg.smartCut(&temp, ret, maxMode, pre);
         pre = pos + 1;
     }
     if (pre < ori.size()) {
         AtomList temp(ori, pre, ori.size());
-        sg.smartCut(&temp, ret, maxMode);
+        sg.smartCut(&temp, ret, maxMode, pre);
         return;
     }
 }

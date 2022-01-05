@@ -42,7 +42,7 @@ typedef struct _segment* segment;
  * @param ret retuurn str
  * @return int normalize str size
  */
-int normalize_str(const char* str, size_t len, char** ret);
+int normalize_str(const char* str, char** ret);
 /**
  * @brief load the drgex from file
  *
@@ -70,8 +70,8 @@ void free_dregex(dregex regex);
  * @return int,匹配的结果数，如果-1失败
  */
 
-typedef bool (*atom_iter)(char* word, size_t postion, darts_ext user_data);
-typedef bool (*dregex_hit)(size_t s, size_t e, int64_t* labels, size_t labels_num, darts_ext user_data);
+typedef bool (*atom_iter)(const char** word, size_t* postion, darts_ext user_data);
+typedef bool (*dregex_hit)(size_t s, size_t e, const char** labels, size_t labels_num, darts_ext user_data);
 
 /**
  * @brief  parse a atom list
@@ -81,7 +81,7 @@ typedef bool (*dregex_hit)(size_t s, size_t e, int64_t* labels, size_t labels_nu
  * @param user_data
  * @return int
  */
-int parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data);
+void parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data);
 
 
 /**
@@ -97,7 +97,8 @@ int load_segment(const char* json_conf_file, segment* sg);
  * @brief token匹配函数
  *
  */
-typedef bool (*token_hit)(const char* str, const char* label, size_t s, size_t e, darts_ext user_data);
+typedef void (*word_hit)(const char* str, const char* label, size_t as, size_t ae, size_t ws, size_t we,
+                         darts_ext user_data);
 /**
  * @brief 分词
  *
@@ -107,7 +108,7 @@ typedef bool (*token_hit)(const char* str, const char* label, size_t s, size_t e
  * @param ret
  * @return int 分词的结果数，如果-1失败
  */
-void tokenize(segment sg, const char* txt, size_t len, token_hit hit, bool max_mode, darts_ext user_data);
+void token_str(segment sg, const char* txt, word_hit hit, bool max_mode, darts_ext user_data);
 
 /**
  * @brief free segment
@@ -125,6 +126,11 @@ void free_segment(segment sg);
  */
 int word_type(const char* word, char** ret);
 
+/**
+ * @brief token匹配函数
+ *
+ */
+typedef bool (*token_hit)(const char* str, const char* label, size_t s, size_t e, darts_ext user_data);
 
 /**
  * @brief char list
@@ -134,7 +140,7 @@ int word_type(const char* word, char** ret);
  * @param hit
  * @param user_data
  */
-void word_split(const char* str, size_t len, token_hit hit, darts_ext user_data);
+void word_split(const char* str, token_hit hit, darts_ext user_data);
 
 /**
  * @brief english bpe
@@ -144,7 +150,7 @@ void word_split(const char* str, size_t len, token_hit hit, darts_ext user_data)
  * @param hit
  * @param user_data
  */
-void word_bpe(const char* str, size_t len, token_hit hit, darts_ext user_data);
+void word_bpe(const char* str, token_hit hit, darts_ext user_data);
 
 
 #ifdef __cplusplus
