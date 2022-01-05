@@ -6,7 +6,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 else()
     set(IS_ROOT_PROJECT OFF)
 endif()
-
+if (APPLE)
+	set (CMAKE_CXX_COMPILER clang++)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -stdlib=libc++") 
+    set (CMAKE_C_COMPILER clang)
+endif()
 #some self define function
 message("find required package path....")
 function(DARTS_PROTOBUF_GENERATE_CPP PATH SRCS HDRS)
@@ -95,7 +99,7 @@ message("hdf5 path: ${HDF5_INCLUDE_DIR}")
 message("-----------------================")
 
 #set bin ouput dir
-add_compile_options(-fPIC)
+add_compile_options(-fPIC -c -O2)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

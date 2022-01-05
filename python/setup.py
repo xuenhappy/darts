@@ -21,7 +21,8 @@ extensions = [
     Extension("cdarts",
               sources=["darts/cdarts.pyx"],
               include_dirs=["../build/dist/include"],
-              libraries=["../build/dist/lib/libcdarts.a", ],
+              library_dirs=["../build/dist/lib"],
+              libraries=["cdarts", ],
               language="c++",
               extra_objects=[],),
 ]
@@ -44,7 +45,7 @@ setup(
     long_description=long_description(),
     long_description_content_type='text/markdown',
     version="",
-    package_dir={'': 'src'},
+    package_dir={'': 'darts'},
     url='https://github.com/google/sentencepiece',
     license='Apache',
     platforms='Unix',
