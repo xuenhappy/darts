@@ -1,114 +1,49 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-# Copyright 2018 Google Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.!
+'''
+File: setup.py
+Project: python
+File Created: Monday, 27th December 2021 10:57:03 am
+Author: Xu En (xuen@mokar.com)
+-----
+Last Modified: Wednesday, 5th January 2022 5:32:10 pm
+Modified By: Xu En (xuen@mokahr.com)
+-----
+Copyright 2021 - 2022 Your Company, Moka
+'''
 
 from setuptools import setup, Extension
-from setuptools.command.build_ext import build_ext as _build_ext
-from setuptools.command.build_py import build_py as _build_py
+from Cython.Build import cythonize
 import codecs
-import string
-import subprocess
-import sys
-import os
 
-sys.path.append(os.path.join('.', 'test'))
+
+extensions = [
+    Extension("cdarts",
+              sources=["darts/cdarts.pyx"],
+              include_dirs=["../build/dist/include"],
+              libraries=["../build/dist/lib/libcdarts.a", ],
+              language="c++",
+              extra_objects=[],),
+]
+
+compiler_directives = {"language_level": 3, "embedsignature": True}
+extensions = cythonize(extensions, compiler_directives=compiler_directives)
 
 
 def long_description():
-    with codecs.open('README.md', 'r', 'utf-8') as f:
+    with codecs.open('../README.md', 'r', 'utf-8') as f:
         long_description = f.read()
     return long_description
 
 
-def version():
-    with codecs.open('VERSION.txt', 'r', 'utf-8') as f:
-        version = f.read().rstrip()
-        return version
-
-
-def run_pkg_config(section, pkg_config_path=None):
-    try:
-        cmd = 'pkg-config sentencepiece --{}'.format(section)
-        if pkg_config_path:
-            cmd = 'env PKG_CONFIG_PATH={} {}'.format(pkg_config_path, cmd)
-        output = subprocess.check_output(cmd, shell=True)
-        if sys.version_info >= (3, 0, 0):
-            output = output.decode('utf-8')
-    except subprocess.CalledProcessError:
-        sys.stderr.write('Failed to find sentencepiece pkg-config\n')
-        sys.exit(1)
-    return output.strip().split()
-
-
-def is_sentencepiece_installed():
-    try:
-        subprocess.check_call('pkg-config sentencepiece --libs', shell=True)
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-
-class build_ext(_build_ext):
-    """Override build_extension to run cmake."""
-
-    def build_extension(self, ext):
-        pkg_config_path = None
-        if not is_sentencepiece_installed():
-            subprocess.check_call(['./build_bundled.sh', version()])
-            pkg_config_path = './bundled/lib/pkgconfig:./bundled/lib64/pkgconfig'
-
-        cflags = ['-std=c++11']
-        # Fix compile on some versions of Mac OSX
-        # See: https://github.com/neulab/xnmt/issues/199
-        if sys.platform == 'darwin':
-            cflags.append('-mmacosx-version-min=10.9')
-        cflags = cflags + run_pkg_config('cflags', pkg_config_path)
-        libs = run_pkg_config('libs', pkg_config_path)
-        print('## cflags={}'.format(' '.join(cflags)))
-        print('## libs={}'.format(' '.join(libs)))
-        ext.extra_compile_args = cflags
-        ext.extra_link_args = libs
-        _build_ext.build_extension(self, ext)
-
-
-if os.name == 'nt':
-    cflags = ['/MT', '/I..\\build\\root\\include']
-    libs = [
-        '..\\build\\root\\lib\\sentencepiece.lib',
-        '..\\build\\root\\lib\\sentencepiece_train.lib'
-    ]
-    SENTENCEPIECE_EXT = Extension(
-        'sentencepiece._sentencepiece',
-        sources=['src/sentencepiece/sentencepiece_wrap.cxx'],
-        extra_compile_args=cflags,
-        extra_link_args=libs)
-    cmdclass = {}
-else:
-    SENTENCEPIECE_EXT = Extension(
-        'sentencepiece._sentencepiece',
-        sources=['src/sentencepiece/sentencepiece_wrap.cxx'])
-    cmdclass = {'build_ext': build_ext}
-
 setup(
-    name='sentencepiece',
-    author='Taku Kudo',
-    author_email='taku@google.com',
+    name='darts',
+    author='Xu En',
+    author_email='xuen@mokahr.com',
     description='SentencePiece python wrapper',
     long_description=long_description(),
     long_description_content_type='text/markdown',
-    version=version(),
+    version="",
     package_dir={'': 'src'},
     url='https://github.com/google/sentencepiece',
     license='Apache',
@@ -117,8 +52,7 @@ setup(
         'sentencepiece/__init__', 'sentencepiece/sentencepiece_model_pb2',
         'sentencepiece/sentencepiece_pb2'
     ],
-    ext_modules=[SENTENCEPIECE_EXT],
-    cmdclass=cmdclass,
+    ext_modules=extensions,
     classifiers=[
         'Development Status :: 5 - Production/Stable', 'Environment :: Console',
         'Intended Audience :: Developers',
@@ -128,4 +62,4 @@ setup(
         'Topic :: Text Processing :: Linguistic',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
-    test_suite='sentencepiece_test.suite')
+)

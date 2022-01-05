@@ -19,17 +19,17 @@
 #include "../utils/dregex.hpp"
 #include "utils/utils_base.hpp"
 
-void init_darts() { initUtils(); }
-
-
-void destroy_darts() { google::protobuf::ShutdownProtobufLibrary(); }
-
 struct _dregex {
     darts::Trie* dat;
 };
 struct _segment {
     darts::Segment* segment;
 };
+
+void init_darts() { initUtils(); }
+
+
+void destroy_darts() { google::protobuf::ShutdownProtobufLibrary(); }
 
 
 int normalize_str(const char* str, char** ret) {
@@ -49,19 +49,21 @@ int load_drgex(const char* path, dregex* regex) {
         delete trie;
         return EXIT_FAILURE;
     }
-    *regex = new struct _dregex();
-    (*regex)->dat = trie;
+    dregexPtr r = new struct _dregex();
+    r->dat = trie;
+    *regex = r;
     return EXIT_SUCCESS;
 }
 
 
 void free_dregex(dregex regex) {
     if (regex) {
-        if (regex->dat) {
-            delete regex->dat;
-            regex->dat = NULL;
+        dregexPtr r = (dregexPtr)regex;
+        if (r->dat) {
+            delete r->dat;
+            r->dat = NULL;
         }
-        delete regex;
+        delete r;
     }
 }
 
@@ -88,8 +90,10 @@ class _C_AtomListIter : public darts::StringIter {
 };
 
 void parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data) {
-    if (!regex || (!regex->dat)) return;
-    auto dat = regex->dat;
+    if (!regex) return;
+    dregexPtr r = (dregexPtr)regex;
+    if (!r->dat) return;
+    auto dat = r->dat;
     _C_AtomListIter alist(user_data, atomlist);
     std::vector<const char*> tmpl;
     dat->parse(alist, [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
@@ -112,23 +116,27 @@ int load_segment(const char* json_conf_file, segment* sg) {
         return EXIT_FAILURE;
     }
     if (!sgemnet) return EXIT_FAILURE;
-    *sg = new struct _segment();
-    (*sg)->segment = sgemnet;
+    segmentPtr s = new struct _segment();
+    s->segment = sgemnet;
+    *sg = s;
     return EXIT_SUCCESS;
 }
 
 void free_segment(segment sg) {
     if (sg) {
-        if (sg->segment) delete sg->segment;
-        sg->segment = NULL;
-        delete sg;
+        segmentPtr s = (segmentPtr)sg;
+        if (s->segment) delete s->segment;
+        s->segment = NULL;
+        delete s;
     }
 }
 
 
 void token_str(segment sg, const char* txt, word_hit hit, bool max_mode, darts_ext user_data) {
-    if (!sg || !sg->segment || !txt) return;
-    auto sgment = sg->segment;
+    if (!sg) return;
+    segmentPtr s = (segmentPtr)sg;
+    if (!s->segment || !txt) return;
+    auto sgment = s->segment;
     std::vector<std::shared_ptr<darts::Word>> ret;
     darts::tokenize(*sgment, txt, ret, max_mode);
     for (auto w : ret) {
