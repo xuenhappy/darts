@@ -261,5 +261,52 @@ class Segment {
     }
 };
 
+const std::set<std::string> SENTENCE_POS = {"!", "。", ",", "?", ";", ":", "！", "，", "？", "；", "："};
+
+/**
+ * @brief 对原始的字符串进行
+ *
+ * @param sg
+ * @param src
+ * @param ret
+ * @param maxMode
+ */
+void tokenize(Segment &sg, const char *src, std::vector<std::shared_ptr<Word>> &ret, bool maxMode = false,
+              size_t maxLineLength = 100, size_t minLineLength = 10) {
+    if (!src) return;
+    AtomList ori(src);
+    if (ori.size() <= maxLineLength) {
+        sg.smartCut(&ori, ret, maxMode);
+        return;
+    }
+    // too long context
+    size_t pre = 0;
+    for (size_t pos = minLineLength; pos < ori.size(); pos++) {
+        auto a = ori.at(pos);
+        if (pos - pre >= maxLineLength) {
+            continue;
+            AtomList temp(ori, pre, pos + 1);
+            sg.smartCut(&temp, ret, maxMode);
+            pre = pos + 1;
+        }
+
+        if (SENTENCE_POS.find(a->image) == SENTENCE_POS.end()) {
+            continue;
+        }
+        if (pos - pre < minLineLength) {
+            continue;
+        }
+        AtomList temp(ori, pre, pos + 1);
+        sg.smartCut(&temp, ret, maxMode);
+        pre = pos + 1;
+    }
+    if (pre < ori.size()) {
+        AtomList temp(ori, pre, ori.size());
+        sg.smartCut(&temp, ret, maxMode);
+        return;
+    }
+}
+
+
 }  // namespace darts
 #endif  // SRC_CORE_SEGMENT_HPP_

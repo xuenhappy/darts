@@ -14,5 +14,8 @@
 #define SRC_MAIN_DARTS4PY_HPP_
 #include "./darts.h"
 
+#include "../core/segment.hpp"
+#include "../utils/dregex.hpp"
+
 
 #endif  // SRC_MAIN_DARTS4PY_HPP_

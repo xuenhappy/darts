@@ -52,6 +52,17 @@ class StringIterPairs {
     virtual ~StringIterPairs() {}
 };
 
+class U32Iter {
+   public:
+    /**
+     * @brief iter string
+     *
+     * @param hit
+     */
+    virtual void iter(std::function<void(int64_t, const char *, size_t)> hit) = 0;
+    virtual ~U32Iter() {}
+};
+
 
 /**
  * @brief 字符串连接

@@ -24,6 +24,7 @@
 
 #include "../core/wtype.h"
 #include "../utils/chspliter.hpp"
+#include "../utils/codecvt.hpp"
 #include "../utils/str_utils.hpp"
 
 namespace darts {
@@ -137,7 +138,7 @@ class Atom {
 class AtomList {
    public:
     std::vector<std::shared_ptr<Atom>> data;
-    std::string content;
+    std::u32string str;
 
 
     /**
@@ -146,13 +147,31 @@ class AtomList {
      * @param str
      */
     explicit AtomList(const std::string &str) {
-        data.reserve(str.length() / 3 + 5);
-        content = str;
-        atomSplit(str.c_str(), [&](const char *astr, WordType ttype, size_t s, size_t e) {
+        this->str = to_utf32(str);
+        data.reserve(str.length());
+        atomSplit(this->str, [&](const char *astr, WordType ttype, size_t s, size_t e) {
             auto atom = std::make_shared<Atom>(astr, s, e);
             atom->addTag(ttype);
             this->data.push_back(atom);
         });
+    }
+
+    /**
+     * @brief Construct a new Atom List object sub
+     *
+     * @param other
+     * @param s
+     * @param e
+     */
+    AtomList(const AtomList &other, int s = 0, int e = -1) {
+        if (e < 0) {
+            e = other.str.size();
+        }
+        if (s <= e) {
+            return;
+        }
+        this->str = other.str.substr(0, e - s);
+        this->data.insert(data.end(), other.data.begin() + s, other.data.begin() + e);
     }
 
     /**
@@ -228,6 +247,13 @@ class Word {
     std::shared_ptr<std::vector<double>> att;  //
     uint16_t feat;                             // this word other type
 
+    /**
+     * @brief Construct a new Word object
+     *
+     * @param atom
+     * @param start  start of postion in atom list
+     * @param end  end of postion in atom list
+     */
     Word(std::shared_ptr<Atom> atom, int start, int end) {
         this->word = atom;
         this->st = start;

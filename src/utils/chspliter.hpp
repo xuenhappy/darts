@@ -158,32 +158,57 @@ size_t wordLen(const char* str) {
     return nums;
 }
 
-/**
- * @brief 对原始字符串进行切分
- *
- * @param str 原始字符串
- * @param accept hook函数
- */
-void atomSplit(const char* str, std::function<void(const char*, WordType, size_t, size_t)> accept) {
+
+class _UTF8StringIter : public darts::U32Iter {
+   private:
+    const char* str;
+
+   public:
+    explicit _UTF8StringIter(const char* str) { this->str = str; }
+    void iter(std::function<void(int64_t, const char*, size_t)> hit) {
+        utf8_iter ITER;
+        int position = -1;
+        utf8_init(&ITER, this->str);
+        while (utf8_next(&ITER)) {
+            position++;
+            hit(ITER.codepoint, utf8_getchar(&ITER), position);
+        }
+    }
+};
+
+class _U32StringIter : public darts::U32Iter {
+   private:
+    const std::u32string* str;
+
+
+   public:
+    explicit _U32StringIter(const std::u32string& str) { this->str = &str; }
+    void iter(std::function<void(int64_t, const char*, size_t)> hit) {
+        for (size_t position = 0; position < str->length(); position++) {
+            int64_t code = (*str)[position];
+            hit(code, unicode_to_utf8(code), position);
+        }
+    }
+};
+
+void atomSplit(darts::U32Iter& str, std::function<void(const char*, WordType, size_t, size_t)> accept) {
     std::string chr_buffer;
     size_t bufstart = 0;
     auto buf_type = WordType::NONE;
-    int position = -1;
-    utf8_iter ITER;
-    utf8_init(&ITER, str);
-    while (utf8_next(&ITER)) {
-        position++;
-        auto ctype = charType(ITER.codepoint);
+    size_t last_pos = 0;
+    str.iter([&](int64_t code, const char* ct, size_t position) {
+        last_pos = position;
+        auto ctype = charType(code);
         if (ctype != buf_type) {
             if (ctype == WordType::EMPTY && buf_type == WordType::POS) {
                 buf_type = WordType::POS;
-                chr_buffer.append(utf8_getchar(&ITER));
-                continue;
+                chr_buffer.append(ct);
+                return;
             }
             if (buf_type == WordType::EMPTY && ctype == WordType::POS) {
                 buf_type = WordType::POS;
-                chr_buffer.append(utf8_getchar(&ITER));
-                continue;
+                chr_buffer.append(ct);
+                return;
             }
 
             if (!chr_buffer.empty()) {
@@ -196,16 +221,32 @@ void atomSplit(const char* str, std::function<void(const char*, WordType, size_t
         buf_type = ctype;
 
         if (buf_type == WordType::CJK) {
-            accept(utf8_getchar(&ITER), buf_type, position, position + 1);
+            accept(ct, buf_type, position, position + 1);
             chr_buffer.clear();
-            continue;
+            return;
         }
-        chr_buffer.append(utf8_getchar(&ITER));
-    }
-
+        chr_buffer.append(ct);
+    });
     if (!chr_buffer.empty()) {
-        accept(chr_buffer.c_str(), buf_type, bufstart, position + 1);
+        accept(chr_buffer.c_str(), buf_type, bufstart, last_pos + 1);
     }
 }
+/**
+ * @brief 对原始字符串进行切分
+ *
+ * @param str 原始字符串
+ * @param accept hook函数
+ */
+void atomSplit(const char* str, std::function<void(const char*, WordType, size_t, size_t)> accept) {
+    _UTF8StringIter iter(str);
+    atomSplit(iter, accept);
+}
+
+
+void atomSplit(const std::u32string& str, std::function<void(const char*, WordType, size_t, size_t)> accept) {
+    _U32StringIter iter(str);
+    atomSplit(iter, accept);
+}
+
 
 #endif  // SRC_UTILS_CHSPLITER_HPP_

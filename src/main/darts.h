@@ -16,6 +16,17 @@
 extern "C" {
 #endif /* __cplusplus */
 #include <stdlib.h>
+/**
+ * @brief init the darts somthing
+ *
+ */
+void init_darts();
+
+/**
+ * @brief dstory the some
+ *
+ */
+void destroy_darts();
 
 
 typedef void* darts_ext;
@@ -24,13 +35,14 @@ typedef struct _segment* segment;
 
 
 /**
- * @brief normalize ori string
+ * @brief
  *
  * @param str
  * @param len
- * @return char*
+ * @param ret retuurn str
+ * @return int normalize str size
  */
-char* normalize_str(const char* str, size_t len);
+int normalize_str(const char* str, size_t len, char** ret);
 /**
  * @brief load the drgex from file
  *
@@ -111,7 +123,7 @@ void free_segment(segment sg);
  * @param word
  * @return char* 某个字符的字符类型
  */
-char* word_type(const char* word);
+int word_type(const char* word, char** ret);
 
 
 /**
@@ -123,6 +135,17 @@ char* word_type(const char* word);
  * @param user_data
  */
 void word_split(const char* str, size_t len, token_hit hit, darts_ext user_data);
+
+/**
+ * @brief english bpe
+ *
+ * @param str
+ * @param len
+ * @param hit
+ * @param user_data
+ */
+void word_bpe(const char* str, size_t len, token_hit hit, darts_ext user_data);
+
 
 #ifdef __cplusplus
 }
