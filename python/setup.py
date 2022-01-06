@@ -50,13 +50,11 @@ extensions = [
               libraries=["cdarts", ],
               language="c++",
               extra_compile_args=cflags,
-              extra_linker_args=cflags,
+              extra_link_args=cflags,
               extra_objects=[],),
 ]
 
-CYTHONIZE = bool(int(os.getenv("CYTHONIZE", 0))) and cythonize is not None
-
-if CYTHONIZE:
+if cythonize is not None:
     compiler_directives = {"language_level": 3, "embedsignature": True}
     extensions = cythonize(extensions, compiler_directives=compiler_directives)
 else:
