@@ -3,9 +3,9 @@ from libcpp cimport bool
 
 
 cdef extern from 'darts.h': 
-    cdef struct _segment:
+    struct _segment:
         pass
-    cdef struct _dregex:
+    struct _dregex:
         pass
     ctypedef _dregex* dregex
     ctypedef _segment* segment
@@ -149,6 +149,7 @@ cdef bool token_hit_callback(const char* strs, const char* label, size_t s, size
     txt=strs.decode('utf-8','ignore') if strs else ''
     tag=label.decode('utf-8','ignore') if label else ''
     tokens.append((txt,tag,s,e))
+    return False
 
     
 def wordSplit(strs):

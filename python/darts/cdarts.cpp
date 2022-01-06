@@ -3918,7 +3918,7 @@ static bool __pyx_f_6cdarts_token_hit_callback(char const *__pyx_v_strs, char co
  *     txt=strs.decode('utf-8','ignore') if strs else ''
  *     tag=label.decode('utf-8','ignore') if label else ''             # <<<<<<<<<<<<<<
  *     tokens.append((txt,tag,s,e))
- * 
+ *     return False
  */
   if ((__pyx_v_label != 0)) {
     __pyx_t_2 = __Pyx_decode_c_string(__pyx_v_label, 0, strlen(__pyx_v_label), NULL, ((char const *)"ignore"), PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 150, __pyx_L1_error)
@@ -3936,7 +3936,7 @@ static bool __pyx_f_6cdarts_token_hit_callback(char const *__pyx_v_strs, char co
  *     txt=strs.decode('utf-8','ignore') if strs else ''
  *     tag=label.decode('utf-8','ignore') if label else ''
  *     tokens.append((txt,tag,s,e))             # <<<<<<<<<<<<<<
- * 
+ *     return False
  * 
  */
   __pyx_t_1 = __Pyx_PyInt_FromSize_t(__pyx_v_s); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 151, __pyx_L1_error)
@@ -3960,6 +3960,16 @@ static bool __pyx_f_6cdarts_token_hit_callback(char const *__pyx_v_strs, char co
   __pyx_t_4 = __Pyx_PyObject_Append(__pyx_v_tokens, __pyx_t_3); if (unlikely(__pyx_t_4 == ((int)-1))) __PYX_ERR(0, 151, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
+  /* "cdarts.pyx":152
+ *     tag=label.decode('utf-8','ignore') if label else ''
+ *     tokens.append((txt,tag,s,e))
+ *     return False             # <<<<<<<<<<<<<<
+ * 
+ * 
+ */
+  __pyx_r = 0;
+  goto __pyx_L0;
+
   /* "cdarts.pyx":147
  * 
  * 
@@ -3969,8 +3979,6 @@ static bool __pyx_f_6cdarts_token_hit_callback(char const *__pyx_v_strs, char co
  */
 
   /* function exit code */
-  __pyx_r = 0;
-  goto __pyx_L0;
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
@@ -3985,7 +3993,7 @@ static bool __pyx_f_6cdarts_token_hit_callback(char const *__pyx_v_strs, char co
   return __pyx_r;
 }
 
-/* "cdarts.pyx":154
+/* "cdarts.pyx":155
  * 
  * 
  * def wordSplit(strs):             # <<<<<<<<<<<<<<
@@ -4022,53 +4030,53 @@ static PyObject *__pyx_pf_6cdarts_4wordSplit(CYTHON_UNUSED PyObject *__pyx_self,
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("wordSplit", 0);
 
-  /* "cdarts.pyx":155
+  /* "cdarts.pyx":156
  * 
  * def wordSplit(strs):
  *     if not strs:return []             # <<<<<<<<<<<<<<
  *     tokens=[]
  *     word_split(strs.encode('utf-8','ignore'), token_hit_callback, <darts_ext> tokens)
  */
-  __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_v_strs); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 155, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_v_strs); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 156, __pyx_L1_error)
   __pyx_t_2 = ((!__pyx_t_1) != 0);
   if (__pyx_t_2) {
     __Pyx_XDECREF(__pyx_r);
-    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 155, __pyx_L1_error)
+    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 156, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __pyx_r = __pyx_t_3;
     __pyx_t_3 = 0;
     goto __pyx_L0;
   }
 
-  /* "cdarts.pyx":156
+  /* "cdarts.pyx":157
  * def wordSplit(strs):
  *     if not strs:return []
  *     tokens=[]             # <<<<<<<<<<<<<<
  *     word_split(strs.encode('utf-8','ignore'), token_hit_callback, <darts_ext> tokens)
  *     return tokens
  */
-  __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 156, __pyx_L1_error)
+  __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 157, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __pyx_v_tokens = ((PyObject*)__pyx_t_3);
   __pyx_t_3 = 0;
 
-  /* "cdarts.pyx":157
+  /* "cdarts.pyx":158
  *     if not strs:return []
  *     tokens=[]
  *     word_split(strs.encode('utf-8','ignore'), token_hit_callback, <darts_ext> tokens)             # <<<<<<<<<<<<<<
  *     return tokens
  * 
  */
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_v_strs, __pyx_n_s_encode); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 157, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_v_strs, __pyx_n_s_encode); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 158, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_3, __pyx_tuple__2, NULL); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 157, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_3, __pyx_tuple__2, NULL); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 158, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_5 = __Pyx_PyObject_AsString(__pyx_t_4); if (unlikely((!__pyx_t_5) && PyErr_Occurred())) __PYX_ERR(0, 157, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_AsString(__pyx_t_4); if (unlikely((!__pyx_t_5) && PyErr_Occurred())) __PYX_ERR(0, 158, __pyx_L1_error)
   word_split(__pyx_t_5, __pyx_f_6cdarts_token_hit_callback, ((darts_ext)__pyx_v_tokens));
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "cdarts.pyx":158
+  /* "cdarts.pyx":159
  *     tokens=[]
  *     word_split(strs.encode('utf-8','ignore'), token_hit_callback, <darts_ext> tokens)
  *     return tokens             # <<<<<<<<<<<<<<
@@ -4080,7 +4088,7 @@ static PyObject *__pyx_pf_6cdarts_4wordSplit(CYTHON_UNUSED PyObject *__pyx_self,
   __pyx_r = __pyx_v_tokens;
   goto __pyx_L0;
 
-  /* "cdarts.pyx":154
+  /* "cdarts.pyx":155
  * 
  * 
  * def wordSplit(strs):             # <<<<<<<<<<<<<<
@@ -4537,17 +4545,17 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_GIVEREF(__pyx_tuple__12);
   __pyx_codeobj__13 = (PyObject*)__Pyx_PyCode_New(1, 0, 3, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__12, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_darts_cdarts_pyx, __pyx_n_s_wordType, 137, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__13)) __PYX_ERR(0, 137, __pyx_L1_error)
 
-  /* "cdarts.pyx":154
+  /* "cdarts.pyx":155
  * 
  * 
  * def wordSplit(strs):             # <<<<<<<<<<<<<<
  *     if not strs:return []
  *     tokens=[]
  */
-  __pyx_tuple__14 = PyTuple_Pack(2, __pyx_n_s_strs, __pyx_n_s_tokens); if (unlikely(!__pyx_tuple__14)) __PYX_ERR(0, 154, __pyx_L1_error)
+  __pyx_tuple__14 = PyTuple_Pack(2, __pyx_n_s_strs, __pyx_n_s_tokens); if (unlikely(!__pyx_tuple__14)) __PYX_ERR(0, 155, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__14);
   __Pyx_GIVEREF(__pyx_tuple__14);
-  __pyx_codeobj__15 = (PyObject*)__Pyx_PyCode_New(1, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__14, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_darts_cdarts_pyx, __pyx_n_s_wordSplit, 154, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__15)) __PYX_ERR(0, 154, __pyx_L1_error)
+  __pyx_codeobj__15 = (PyObject*)__Pyx_PyCode_New(1, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__14, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_darts_cdarts_pyx, __pyx_n_s_wordSplit, 155, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__15)) __PYX_ERR(0, 155, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;
@@ -4922,16 +4930,16 @@ if (!__Pyx_RefNanny) {
   if (PyDict_SetItem(__pyx_d, __pyx_n_s_wordType, __pyx_t_1) < 0) __PYX_ERR(0, 137, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "cdarts.pyx":154
+  /* "cdarts.pyx":155
  * 
  * 
  * def wordSplit(strs):             # <<<<<<<<<<<<<<
  *     if not strs:return []
  *     tokens=[]
  */
-  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_6cdarts_5wordSplit, NULL, __pyx_n_s_cdarts); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 154, __pyx_L1_error)
+  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_6cdarts_5wordSplit, NULL, __pyx_n_s_cdarts); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 155, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_wordSplit, __pyx_t_1) < 0) __PYX_ERR(0, 154, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_wordSplit, __pyx_t_1) < 0) __PYX_ERR(0, 155, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "cdarts.pyx":1
