@@ -30,10 +30,8 @@ void destroy_darts();
 
 
 typedef void* darts_ext;
-typedef void* dregex;
-typedef void* segment;
-typedef struct _dregex* dregexPtr;
-typedef struct _segment* segmentPtr;
+typedef struct _dregex* dregex;
+typedef struct _segment* segment;
 
 
 /**

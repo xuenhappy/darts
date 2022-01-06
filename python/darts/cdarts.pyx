@@ -3,8 +3,12 @@ from libcpp cimport bool
 
 
 cdef extern from 'darts.h': 
-    ctypedef void* dregex
-    ctypedef void* segment
+    cdef struct _segment:
+        pass
+    cdef struct _dregex:
+        pass
+    ctypedef _dregex* dregex
+    ctypedef _segment* segment
     ctypedef void* darts_ext
     ctypedef bool (*atom_iter)(const char** word, size_t* postion, darts_ext user_data)
     ctypedef bool (*dregex_hit)(size_t s, size_t e, const char** labels, size_t labels_num, darts_ext user_data)
@@ -46,7 +50,8 @@ cdef bool atom_iter_func(const char** word, size_t* postion, darts_ext user_data
     if(atom_info is None):
         return False
     atom, idx=atom_info
-    word[0]=<char*>atom
+    py_byte_string=atom.encode('utf-8','replace')
+    word[0]=<char*>py_byte_string
     postion[0]=<size_t>idx
     return True
 
