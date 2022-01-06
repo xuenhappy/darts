@@ -1,3 +1,4 @@
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 cmake_minimum_required (VERSION 3.0.2)
 project (darts VERSION 1.2 LANGUAGES C CXX)
 #set complier
@@ -7,13 +8,13 @@ add_compile_options(-fPIC -c -O2)
 if (APPLE)
     add_compile_options(-mmacosx-version-min=11.0 )
 	set (CMAKE_CXX_COMPILER clang++)
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -stdlib=libc++ ") 
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -arch arm64 -arch x86_64 ") 
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -stdlib=libc++") 
     set (CMAKE_C_COMPILER clang)
 endif()
 message("Use C compiler is [${CMAKE_C_COMPILER}] and CXX compiler is [${CMAKE_CXX_COMPILER}]")
 #some self define function
 message("find required package path....")
+
 function(DARTS_PROTOBUF_GENERATE_CPP PATH SRCS HDRS)
   if(NOT ARGN)
     message(SEND_ERROR "Error: PROTOBUF_GENERATE_CPP() called without any proto files")
@@ -72,21 +73,12 @@ endfunction()
 
 
 # search the package use
-find_path(Jsoncpp_INCLUDE_DIR
-  NAMES json/json.h
-  PATH_SUFFIXES jsoncpp
-  PATHS ${Jsoncpp_PKGCONF_INCLUDE_DIRS} # /usr/include/jsoncpp/json
-)
-
-find_library(Jsoncpp_LIBRARY
-  NAMES jsoncpp
-  PATHS ${Jsoncpp_PKGCONF_LIBRARY_DIRS}
-)
-
+find_package(Jsoncpp REQUIRED)
 find_package (Eigen3 REQUIRED NO_MODULE)
 find_package(Protobuf REQUIRED)
 find_package(HDF5 REQUIRED)
 find_package(ZLIB REQUIRED)
+
 file(GLOB ProtoFiles "${CMAKE_CURRENT_LIST_DIR}/src/utils/*.proto")
 set(proto_gen_path proto_gen)
 DARTS_PROTOBUF_GENERATE_CPP(${proto_gen_path} PROTO_SRCS PROTO_HDRS ${ProtoFiles})
@@ -97,7 +89,11 @@ message("gen proto head file: ${PROTO_HDRS}")
 message("jsoncpp path: ${Jsoncpp_INCLUDE_DIR}")
 message("eigen3 path: ${EIGEN3_INCLUDE_DIR}")
 message("hdf5 path: ${HDF5_INCLUDE_DIR}")
-message("-----------------================")
+message("--------------- lib--------path-----------------------")
+message("${Jsoncpp_LIBRARY}")
+message("${Protobuf_LIBRARIES}")
+message("${HDF5_LIBRARIES}")
+message("${ZLIB_LIBRARIES}")
 
 #set bin ouput dir
 
@@ -107,7 +103,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/dist)
 
 include_directories(src ${ZLIB_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS} "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}" ${HDF5_INCLUDE_DIR})
-set(darts_libs Eigen3::Eigen ${Jsoncpp_LIBRARY} ${PROTOBUF_LIBRARY} ${HDF5_LIBRARY} ${ZLIB_LIBRARIES})
+set(darts_libs ${Jsoncpp_LIBRARY} ${Protobuf_LIBRARIES} ${HDF5_LIBRARIES} ${ZLIB_LIBRARIES})
+
 
 #build darts
 add_executable(darts ${PROTO_SRCS} src/main/main.cpp)
