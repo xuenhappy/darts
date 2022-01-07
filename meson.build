@@ -45,6 +45,7 @@ if get_option('build-python')
             dependencies : [dep_py],
             include_directories : [include_directories('src/main/')],
             link_with : darts_lib.get_static_lib(),
+            install : true, install_dir : 'python/darts'
         )
     endforeach
 endif
