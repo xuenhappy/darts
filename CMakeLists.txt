@@ -5,6 +5,11 @@ project (darts VERSION 1.2 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-fPIC -c -O2)
 
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+if(MSVC)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
+endif()
+
 if (APPLE)
     add_compile_options(-mmacosx-version-min=11.0 )
 	set (CMAKE_CXX_COMPILER clang++)
@@ -107,7 +112,7 @@ set(darts_libs ${Jsoncpp_LIBRARY} ${Protobuf_LIBRARIES} ${HDF5_LIBRARIES} ${ZLIB
 set(darts_src ${PROTO_SRCS})
 
 #build darts c libray 
-add_library(cdarts SHARED ${darts_src} src/main/darts.cxx)
+add_library(cdarts STATIC ${darts_src} src/main/darts.cxx)
 target_link_libraries(cdarts PRIVATE ${darts_libs})
 set_target_properties(cdarts PROPERTIES PUBLIC_HEADER "src/main/darts.h")
 set_property(TARGET cdarts PROPERTY CXX_STANDARD 17)
