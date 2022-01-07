@@ -12,53 +12,8 @@ Modified By: Xu En (xuen@mokahr.com)
 Copyright 2021 - 2022 Your Company, Moka
 '''
 
-from setuptools import setup, Extension
+from setuptools import setup
 import codecs
-import os
-import sys
-try:
-    from Cython.Build import cythonize
-except ImportError:
-    cythonize = None
-
-
-def no_cythonize(extensions, **_ignore):
-    for extension in extensions:
-        sources = []
-        for sfile in extension.sources:
-            path, ext = os.path.splitext(sfile)
-            if ext in (".pyx", ".py"):
-                if extension.language == "c++":
-                    ext = ".cpp"
-                else:
-                    ext = ".c"
-                sfile = path + ext
-            sources.append(sfile)
-        extension.sources[:] = sources
-    return extensions
-
-
-cflags = ["-Wall", "-Wextra", "-std=c++17"]
-if sys.platform.lower() == 'darwin':
-    cflags.extend(["-stdlib=libc++", "-mmacosx-version-min=10.14.6"])
-
-extensions = [
-    Extension("cdarts",
-              sources=["darts/cdarts.pyx"],
-              include_dirs=["../build/dist/include"],
-              library_dirs=["../build/dist/lib"],
-              libraries=["cdarts", ],
-              language="c++",
-              extra_compile_args=cflags,
-              extra_link_args=cflags,
-              extra_objects=[],),
-]
-
-if cythonize is not None:
-    compiler_directives = {"language_level": 3, "embedsignature": True}
-    extensions = cythonize(extensions, compiler_directives=compiler_directives)
-else:
-    extensions = no_cythonize(extensions)
 
 
 def long_description():
@@ -83,7 +38,6 @@ setup(
         'sentencepiece/__init__', 'sentencepiece/sentencepiece_model_pb2',
         'sentencepiece/sentencepiece_pb2'
     ],
-    ext_modules=extensions,
     classifiers=[
         'Development Status :: 5 - Production/Stable', 'Environment :: Console',
         'Intended Audience :: Developers',
