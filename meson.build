@@ -37,7 +37,7 @@ endif
 fs=import('fs')
 proto_sources=[]
 proto_headers=[]
-curdir=meson.current_source_dir()
+
 foreach pfile : files('src/utils/darts.proto') 
     proto_path=fs.parent(pfile)
     base_name=fs.stem(pfile)
@@ -83,6 +83,7 @@ darts_test_exe = executable('darts_test','test/test_func.cc',
 )
 if get_option('build-python')
     message('gen cython so...')
+    curdir=meson.current_source_dir()
     py = import('python').find_installation('python3')
     dep_py = py.dependency(required:true)
     pylib=py.extension_module(
