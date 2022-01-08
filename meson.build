@@ -1,4 +1,8 @@
 project('cdarts','c','cpp','cython',default_options: ['cpp_std=c++17'],version:'1.0.0')
+#useage:like blow
+#CC=gcc CXX=g++ meson setup directory -Dcmake_prefix_path=<Path1> -Dpkg_config_path=<Path1> -Dbuild-python=false
+#CC=clang CXX=clang++ meson setup directory
+
 # Validate the c++ Standard
 if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
@@ -6,12 +10,10 @@ endif
 extra_args = []
 if meson.get_compiler('c').get_id() == 'clang'
     if build_machine.system()=='darwin'
-        extra_args += ['-mmacosx-version-min=11.0','-std=c++17 -stdlib=libc++']
+        extra_args += ['-mmacosx-version-min=11.0','-std=c++17','-stdlib=libc++']
     endif
 endif
-#-Dcmake_prefix_path=<Path1> -Dpkg_config_path=<Path1>
-#CC=gcc CXX=g++ meson build directory
-#CC=clang CXX=clang++ meson build directory
+
 message('check the deps libray.....')
 zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: true)
 hdf5_dep=dependency('hdf5', version : '>=1.10.6', required : true,static: true)
