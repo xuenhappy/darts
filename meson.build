@@ -1,4 +1,8 @@
 project('cdarts','c','cpp','cython',default_options: ['cpp_std=c++17'],version:'1.0.0')
+# Validate the c++ Standard
+if get_option('cpp_std') != 'c++17'
+    error('This project requires c++17 support')
+endif
 #-Dcmake_prefix_path=<Path1> -Dpkg_config_path=<Path1>
 message('check the deps libray.....')
 zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: true)
