@@ -3,7 +3,15 @@ project('cdarts','c','cpp','cython',default_options: ['cpp_std=c++17'],version:'
 if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
 endif
+extra_args = []
+if meson.get_compiler('c').get_id() == 'clang'
+    if build_machine.system()=='darwin'
+        extra_args += ['-mmacosx-version-min=11.0','-std=c++17 -stdlib=libc++']
+    endif
+endif
 #-Dcmake_prefix_path=<Path1> -Dpkg_config_path=<Path1>
+#CC=gcc CXX=g++ meson build directory
+#CC=clang CXX=clang++ meson build directory
 message('check the deps libray.....')
 zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: true)
 hdf5_dep=dependency('hdf5', version : '>=1.10.6', required : true,static: true)
@@ -37,9 +45,16 @@ incdir = include_directories('src')
 darts_lib=both_libraries('darts', 'src/main/darts.cxx',proto_gens, 
         version : '1.2.3', soversion : '0',
         dependencies:base_deps,include_directories : incdir,
+        cpp_args : extra_args,c_args : extra_args
 )
-darts_exe = executable('darts', 'src/main/main.cpp', proto_gens, dependencies:base_deps, include_directories : incdir)
-darts_test_exe = executable('darts_test','test/test_func.cc',proto_gens,dependencies:base_deps,include_directories : incdir)
+darts_exe = executable('darts', 'src/main/main.cpp', proto_gens, 
+        dependencies:base_deps, include_directories : incdir,
+        cpp_args : extra_args,c_args : extra_args
+)
+darts_test_exe = executable('darts_test','test/test_func.cc',proto_gens,
+    dependencies:base_deps,include_directories : incdir,
+    cpp_args : extra_args,c_args : extra_args
+)
 if get_option('build-python')
     message('gen cython so...')
     py = import('python').find_installation('python3')
@@ -51,6 +66,7 @@ if get_option('build-python')
         dependencies : [dep_py],
         include_directories : [include_directories('src/main/')],
         link_with : darts_lib.get_static_lib(),
-        install : true, install_dir : 'python/darts'
+        install : true, install_dir : meson.current_source_dir()/'python/darts',
+        cpp_args : extra_args,c_args : extra_args
     )
 endif
