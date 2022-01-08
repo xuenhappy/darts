@@ -21,41 +21,63 @@ zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : t
 hdf5_dep=dependency('hdf5', version : '>=1.10.6', required : true,static: enable_static)
 jsoncpp_dep = dependency('jsoncpp', version : '>=1.9.4',required : true,static: enable_static)
 eigen_dep = dependency('eigen3', version : '>=3.3.9', required : true,static: enable_static)
-proto_dep = dependency('protobuf', version : '>=3.17.3',method: 'pkg-config', required : true,static: enable_static,modules: ['protobuf::libprotobuf'])
-base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep,proto_dep]
+
+base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep]
 
 message('set gen the proto source.....')
-
+proto_dep = dependency('protobuf', version : '>=3.17.3',
+    method: 'pkg-config', required : true,
+    static: enable_static,modules: ['protobuf::libprotobuf']
+)
 protoc = find_program('protoc', required : false)
 if not protoc.found()
   error('MESON_SKIP_TEST: protoc tool and/or protobuf pkg-config dependency not found')
 endif
+
 fs=import('fs')
-proto_gens=[]
+proto_sources=[]
+proto_headers=[]
+curdir=meson.current_source_dir()
 foreach pfile : files('src/utils/darts.proto') 
     proto_path=fs.parent(pfile)
-    proto_name=fs.name(pfile)
-    gen = generator(protoc,
-        output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
-        arguments : ['--proto_path=@CURRENT_SOURCE_DIR@/'+proto_path, '--cpp_out=@BUILD_DIR@',proto_name])
-    proto_gens+=gen.process(pfile)
+    base_name=fs.stem(pfile)
+    proto_list = custom_target(
+        base_name,
+        output : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
+        input : pfile,
+        command : [protoc, '--proto_path=@CURRENT_SOURCE_DIR@/'+proto_path, '--cpp_out=@OUTDIR@','@PLAINNAME@'],
+    )
+    # gen = generator(protoc,
+    #     output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
+    #     arguments : ['--proto_path=@CURRENT_SOURCE_DIR@/'+proto_path, '--cpp_out=@BUILD_DIR@',proto_name])
+    # proto_list=gen.process(pfile)
+    proto_headers+=proto_list[1]
+    proto_sources+=proto_list
 endforeach
+
+proto_lib=static_library('proto',proto_sources,dependencies:proto_dep,
+    cpp_args : extra_args,c_args : extra_args
+)
+my_proto_deb=declare_dependency(
+    link_with : [proto_lib],
+    #link_args : ['-L' + blaspp_lib_dir, '-l' + blaspp_lib],
+    sources:[proto_headers]
+)
+base_deps+=my_proto_deb
+
 message('set gen darts main exe....')
-# blaspp_dep = declare_dependency(
-#     link_args : ['-L' + blaspp_lib_dir, '-l' + blaspp_lib],
-#     include_directories : include_directories(blaspp_header_dir))
 
 incdir = include_directories('src')
-darts_lib=both_libraries('darts', 'src/main/darts.cxx',proto_gens, 
-        version : '1.2.3', soversion : '0',
-        dependencies:base_deps,include_directories : incdir,
-        cpp_args : extra_args,c_args : extra_args
+darts_lib=both_libraries('darts', 'src/main/darts.cxx', 
+    version : '1.2.3', soversion : '0',
+    dependencies:base_deps,include_directories : incdir,
+    cpp_args : extra_args,c_args : extra_args
 )
-darts_exe = executable('darts', 'src/main/main.cpp', proto_gens, 
-        dependencies:base_deps, include_directories : incdir,
-        cpp_args : extra_args,c_args : extra_args
+darts_exe = executable('darts', 'src/main/main.cpp', 
+    dependencies:base_deps, include_directories : incdir,
+    cpp_args : extra_args,c_args : extra_args
 )
-darts_test_exe = executable('darts_test','test/test_func.cc',proto_gens,
+darts_test_exe = executable('darts_test','test/test_func.cc',
     dependencies:base_deps,include_directories : incdir,
     cpp_args : extra_args,c_args : extra_args
 )
@@ -70,7 +92,7 @@ if get_option('build-python')
         dependencies : [dep_py],
         include_directories : [include_directories('src/main/')],
         link_with : darts_lib.get_static_lib(),
-        install : true, install_dir : meson.current_source_dir()/'python/darts',
+        install : true, install_dir : curdir/'python/darts',
         cpp_args : extra_args,c_args : extra_args
     )
 endif
