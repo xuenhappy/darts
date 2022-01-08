@@ -67,6 +67,7 @@ base_deps+=my_proto_deb
 
 message('set gen darts main exe....')
 
+install_dir=meson.current_source_dir()/'python/darts'
 incdir = include_directories('src')
 darts_lib=both_libraries('darts', 'src/main/darts.cxx', 
     version : '1.2.3', soversion : '0',
@@ -75,6 +76,7 @@ darts_lib=both_libraries('darts', 'src/main/darts.cxx',
 )
 darts_exe = executable('darts', 'src/main/main.cpp', 
     dependencies:base_deps, include_directories : incdir,
+    install : true, install_dir : install_dir,
     cpp_args : extra_args,c_args : extra_args
 )
 darts_test_exe = executable('darts_test','test/test_func.cc',
@@ -83,7 +85,6 @@ darts_test_exe = executable('darts_test','test/test_func.cc',
 )
 if get_option('build-python')
     message('gen cython so...')
-    curdir=meson.current_source_dir()
     py = import('python').find_installation('python3')
     dep_py = py.dependency(required:true)
     pylib=py.extension_module(
@@ -93,7 +94,7 @@ if get_option('build-python')
         dependencies : [dep_py],
         include_directories : [include_directories('src/main/')],
         link_with : darts_lib.get_static_lib(),
-        install : true, install_dir : curdir/'python/darts',
+        install : true, install_dir : install_dir,
         cpp_args : extra_args,c_args : extra_args
     )
 endif
