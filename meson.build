@@ -2,6 +2,8 @@ project('cdarts','c','cpp','cython',default_options: ['cpp_std=c++17'],version:'
 #useage:like blow
 #CC=gcc CXX=g++ meson setup directory -Dcmake_prefix_path=<Path1> -Dpkg_config_path=<Path1> -Dbuild-python=false
 #CC=clang CXX=clang++ meson setup directory
+#meson compile -C directory
+#meson install -C directory
 
 # Validate the c++ Standard
 if get_option('cpp_std') != 'c++17'
