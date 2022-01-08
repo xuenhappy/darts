@@ -6,9 +6,9 @@ endif
 #-Dcmake_prefix_path=<Path1> -Dpkg_config_path=<Path1>
 message('check the deps libray.....')
 zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: true)
-hdf5_dep=dependency('hdf5', version : '>=1.12.1', required : true,static: true)
+hdf5_dep=dependency('hdf5', version : '>=1.10.6', required : true,static: true)
 jsoncpp_dep = dependency('jsoncpp', version : '>=1.9.4',required : true,static: true)
-eigen_dep = dependency('eigen3', version : '>=3.4.0', required : true,static: true)
+eigen_dep = dependency('eigen3', version : '>=3.3.9', required : true,static: true)
 proto_dep = dependency('protobuf', version : '>=3.17.3',method: 'pkg-config', required : true,static: true,modules: ['protobuf::libprotobuf'])
 base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep,proto_dep]
 
@@ -34,7 +34,10 @@ message('set gen darts main exe....')
 #     include_directories : include_directories(blaspp_header_dir))
 
 incdir = include_directories('src')
-darts_lib=both_libraries('darts', 'src/main/darts.cxx',proto_gens, version : '1.2.3', soversion : '0',dependencies:base_deps,include_directories : incdir)
+darts_lib=both_libraries('darts', 'src/main/darts.cxx',proto_gens, 
+        version : '1.2.3', soversion : '0',
+        dependencies:base_deps,include_directories : incdir,
+)
 darts_exe = executable('darts', 'src/main/main.cpp', proto_gens, dependencies:base_deps, include_directories : incdir)
 darts_test_exe = executable('darts_test','test/test_func.cc',proto_gens,dependencies:base_deps,include_directories : incdir)
 if get_option('build-python')
