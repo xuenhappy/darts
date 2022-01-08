@@ -4,7 +4,7 @@ project('cdarts','c','cpp','cython',default_options: ['cpp_std=c++17'],version:'
 #CC=clang CXX=clang++ meson setup directory
 #meson compile -C directory
 #meson install -C directory
-
+enable_static=get_option('link-static')
 # Validate the c++ Standard
 if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
@@ -17,11 +17,11 @@ if meson.get_compiler('c').get_id() == 'clang'
 endif
 
 message('check the deps libray.....')
-zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: true)
-hdf5_dep=dependency('hdf5', version : '>=1.10.6', required : true,static: true)
-jsoncpp_dep = dependency('jsoncpp', version : '>=1.9.4',required : true,static: true)
-eigen_dep = dependency('eigen3', version : '>=3.3.9', required : true,static: true)
-proto_dep = dependency('protobuf', version : '>=3.17.3',method: 'pkg-config', required : true,static: true,modules: ['protobuf::libprotobuf'])
+zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: enable_static)
+hdf5_dep=dependency('hdf5', version : '>=1.10.6', required : true,static: enable_static)
+jsoncpp_dep = dependency('jsoncpp', version : '>=1.9.4',required : true,static: enable_static)
+eigen_dep = dependency('eigen3', version : '>=3.3.9', required : true,static: enable_static)
+proto_dep = dependency('protobuf', version : '>=3.17.3',method: 'pkg-config', required : true,static: enable_static,modules: ['protobuf::libprotobuf'])
 base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep,proto_dep]
 
 message('set gen the proto source.....')
