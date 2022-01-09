@@ -12,7 +12,6 @@
  */
 
 #include <functional>
-
 #include "../core/segment.hpp"
 #include "../impl/quantizer.hpp"
 #include "../impl/recognizer.hpp"
@@ -23,7 +22,7 @@
 #include "../utils/file_utils.hpp"
 #include "../utils/utils_base.hpp"
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     std::map<std::string, std::function<void()>> functions;
     // dregex-build
     argparse::ArgumentParser program1("dregex-build");
@@ -33,7 +32,7 @@ int main(int argc, char **argv) {
     functions[program1.pname()] = [&]() {
         try {
             program1.parse_args(argc - 1, argv + 1);
-            auto files = program1.get<std::vector<std::string>>("files");
+            auto files   = program1.get<std::vector<std::string>>("files");
             auto outfile = program1.get<std::string>("-o");
             if (!files.empty()) {
                 std::cout << "compile files to trie [" << darts::join(files, " , ") << "] " << std::endl;
@@ -42,11 +41,11 @@ int main(int argc, char **argv) {
                     std::cout << "build tire success, pb out file path:" << outfile << std::endl;
                 }
             }
-        } catch (const std::runtime_error &err) {
+        } catch (const std::runtime_error& err) {
             std::cerr << err.what() << std::endl;
             std::cerr << program1;
             std::exit(1);
-        } catch (std::logic_error &e) {
+        } catch (std::logic_error& e) {
             std::cout << program1 << std::endl;
         }
     };
@@ -59,28 +58,27 @@ int main(int argc, char **argv) {
     functions[program2.pname()] = [&]() {
         try {
             program2.parse_args(argc - 1, argv + 1);
-            auto files = program2.get<std::vector<std::string>>("-f");
+            auto files  = program2.get<std::vector<std::string>>("-f");
             auto outdir = program2.get<std::string>("-o");
             if (files.size() == 2) {
                 if (darts::BigramPersenter::buildDict(files[0], files[1], outdir)) {
                     std::cout << "compile ngram files to dir " << outdir << std::endl;
                 }
             }
-        } catch (const std::runtime_error &err) {
+        } catch (const std::runtime_error& err) {
             std::cerr << err.what() << std::endl;
             std::cerr << program2;
             std::exit(1);
-        } catch (std::logic_error &e) {
+        } catch (std::logic_error& e) {
             std::cout << program2 << std::endl;
         }
     };
     // tokenize
     argparse::ArgumentParser program3("tokenize");
 
-
     // check function
     std::vector<std::string> func_names;
-    for (auto &kv : functions) {
+    for (auto& kv : functions) {
         func_names.push_back(kv.first);
     }
 
