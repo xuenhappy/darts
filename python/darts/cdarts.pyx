@@ -39,7 +39,7 @@ def normalize(content):
     cdef char* point=NULL
     cdef size=normalize_str(content,&point)
     try:
-        pyStr=point[:size].decode('utf-8','replace')
+        return point[:size].decode('utf-8','replace')
     finally:
         free(point)
 
