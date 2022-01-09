@@ -67,16 +67,16 @@ base_deps+=my_proto_deb
 
 message('set gen darts main exe....')
 
-install_dir=meson.current_source_dir()/'python/darts'
+cur_dir=meson.current_source_dir()/'python/darts'
 incdir = include_directories('src')
 darts_lib=both_libraries('darts', 'src/main/darts.cxx', 
     version : '1.2.3', soversion : '0',
     dependencies:base_deps,include_directories : incdir,
     cpp_args : extra_args,c_args : extra_args
 )
-darts_exe = executable('darts', 'src/main/main.cpp', 
+darts_exe = executable('darts.bin', 'src/main/main.cpp', 
     dependencies:base_deps, include_directories : incdir,
-    install : true, install_dir : install_dir,
+    install : true, install_dir : cur_dir/'python/darts/bin',
     cpp_args : extra_args,c_args : extra_args
 )
 darts_test_exe = executable('darts_test','test/test_func.cc',
@@ -94,7 +94,7 @@ if get_option('build-python')
         dependencies : [dep_py],
         include_directories : [include_directories('src/main/')],
         link_with : darts_lib.get_static_lib(),
-        install : true, install_dir : install_dir,
+        install : true, install_dir : cur_dir/'python/darts',
         cpp_args : extra_args,c_args : extra_args
     )
 endif

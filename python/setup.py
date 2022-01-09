@@ -12,8 +12,10 @@ Modified By: Xu En (xuen@mokahr.com)
 Copyright 2021 - 2022 Your Company, Moka
 '''
 
-from setuptools import setup
+from setuptools.command.build_py import build_py as _build_py
+from setuptools import setup, find_packages
 import codecs
+import os
 
 
 def long_description():
@@ -22,22 +24,29 @@ def long_description():
     return long_description
 
 
-setup(
+class build_py(_build_py):
+    """Custom build command."""
+
+    def build_package_data(self):
+        super().build_package_data()
+        build_dir = os.path.join(*([self.build_lib]))
+        import shutil
+        scripts_dir = os.path.split(os.path.realpath(__file__))[0]
+        shutil.copytree(os.path.join(scripts_dir, '../data'), os.path.join(build_dir, 'darts/data'))
+
+
+setarg = setup(
     name='darts',
     author='Xu En',
     author_email='xuen@mokahr.com',
-    description='SentencePiece python wrapper',
+    description='darts python wrapper',
     long_description=long_description(),
     long_description_content_type='text/markdown',
-    version="",
-    package_dir={'': 'darts'},
-    url='https://github.com/google/sentencepiece',
+    version="2.0.1",
+    packages=find_packages(include=['darts', 'darts.*']),
+    url='https://github.com/xuenhappy/darts',
     license='Apache',
-    platforms='Unix',
-    py_modules=[
-        'sentencepiece/__init__', 'sentencepiece/sentencepiece_model_pb2',
-        'sentencepiece/sentencepiece_pb2'
-    ],
+    platforms=['Unix', 'MacOS'],
     classifiers=[
         'Development Status :: 5 - Production/Stable', 'Environment :: Console',
         'Intended Audience :: Developers',
@@ -47,4 +56,11 @@ setup(
         'Topic :: Text Processing :: Linguistic',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
+    cmdclass={
+        'build_py': build_py,
+    },
+    package_data={'': ['*.*'], },
+    include_package_data=True,
+    python_requires='>=3.8, <=3.10',
+    scripts=['darts/bin/darts']
 )
