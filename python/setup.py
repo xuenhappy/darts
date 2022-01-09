@@ -62,5 +62,4 @@ setarg = setup(
     package_data={'': ['*.*'], },
     include_package_data=True,
     python_requires='>=3.8, <=3.10',
-    scripts=['darts/bin/darts']
 )

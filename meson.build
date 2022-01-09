@@ -67,7 +67,7 @@ base_deps+=my_proto_deb
 
 message('set gen darts main exe....')
 
-cur_dir=meson.current_source_dir()/'python/darts'
+cur_dir=meson.current_source_dir()
 incdir = include_directories('src')
 darts_lib=both_libraries('darts', 'src/main/darts.cxx', 
     version : '1.2.3', soversion : '0',
