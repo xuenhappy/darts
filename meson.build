@@ -18,9 +18,9 @@ endif
 
 message('check the deps libray.....')
 zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: enable_static)
-hdf5_dep=dependency('hdf5', version : '>=1.10.6', required : true,static: enable_static)
-jsoncpp_dep = dependency('jsoncpp', version : '>=1.9.4',required : true,static: enable_static)
-eigen_dep = dependency('eigen3', version : '>=3.3.9', required : true,static: enable_static)
+hdf5_dep=dependency('hdf5', version : '>=1.10.3', required : true,static: enable_static)
+jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: enable_static)
+eigen_dep = dependency('eigen3', version : '>=3.3.7', required : true,static: enable_static)
 
 base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep]
 
@@ -60,7 +60,7 @@ proto_lib=static_library('proto',proto_sources,dependencies:proto_dep,
 )
 my_proto_deb=declare_dependency(
     link_with : [proto_lib],
-    #link_args : ['-L' + blaspp_lib_dir, '-l' + blaspp_lib],
+    link_args : ['-ldl' ],
     sources:[proto_headers]
 )
 base_deps+=my_proto_deb
