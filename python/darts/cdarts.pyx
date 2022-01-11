@@ -35,7 +35,7 @@ init_darts()
 def normalize(content:str)->str:
     if content is None:
         return None
-    data = content.encode('utf-8','replace')
+    cdef bytes data = content.encode('utf-8','replace')
     cdef char* point=NULL
     cdef size=normalize_str(data,&point)
     try:
@@ -51,7 +51,7 @@ cdef bool atom_iter_func(const char** word, size_t* postion, darts_ext user_data
         return False
     cdef str atom=<str>atom_info[0]
     cdef size_t idx=<size_t>atom_info[1]
-    py_byte_string=atom.encode('utf-8','replace')
+    cdef bytes py_byte_string=atom.encode('utf-8','replace')
     word[0]=<char*>py_byte_string
     postion[0]=idx
     return True
@@ -98,9 +98,9 @@ cdef void word_hit_callback(const char* strs, const char* label, size_t ast, siz
     cdef list tokens=<list>user_data
     t=Token()
     if strs:
-        t.word=strs.decode("utf-8",'ignore')
+        t.word=strs[:].decode("utf-8",'ignore')
     if label:
-        t.tags=label.decode("utf-8",'ignore')
+        t.tags=label[:].decode("utf-8",'ignore')
     t.start_of_string=ast
     t.end_of_string=aet
     t.start_of_atoms=wst
@@ -123,7 +123,8 @@ cdef class Segment:
         if not strs:
             return []
         cdef list tokens=[]
-        token_str(self.sg, strs.encode('utf-8','replace'), word_hit_callback,max_mode, <darts_ext> tokens)
+        cdef bytes data=strs.encode('utf-8','replace')
+        token_str(self.sg,data, word_hit_callback,max_mode, <darts_ext> tokens)
         return tokens
 
         
@@ -147,8 +148,8 @@ def wordType(word):
 
 cdef bool token_hit_callback(const char* strs, const char* label, size_t s, size_t e, darts_ext user_data):
     tokens=<list>user_data
-    txt=strs.decode('utf-8','ignore') if strs else ''
-    tag=label.decode('utf-8','ignore') if label else ''
+    txt=strs[:].decode('utf-8','ignore') if strs else ''
+    tag=label[:].decode('utf-8','ignore') if label else ''
     tokens.append((txt,tag,s,e))
     return False
 
