@@ -21,14 +21,13 @@ zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : t
 hdf5_dep=dependency('hdf5', version : '>=1.10.3', required : true,static: enable_static)
 jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: enable_static)
 eigen_dep = dependency('eigen3', version : '>=3.3.7', required : true,static: enable_static)
-
-base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep]
-
-message('set gen the proto source.....')
 proto_dep = dependency('protobuf', version : '>=3.17.3',
     method: 'pkg-config', required : true,
     static: enable_static,modules: ['protobuf::libprotobuf']
 )
+base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep,proto_dep]
+
+message('set gen the proto source.....')
 protoc = find_program('protoc', required : false)
 if not protoc.found()
   error('MESON_SKIP_TEST: protoc tool and/or protobuf pkg-config dependency not found')
@@ -85,7 +84,7 @@ darts_test_exe = executable('darts_test','test/test_func.cc',
 )
 if get_option('build-python')
     message('gen cython so...')
-    py = import('python').find_installation('python3')
+    py = import('python').find_installation('python3.9')
     dep_py = py.dependency(required:true)
     pylib=py.extension_module(
         'cdarts',
