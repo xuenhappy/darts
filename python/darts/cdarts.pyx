@@ -32,12 +32,12 @@ cdef extern from 'darts.h':
 #init some thing
 init_darts()
 
-def normalize(content):
+def normalize(content:str)->str:
     if content is None:
         return None
-    content = content.encode('utf-8','replace')
+    data = content.encode('utf-8','replace')
     cdef char* point=NULL
-    cdef size=normalize_str(content,&point)
+    cdef size=normalize_str(data,&point)
     try:
         return point[:size].decode('utf-8','replace')
     finally:
@@ -46,18 +46,19 @@ def normalize(content):
 
 #define some callback function
 cdef bool atom_iter_func(const char** word, size_t* postion, darts_ext user_data):
-    atom_info=next((<object>user_data)[0])
+    cdef tuple atom_info=next((<tuple>user_data)[0])
     if(atom_info is None):
         return False
-    atom, idx=atom_info
+    cdef str atom=<str>atom_info[0]
+    cdef size_t idx=<size_t>atom_info[1]
     py_byte_string=atom.encode('utf-8','replace')
     word[0]=<char*>py_byte_string
-    postion[0]=<size_t>idx
+    postion[0]=idx
     return True
 
 cdef bool dregex_hit_callback (size_t s, size_t e, const char** labels, size_t labels_num, darts_ext user_data):
-    py_hit=(<object>user_data)[1]
-    labels_py=[]
+    py_hit=(<tuple>user_data)[1]
+    cdef list labels_py=[]
     if(labels and labels_num>0):
         labels_py=[labels[i].decode("utf-8","ignore") for i in range(labels_num) if labels[i]]
     py_hit(s,e,labels_py)
@@ -94,7 +95,7 @@ class Token:
         self.tags=None
 
 cdef void word_hit_callback(const char* strs, const char* label, size_t ast, size_t aet, size_t wst, size_t wet,darts_ext user_data):
-    tokens=<object>user_data
+    cdef list tokens=<list>user_data
     t=Token()
     if strs:
         t.word=strs.decode("utf-8",'ignore')
@@ -118,10 +119,10 @@ cdef class Segment:
         if not self.sg:
             raise IOError("load %s segment conf json file failed!"%path)
 
-    def tokenize(self,strs,max_mode=False):
+    def tokenize(self,strs:str,max_mode:bool=False)->list:
         if not strs:
             return []
-        tokens=[]
+        cdef list tokens=[]
         token_str(self.sg, strs.encode('utf-8','replace'), word_hit_callback,max_mode, <darts_ext> tokens)
         return tokens
 
@@ -145,16 +146,16 @@ def wordType(word):
     
 
 cdef bool token_hit_callback(const char* strs, const char* label, size_t s, size_t e, darts_ext user_data):
-    tokens=<object>user_data
+    tokens=<list>user_data
     txt=strs.decode('utf-8','ignore') if strs else ''
     tag=label.decode('utf-8','ignore') if label else ''
     tokens.append((txt,tag,s,e))
     return False
 
     
-def wordSplit(strs):
+def wordSplit(strs:str)->list:
     if not strs:return []
-    tokens=[]
+    cdef list tokens=[]
     word_split(strs.encode('utf-8','ignore'), token_hit_callback, <darts_ext> tokens)
     return tokens
 
