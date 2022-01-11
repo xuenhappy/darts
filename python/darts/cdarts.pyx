@@ -68,7 +68,7 @@ cdef bool dregex_hit_callback (size_t s, size_t e, const char** labels, size_t l
 cdef class Dregex:
     cdef dregex data
 
-    def __cinit__(self, path):
+    def __cinit__(self, path:str):
         assert path is not None,"path must be give"
         self.data=NULL
         load_drgex(path.encode("utf-8",'ignore'), &self.data)
@@ -76,7 +76,7 @@ cdef class Dregex:
             raise IOError("load %s regex file failed!"%path)
 
     def parse(self, atom_iter,hit):
-        user_data =(atom_iter,hit)
+        cdef tuple user_data =(atom_iter,hit)
         parse(self.data,atom_iter_func,dregex_hit_callback, <darts_ext>user_data)
         
 
@@ -111,7 +111,7 @@ cdef void word_hit_callback(const char* strs, const char* label, size_t ast, siz
 cdef class Segment:
     cdef segment sg
 
-    def __cinit__(self, path=None):
+    def __cinit__(self, path:str=None):
         if path is not None:
             path="data/darts.conf.json"
         self.sg=NULL
@@ -136,7 +136,7 @@ cdef class Segment:
 
         
     
-def wordType(word):
+def wordType(word:str)->str:
     cdef char* ret=NULL
     cdef size=word_type(word.encode('utf-8','ignore'),&ret)
     try:
