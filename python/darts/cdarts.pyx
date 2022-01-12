@@ -37,7 +37,7 @@ def normalize(content:str)->str:
         return None
     cdef bytes data = content.encode('utf-8','replace')
     cdef char* point=NULL
-    cdef size=normalize_str(data,&point)
+    cdef int size=normalize_str(data,&point)
     try:
         return point[:size].decode('utf-8','replace')
     finally:
@@ -138,7 +138,8 @@ cdef class Segment:
     
 def wordType(word:str)->str:
     cdef char* ret=NULL
-    cdef size=word_type(word.encode('utf-8','ignore'),&ret)
+    cdef bytes data=word.encode('utf-8','ignore')
+    cdef int size=word_type(data,&ret)
     try:
         return ret[:size].decode('utf-8')
     except:
@@ -147,7 +148,7 @@ def wordType(word:str)->str:
     
 
 cdef bool token_hit_callback(const char* strs, const char* label, size_t s, size_t e, darts_ext user_data):
-    tokens=<list>user_data
+    cdef list tokens=<list>user_data
     txt=strs[:].decode('utf-8','ignore') if strs else ''
     tag=label[:].decode('utf-8','ignore') if label else ''
     tokens.append((txt,tag,s,e))
