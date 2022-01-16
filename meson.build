@@ -23,7 +23,7 @@ jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: 
 eigen_dep = dependency('eigen3', version : '>=3.3.7', required : true,static: enable_static)
 proto_dep = dependency('protobuf', version : '>=3.17.3',
     method: 'pkg-config', required : true,
-    static: enable_static,modules: ['protobuf::libprotobuf']
+    static: enable_static,modules: ['protobuf::libprotobuf-lite']
 )
 base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep,proto_dep]
 

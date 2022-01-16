@@ -1,5 +1,6 @@
 syntax="proto3";
 package darts;
+option optimize_for = LITE_RUNTIME;
 message DRegexDat{
     int32 MaxLen=1;
     repeated int64  Check=2; 
