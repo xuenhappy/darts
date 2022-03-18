@@ -152,6 +152,7 @@ class Segment {
             double minDist = DBL_MAX;
             int u          = 0;
             for (auto idx : visted) {
+                if (used.find(idx) == used.end()) continue;
                 if (dist[idx] < minDist) {
                     minDist = dist[idx];
                     u       = idx;
