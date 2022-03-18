@@ -13,14 +13,12 @@
 #ifndef SRC_CORE_SEGMENT_HPP_
 #define SRC_CORE_SEGMENT_HPP_
 #include <float.h>
-
 #include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
-
 #include "../core/darts.hpp"
 #include "../utils/registerer.hpp"
 namespace darts {
@@ -33,7 +31,7 @@ class SegmentPlugin {
      * @param param
      * @return int
      */
-    virtual int initalize(const std::map<std::string, std::string> &param) = 0;
+    virtual int initalize(const std::map<std::string, std::string>& param) = 0;
     virtual ~SegmentPlugin() {}
 };
 
@@ -42,7 +40,7 @@ class CellPersenter : public SegmentPlugin {
     /***
      * 对每个Word进行向量表示
      **/
-    virtual void embed(AtomList *dstSrc, CellMap *cmap) const = 0;
+    virtual void embed(AtomList* dstSrc, CellMap* cmap) const = 0;
     /**
      * @brief
      *
@@ -50,14 +48,14 @@ class CellPersenter : public SegmentPlugin {
      * @param next
      * @return double must >=0
      */
-    virtual double ranging(const Word *pre, const Word *next) const = 0;
+    virtual double ranging(const Word* pre, const Word* next) const = 0;
     virtual ~CellPersenter() {}
 };
 
 class CellRecognizer : public SegmentPlugin {
    public:
     // recognizer all Wcell possable in the atomlist
-    virtual void addSomeCells(AtomList *dstSrc, CellMap *cmap) const = 0;
+    virtual void addSomeCells(AtomList* dstSrc, CellMap* cmap) const = 0;
     virtual ~CellRecognizer() {}
 };
 
@@ -72,7 +70,6 @@ typedef struct _GraphEdge {
     int et;
     double weight;
 } * GraphEdge;
-
 
 class Segment {
    private:
@@ -91,7 +88,6 @@ class Segment {
         }
     }
 
-
    private:
     /**
      * @brief build map
@@ -100,19 +96,27 @@ class Segment {
      * @param cmap
      * @param graph
      */
-    void buildGraph(AtomList *context, CellMap *cmap, std::map<int, std::vector<GraphEdge> *> &graph) {
+    void buildGraph(AtomList* context, CellMap* cmap, std::map<int, std::vector<GraphEdge>*>& graph) {
         cmap->makeCurIndex();
         this->quantizer->embed(context, cmap);
+        // add head
+        std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
+        cmap->iterRow(NULL, 0, [&](Cursor pre) {
+            auto dist = quantizer->ranging(NULL, pre->val.get());
+            tmp->push_back(new _GraphEdge{next->idx, dist});
+        });
+        graph.insert(std::make_pair(-1, head_tmp));
 
         cmap->iterRow(NULL, -1, [&](Cursor pre) {
-            std::vector<GraphEdge> *tmp = new std::vector<GraphEdge>();
+            std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
             cmap->iterRow(pre, pre->val->et, [&](Cursor next) {
-                auto dist = quantizer->ranging(pre->idx < 0 ? NULL : pre->val.get(), next->val.get());
+                auto dist = quantizer->ranging(pre->val.get(), next->val.get());
                 tmp->push_back(new _GraphEdge{next->idx, dist});
             });
+            // add tail
             if (tmp->empty()) {
-                auto dist = quantizer->ranging(pre->idx < 0 ? NULL : pre->val.get(), NULL);
-                int cidx = cmap->Size();
+                auto dist = quantizer->ranging(pre->val.get(), NULL);
+                int cidx  = cmap->Size();
                 tmp->push_back(new _GraphEdge{cidx, dist});
             }
             graph.insert(std::make_pair(pre->idx, tmp));
@@ -125,7 +129,7 @@ class Segment {
      * @param graph
      * @param bestPaths
      */
-    void selectPath(std::map<int, std::vector<GraphEdge> *> &graph, std::vector<int> &bestPaths) {
+    void selectPath(std::map<int, std::vector<GraphEdge>*>& graph, std::vector<int>& bestPaths) {
         auto sz = graph.size();
         std::vector<double> dist;
         dist.assign(sz, -1.0);
@@ -146,11 +150,11 @@ class Segment {
         // dijkstra
         while (used.find(sz - 1) != used.end()) {
             double minDist = DBL_MAX;
-            int u = 0;
+            int u          = 0;
             for (auto idx : visted) {
                 if (dist[idx] < minDist) {
                     minDist = dist[idx];
-                    u = idx;
+                    u       = idx;
                 }
             }
             if (u == sz - 1) break;
@@ -174,7 +178,6 @@ class Segment {
         std::reverse(bestPaths.begin(), bestPaths.end());
     }
 
-
     /**
      * @brief 进行最优选择
      *
@@ -182,10 +185,10 @@ class Segment {
      * @param cmap
      * @param ret
      */
-    void splitContent(AtomList *context, CellMap *cmap, std::vector<std::shared_ptr<Word>> &ret,
+    void splitContent(AtomList* context, CellMap* cmap, std::vector<std::shared_ptr<Word>>& ret,
                       int atom_start_pos = 0) {
         // get best path
-        std::map<int, std::vector<GraphEdge> *> graph;
+        std::map<int, std::vector<GraphEdge>*> graph;
         buildGraph(context, cmap, graph);
         std::vector<int> bestPaths;
         selectPath(graph, bestPaths);
@@ -210,12 +213,12 @@ class Segment {
         graph.clear();
     }
 
-    void buildMap(AtomList *atomList, CellMap *cmap) {
+    void buildMap(AtomList* atomList, CellMap* cmap) {
         auto cur = cmap->Head();
         // add basic cells
         for (size_t i = 0; i < atomList->size(); i++) {
             auto a = atomList->at(i);
-            cur = cmap->addNext(cur, std::make_shared<Word>(a, i, i + 1));
+            cur    = cmap->addNext(cur, std::make_shared<Word>(a, i, i + 1));
         }
         // add cell regnize
         for (auto recognizer : cellRecognizers) {
@@ -245,7 +248,7 @@ class Segment {
      * @param ret
      * @param maxMode
      */
-    void smartCut(AtomList *atomList, std::vector<std::shared_ptr<Word>> &ret, bool maxMode = false,
+    void smartCut(AtomList* atomList, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
                   int atom_start_pos = 0) {
         if (!atomList || atomList->size() < 1) {
             return;
@@ -281,7 +284,7 @@ const std::set<std::string> SENTENCE_POS = {"!", "。", ",", "?", ";", ":", "！
  * @param ret
  * @param maxMode
  */
-void tokenize(Segment &sg, const char *src, std::vector<std::shared_ptr<Word>> &ret, bool maxMode = false,
+void tokenize(Segment& sg, const char* src, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
               size_t maxLineLength = 100, size_t minLineLength = 10) {
     if (!src) return;
     AtomList ori(src);
@@ -316,7 +319,6 @@ void tokenize(Segment &sg, const char *src, std::vector<std::shared_ptr<Word>> &
         return;
     }
 }
-
 
 }  // namespace darts
 #endif  // SRC_CORE_SEGMENT_HPP_
