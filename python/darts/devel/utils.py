@@ -196,12 +196,12 @@ class GraphLoss(nn.Module):
     def _forward_alg(self, graph, weight):
         # caluate th paths
         paths = {}
-        for i, (s, e, _) in enumerate(graph):
+        for i, (s, e) in enumerate(graph):
             pth = paths.get(e, [])
             pth.append((s, i))
             paths[e] = pth
         # init data
-        esum = torch.zeros(len(paths)+1).float().to(weight.device())
+        esum = torch.zeros(len(paths)+1).to(weight)
         flag = [False]*(len(paths)+1)
         flag[0] = True
         stack = [len(paths)]
@@ -209,7 +209,7 @@ class GraphLoss(nn.Module):
         # calculate the prob
         while stack:
             if flag[stack[-1]]:
-                # this node hase been calculated
+                # this node has been calculated
                 stack.pop()
                 continue
             # check sub path
@@ -219,12 +219,14 @@ class GraphLoss(nn.Module):
                     stack.append(idx)
                     allpre_ready = False
                     continue
+
             if allpre_ready:
                 idx = stack.pop()
                 pth = torch.LongTensor(paths[idx]).to(weight.device())
                 pre_esums = esum.index_select(0, pth[:, 0])-weight.index_select(0, pth[:, 1])
                 esum[idx] = torch.logsumexp(pre_esums, 0)
                 flag[idx] = True
+
         return esum[-1]
 
     def forward(self, graph, weight):
@@ -233,9 +235,12 @@ class GraphLoss(nn.Module):
         graph is [path_nums,3] int numpy tensor ,every graph path (start,end,bool)
         weight is [path_nums] float torch tensor,every graph path weight
         """
-        graph = graph.astype(int)
-        gold_score = (weight*torch.from_numpy(graph[:, 2]).to(weight.device).float()).sum(0)
-        forward_score = self._forward_alg(graph, weight)
+        best_weight_mask = torch.from_numpy(graph[:, 2]).to(weight)
+        gold_score = (weight*best_weight_mask).sum(0)
+
+        graph_path = graph[:, :2]
+        forward_score = self._forward_alg(graph_path-graph_path.min(), weight)
+
         return gold_score+forward_score
 
 

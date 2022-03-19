@@ -4,36 +4,71 @@
 '''
 @author: enxu
 '''
-import utils
+from .utils import *
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
 
-class SMelo(nn.Module):
-    def __init__(self, token_size):
-        super().__init__()
-        self.embeding = nn.Embedding(token_size, 150)
-        self.drop = nn.Dropout(0.5)
-        self.rnn = nn.GRU(150, 180, batch_first=True, bidirectional=True)
-        self.map = nn.Linear(180*2, 150)
-        self.bd = nn.BatchNorm1d(150)
+class Embeder(nn.Module):
+    """单词表示"""
 
-    def forward(self, input, seq_lengths, input_add=None):
-        """
-        input is a long tensor and shape is (N,T),
-        seq_lengths is a long tensor and shape is (N,)
-        seq_length and inpt must be in same device
-        """
-        embeding = self.drop(self.embeding(input))
-        if input_add is not None:
-            embeding += input_add
-        out = self.map(run_rnn(self.rnn, embeding, seq_lengths))+embeding
-        return self.bd(out.view(-1, out.size(2))).view(out.shape)
+    def __init__(self, token_size, hidden_size):
+        super().__init__()
+        self.embeding = nn.Embedding(token_size, hidden_size)
+        self.normal = nn.LayerNorm(hidden_size)
+        self.drop = nn.Dropout(0.5)
+
+    def forward(self, input_idx, type_embeding=None, input_mask=None):
+        embeding = self.embeding(input_idx)
+        if type_embeding is not None:
+            embeding += type_embeding
+        embeding = self.drop(self.normal(embeding))
+        if input_mask is not None:
+            embeding = embeding * input_mask.to(embeding.dtype)
+        return embeding
+
+
+class SentenceEncoder(nn.Module):
+    """句子表示"""
+
+    def __init__(self, token_size, hidden_size, type_size=-1):
+        super().__init__()
+        self.embeding = Embeder(token_size, hidden_size)
+        if type_size > 0:
+            self.type_embeding = nn.Embedding(type_size, hidden_size)
+        self.encoder = nn.GRU(hidden_size, hidden_size*2, batch_first=True, bidirectional=True)
+        self.imner = nn.Linear(hidden_size*2, hidden_size)
+        self.imgate = nn.Linear(hidden_size*2, hidden_size)
+        self.output = nn.Linear(hidden_size, hidden_size)
+        self.normal = nn.LayerNorm(hidden_size)
+
+    def forward(self, input_idx, seq_lengths=None, type_idxs=None):
+        attention_mask = None
+        if seq_lengths is not None:
+            _tmp_tensor = torch.cumsum(torch.ones(input_idx.size()), dim=-1).to(input_idx.device)
+            attention_mask = (_tmp_tensor < seq_lengths.unsqueeze(-1)).byte().unsqueeze(2)
+
+        type_embeding = None
+        if (type_idxs is not None) and hasattr(self, 'type_embeding'):
+            type_embeding = self.type_embeding(type_idxs)
+
+        embeding = self.embeding(input_idx, type_embeding, attention_mask)
+        if seq_lengths is None:
+            encoding = self.encoder(embeding)
+        else:
+            encoding = run_rnn(self.encoder, embeding, seq_lengths)
+
+        output = self.output(self.imner(encoding)*torch.sigmoid(self.imgate(encoding)))
+        output = self.normal(output)
+        if attention_mask is not None:
+            output = output*attention_mask.to(output.dtype)
+        return output
 
 
 class Quantizer(nn.Module):
+    """距离量化模型"""
 
     def __init__(self, input_size, hidden_size):
         nn.Module.__init__(self)
@@ -44,52 +79,56 @@ class Quantizer(nn.Module):
     def distance(self, x, y):
         K, Q = self.Kmap(x), self.Qmap(y)
         dist = torch.einsum('ij,ij->i', K, Q)/self.alpha
-        return F.softplus(dist)
+        return F.silu(dist).squeeze(-1)
 
 
-class SMeloTrainer(nn.Module):
-    """
-    init the sentence
-    """
+class GraphTrainer(nn.Module):
+    """图训练"""
 
-    def __init__(self, word_num, emb_size, tags_weight, nsampled):
-        super(SentencePredict, self).__init__()
-        self.predictor = SentenceEncoder(word_num, emb_size)
-        self.embedd = utils.SampledSoftMaxCrossEntropy(emb_size, tags_weight, nsampled)
+    def __init__(self, token_size, hidden_size, type_size=-1):
+        super().__init__()
+        self.predictor = SentenceEncoder(token_size, hidden_size, type_size=type_size)
+        self.quantizer = Quantizer(hidden_size, 32)
+        self.lossfunc = GraphLoss()
 
-    def forward(self, batch_sentence, batch_tags_with_idx, keep_prop):
+    def loss(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index):
+        sentence_embeding = self.predictor(batch_input_idx, batch_seq_lengths, batch_type_idxs)
+        atoms_embeding = batch_segment_max(sentence_embeding, batch_atoms)
+        losses = []
+        gs = 0
+        for ge in graph_index:
+            graph = batch_graph[gs:ge]
+            gs = ge
+            s_atom_embeding = atoms_embeding[graph[0]]
+            e_atom_embeding = atoms_embeding[graph[1]]
+            weight = self.quantizer(s_atom_embeding, e_atom_embeding)
+            losses.append(self.lossfunc(graph, weight))
+        return losses
+
+    def forward(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index):
         """
-        batch_sentence shape:batch_size×word_size
-        batch_tags_with_idx:list((start,end,tag))
+
+        Args:
+            batch_input_idx (int numpy): N*T
+            batch_seq_lengths (int numpy): N
+            batch_type_idxs (int numpy): N*T
+            batch_atoms (int numpy): M*3 coloum is [batch_idx start,end]
+            batch_graph (int numpy): K*3 coloum is [atom_sidx,atom_eidx,bool]
+            graph_index (int numpy): N coloum is [graph_eidx]
+
+        Returns:
+            losses
         """
-        batch_sentence_length = []
-        batch_indices_st = []
-        batch_indices_et = []
-        batch_tags = []
 
-        for i, batch in enumerate(batch_tags_with_idx):
-            offset = i*batch_sentence.shape[1]
-            for s, e, tag in batch:
-                batch_indices_st.append(offset+s)
-                batch_indices_et.append(offset+e)
-                batch_tags.append(batch_tags)
-            batch_sentence_length.append(batch[-1][1])
-
-        batch_sentence = torch.from_numpy(batch_sentence)
-        batch_sentence_length = torch.LongTensor(batch_sentence_length)
-        batch_indices_st = torch.LongTensor(batch_indices_st)
-        batch_indices_et = torch.LongTensor(batch_indices_et)
-        batch_tags = torch.LongTensor(batch_tags)
+        batch_input_idx = torch.from_numpy(batch_input_idx).long()
+        batch_seq_lengths = torch.from_numpy(batch_seq_lengths).long()
+        batch_type_idxs = torch.from_numpy(batch_type_idxs).long()
+        batch_atoms = torch.from_numpy(batch_atoms).long()
 
         if torch.cuda.is_available():
-            batch_sentence = batch_sentence
-            batch_sentence_length = batch_sentence_length.cuda()
-            batch_indices_st = batch_indices_st.cuda()
-            batch_indices_et = batch_indices_et.cuda()
-            batch_tags = batch_tags.cuda()
+            batch_input_idx = batch_input_idx.cuda()
+            batch_seq_lengths = batch_seq_lengths.cuda()
+            batch_type_idxs = batch_type_idxs.cuda()
+            batch_atoms = batch_atoms.cuda()
 
-        batch_sentence_fw_encoding, batch_sentence_bw_encoding = self.predictor(batch_sentence, batch_sentence_length, keep_prop)
-        word_embs_st = batch_sentence_fw_encoding.reshape(-1, emb_size).index_select(0, batch_indices_st)
-        word_embs_et = batch_sentence_bw_encoding.reshape(-1, emb_size).index_select(0, batch_indices_et)
-        word_embs = word_embs_st + word_embs_et
-        return self.embedd(word_embs, batch_tags).mean()
+        return self.loss(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index)
