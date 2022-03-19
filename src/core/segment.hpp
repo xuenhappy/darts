@@ -40,7 +40,7 @@ class CellPersenter : public SegmentPlugin {
     /***
      * 对每个Word进行向量表示
      **/
-    virtual void embed(AtomList* dstSrc, CellMap* cmap) const = 0;
+    virtual void embed(AtomList* dstSrc, SegPath* cmap) const = 0;
     /**
      * @brief
      *
@@ -55,7 +55,7 @@ class CellPersenter : public SegmentPlugin {
 class CellRecognizer : public SegmentPlugin {
    public:
     // recognizer all Wcell possable in the atomlist
-    virtual void addSomeCells(AtomList* dstSrc, CellMap* cmap) const = 0;
+    virtual void addSomeCells(AtomList* dstSrc, SegPath* cmap) const = 0;
     virtual ~CellRecognizer() {}
 };
 
@@ -178,7 +178,7 @@ class Segment {
      * @param cmap
      * @param graph
      */
-    void buildGraph(AtomList* context, CellMap* cmap, SegGraph& graph) {
+    void buildGraph(AtomList* context, SegPath* cmap, SegGraph& graph) {
         cmap->makeCurIndex();
         this->quantizer->embed(context, cmap);
         // add head
@@ -212,7 +212,7 @@ class Segment {
      * @param cmap
      * @param ret
      */
-    void splitContent(AtomList* context, CellMap* cmap, std::vector<std::shared_ptr<Word>>& ret,
+    void splitContent(AtomList* context, SegPath* cmap, std::vector<std::shared_ptr<Word>>& ret,
                       int atom_start_pos = 0) {
         // get best path
         SegGraph graph;
@@ -231,7 +231,7 @@ class Segment {
         });
     }
 
-    void buildSegPath(AtomList* atomList, CellMap* cmap) {
+    void buildSegPath(AtomList* atomList, SegPath* cmap) {
         auto cur = cmap->Head();
         // add basic cells
         for (size_t i = 0; i < atomList->size(); i++) {
@@ -276,7 +276,7 @@ class Segment {
             ret.push_back(std::make_shared<Word>(atom, atom_start_pos, atom_start_pos + 1));
             return;
         }
-        auto cmap = new CellMap();
+        auto cmap = new SegPath();
         buildSegPath(atomList, cmap);
         if (maxMode) {
             cmap->iterRow(NULL, -1, [&](Cursor cur) {

@@ -65,7 +65,7 @@ class DictWordRecongnizer : public CellRecognizer {
         return this->trie.loadPb(iter->second);
     }
 
-    void addSomeCells(AtomList* dstSrc, CellMap* cmap) const {
+    void addSomeCells(AtomList* dstSrc, SegPath* cmap) const {
         auto cur = cmap->Head();
         AtomListIterator iter(dstSrc);
         this->trie.parse(iter, [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {

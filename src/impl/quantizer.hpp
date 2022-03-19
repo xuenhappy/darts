@@ -32,7 +32,7 @@ namespace darts {
 class MinCoverPersenter {
    public:
     int initalize(const std::map<std::string, std::string> &param) { return EXIT_SUCCESS; }
-    void embed(AtomList *dstSrc, CellMap *cmap) {}
+    void embed(AtomList *dstSrc, SegPath *cmap) {}
     /**
      * @brief
      *
@@ -232,7 +232,7 @@ class BigramPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList *dstSrc, CellMap *cmap) const {}
+    void embed(AtomList *dstSrc, SegPath *cmap) const {}
 
 
     /**
@@ -425,7 +425,7 @@ class ElmoPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList *dstSrc, CellMap *cmap) const {}
+    void embed(AtomList *dstSrc, SegPath *cmap) const {}
     /**
      * @brief
      *
@@ -459,7 +459,7 @@ class TinyBertPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList *dstSrc, CellMap *cmap) const {}
+    void embed(AtomList *dstSrc, SegPath *cmap) const {}
     /**
      * @brief
      *

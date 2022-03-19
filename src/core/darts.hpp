@@ -343,7 +343,7 @@ Cursor makeCursor(std::shared_ptr<Word> word, Cursor pre, Cursor next) {
     return cur;
 }
 
-class CellMap {
+class SegPath {
    private:
     Cursor head;
     size_t rows, colums, size;
@@ -357,13 +357,13 @@ class CellMap {
 
     size_t Column() const { return this->colums; }
 
-    CellMap() {
+    SegPath() {
         this->head      = makeCursor(std::make_shared<Word>(nullptr, -1, 0), NULL, NULL);
         this->head->idx = -1;
         this->rows = this->colums = this->size = 0;
     }
 
-    ~CellMap() {
+    ~SegPath() {
         auto node = head;
         while (node) {
             auto next = node->lack;
