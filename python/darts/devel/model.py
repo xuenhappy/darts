@@ -39,10 +39,12 @@ class SentenceEncoder(nn.Module):
         if type_size > 0:
             self.type_embeding = nn.Embedding(type_size, hidden_size)
         self.encoder = nn.GRU(hidden_size, hidden_size*2, batch_first=True, bidirectional=True)
+        self.dropin = nn.Dropout(0.3)
         self.imner = nn.Linear(hidden_size*2, hidden_size)
         self.imgate = nn.Linear(hidden_size*2, hidden_size)
         self.output = nn.Linear(hidden_size, hidden_size)
         self.normal = nn.LayerNorm(hidden_size)
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, input_idx, seq_lengths=None, type_idxs=None):
         attention_mask = None
@@ -60,11 +62,12 @@ class SentenceEncoder(nn.Module):
         else:
             encoding = run_rnn(self.encoder, embeding, seq_lengths)
 
+        encoding = self.dropin(encoding)
         output = self.output(self.imner(encoding)*torch.sigmoid(self.imgate(encoding)))
         output = self.normal(output)
         if attention_mask is not None:
             output = output*attention_mask.to(output.dtype)
-        return output
+        return self.drop(output)
 
 
 class Quantizer(nn.Module):
