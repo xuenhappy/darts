@@ -99,8 +99,8 @@ class GraphTrainer(nn.Module):
         for ge in graph_index:
             graph = batch_graph[gs:ge]
             gs = ge
-            s_atom_embeding = atoms_embeding[graph[0]]
-            e_atom_embeding = atoms_embeding[graph[1]]
+            s_atom_embeding = atoms_embeding[graph[:, 0]]
+            e_atom_embeding = atoms_embeding[graph[:, 1]]
             weight = self.quantizer(s_atom_embeding, e_atom_embeding)
             losses.append(self.lossfunc(graph, weight))
         return losses
