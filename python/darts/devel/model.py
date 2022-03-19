@@ -94,13 +94,15 @@ class GraphTrainer(nn.Module):
     def loss(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index):
         sentence_embeding = self.predictor(batch_input_idx, batch_seq_lengths, batch_type_idxs)
         atoms_embeding = batch_segment_max(sentence_embeding, batch_atoms)
+        batch_atom_index = torch.from_numpy(graph[:, :2]).long().to(atoms_embeding.device)
         losses = []
         gs = 0
         for ge in graph_index:
             graph = batch_graph[gs:ge]
+            atom_index = batch_atom_index[gs:ge]
             gs = ge
-            s_atom_embeding = atoms_embeding[graph[:, 0]]
-            e_atom_embeding = atoms_embeding[graph[:, 1]]
+            s_atom_embeding = atoms_embeding[atom_index[:, 0]]
+            e_atom_embeding = atoms_embeding[atom_index[:, 1]]
             weight = self.quantizer(s_atom_embeding, e_atom_embeding)
             losses.append(self.lossfunc(graph, weight))
         return sum(losses)/len(losses)
