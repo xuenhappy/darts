@@ -17,30 +17,27 @@
 #include <set>
 #include <string>
 #include <vector>
-
 #include "../core/segment.hpp"
 #include "../utils/dregex.hpp"
 #include "../utils/str_utils.hpp"
 
-
 namespace darts {
 class AtomListIterator : public StringIter {
    private:
-    AtomList *m_list;
-    std::set<WordType> skiptypes;
+    AtomList* m_list;
+    std::set<std::string> skiptypes;
 
    public:
-    explicit AtomListIterator(AtomList *m_list) {
+    explicit AtomListIterator(AtomList* m_list) {
         this->m_list = m_list;
-        this->skiptypes.insert(WordType::EMPTY);
+        this->skiptypes.insert("EMPTY");
     }
 
-
-    void iter(std::function<bool(const std::string &, size_t)> hit) {
+    void iter(std::function<bool(const std::string&, size_t)> hit) {
         std::string tmp;
         for (auto i = 0; i < m_list->size(); i++) {
             auto a = m_list->at(i);
-            if (a->hasType(&skiptypes)) {
+            if (a->hasLabel(&skiptypes)) {
                 continue;
             }
             tmp = a->image;
@@ -53,13 +50,13 @@ class AtomListIterator : public StringIter {
 class DictWordRecongnizer : public CellRecognizer {
    private:
     Trie trie;
-    static const char *PB_FILE_KEY;
+    static const char* PB_FILE_KEY;
 
    public:
     DictWordRecongnizer() {}
-    explicit DictWordRecongnizer(const std::string &pbfile) { this->trie.loadPb(pbfile); }
+    explicit DictWordRecongnizer(const std::string& pbfile) { this->trie.loadPb(pbfile); }
 
-    int initalize(const std::map<std::string, std::string> &param) {
+    int initalize(const std::map<std::string, std::string>& param) {
         auto iter = param.find(PB_FILE_KEY);
         if (iter == param.end()) {
             std::cerr << PB_FILE_KEY << " key not found in dictionary!" << std::endl;
@@ -68,18 +65,18 @@ class DictWordRecongnizer : public CellRecognizer {
         return this->trie.loadPb(iter->second);
     }
 
-    void addSomeCells(AtomList *dstSrc, CellMap *cmap) const {
+    void addSomeCells(AtomList* dstSrc, CellMap* cmap) const {
         auto cur = cmap->Head();
         AtomListIterator iter(dstSrc);
-        this->trie.parse(iter, [&](size_t s, size_t e, const std::set<int64_t> *labels) -> bool {
+        this->trie.parse(iter, [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
             auto word = std::make_shared<Word>(dstSrc->at(s, e), s, e);
             if (labels) {
                 for (auto tidx : *labels) {
                     auto tag = this->trie.getLabel(tidx);
-                    if (!tag) continue;
-                    auto h = str2wordType(tag);
-                    if (h == WordType::NONE) continue;
-                    word->addTag(h);
+                    if (tag) {
+                        std::string label = tag;
+                        word->addLabel(label);
+                    }
                 }
             }
             cur = cmap->addCell(word, cur);
@@ -87,11 +84,10 @@ class DictWordRecongnizer : public CellRecognizer {
         });
     }
 };
-const char *DictWordRecongnizer::PB_FILE_KEY = "pbfile.path";
+const char* DictWordRecongnizer::PB_FILE_KEY = "pbfile.path";
 // add this pulg
 REGISTER_Recognizer(DictWordRecongnizer);
 
 }  // namespace darts
-
 
 #endif  // SRC_IMPL_RECOGNIZER_HPP_

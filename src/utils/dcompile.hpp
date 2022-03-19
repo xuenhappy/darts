@@ -12,7 +12,6 @@
 #ifndef SRC_UTILS_DCOMPILE_HPP_
 #define SRC_UTILS_DCOMPILE_HPP_
 
-
 #include <iostream>
 #include <map>
 #include <queue>
@@ -20,7 +19,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
 #include "chspliter.hpp"
 #include "dregex.hpp"
 #include "norm_chr.hpp"
@@ -28,26 +26,26 @@
 #include "utf8.hpp"
 namespace dregex {
 struct State {
-    int depth;                           // the string length
-    State *failure;                      // match failed use
-    std::vector<int64_t> emits;          // emits
-    std::map<int64_t, State *> success;  // go map
-    int64_t index;                       // index of the struct
-    bool fake;                           // this node is fake
+    int depth;                          // the string length
+    State* failure;                     // match failed use
+    std::vector<int64_t> emits;         // emits
+    std::map<int64_t, State*> success;  // go map
+    int64_t index;                      // index of the struct
+    bool fake;                          // this node is fake
 };
 
-State *newState(int depth, bool fake) {
-    auto S = new State();
-    S->depth = depth;
-    S->fake = fake;
+State* newState(int depth, bool fake) {
+    auto S     = new State();
+    S->depth   = depth;
+    S->fake    = fake;
     S->failure = NULL;
-    S->index = 0;
+    S->index   = 0;
     return S;
 }
 
-void freeState(State *state) {
+void freeState(State* state) {
     if (state == NULL) return;
-    for (auto &kv : state->success) {
+    for (auto& kv : state->success) {
         freeState(kv.second);
     }
     state->success.clear();
@@ -57,31 +55,31 @@ void freeState(State *state) {
 }
 
 // insert sort a sort to keep it order
-void insertSorted(std::vector<int64_t> &s, int64_t e) { s.insert(std::upper_bound(s.begin(), s.end(), e), e); }
+void insertSorted(std::vector<int64_t>& s, int64_t e) { s.insert(std::upper_bound(s.begin(), s.end(), e), e); }
 
 // add emit
-void addEmit(State *s, int64_t keyword) {
+void addEmit(State* s, int64_t keyword) {
     if (keyword != INT64_MIN) {
         insertSorted(s->emits, keyword);
     }
 }
 
 // get l code
-int64_t getMaxValueID(State *s) {
+int64_t getMaxValueID(State* s) {
     if (s->emits.empty()) {
         return INT64_MIN;
     }
     return s->emits.back();
 }
 
-bool isAcceptable(State *s) { return s->depth > 0 && s->emits.size() > 0; }
+bool isAcceptable(State* s) { return s->depth > 0 && s->emits.size() > 0; }
 
-void setFailure(State *s, State *failState, std::vector<int64_t> &fail) {
-    s->failure = failState;
+void setFailure(State* s, State* failState, std::vector<int64_t>& fail) {
+    s->failure     = failState;
     fail[s->index] = failState->index;
 }
 
-State *nextState(State *s, int64_t character, bool ignoreRootState) {
+State* nextState(State* s, int64_t character, bool ignoreRootState) {
     auto it = s->success.find(character);
     if (it == s->success.end()) {
         if ((!ignoreRootState) && (s->depth == 0)) {
@@ -92,10 +90,10 @@ State *nextState(State *s, int64_t character, bool ignoreRootState) {
     return it->second;
 }
 
-State *addState(State *s, int64_t character) {
+State* addState(State* s, int64_t character) {
     auto nextS = nextState(s, character, true);
     if (nextS == NULL) {
-        nextS = newState(s->depth + 1, false);
+        nextS                 = newState(s->depth + 1, false);
         s->success[character] = nextS;
     }
     return nextS;
@@ -103,8 +101,8 @@ State *addState(State *s, int64_t character) {
 
 // Builder is inner useed
 struct Builder {
-    State *rootState;
-    darts::Trie *trie;
+    State* rootState;
+    darts::Trie* trie;
     /**
      * whether the position has been used
      */
@@ -123,20 +121,18 @@ struct Builder {
     size_t size;
 };
 
-
-void zipWeight(Builder *b) {
+void zipWeight(Builder* b) {
     size_t msize = b->size;
     b->trie->Base.resize(msize);
     b->trie->Check.resize(msize);
 }
 
-void constructFailureStates(Builder *b) {
+void constructFailureStates(Builder* b) {
     b->trie->Fail.resize(b->size + 1, 0);
     b->trie->OutPut.resize(b->size + 1, NULL);
-    std::queue<State *> queue;
+    std::queue<State*> queue;
 
-
-    for (auto &kv : b->rootState->success) {
+    for (auto& kv : b->rootState->success) {
         auto depthOneState = kv.second;
         setFailure(depthOneState, b->rootState, b->trie->Fail);
         queue.push(depthOneState);
@@ -149,8 +145,8 @@ void constructFailureStates(Builder *b) {
     while (!queue.empty()) {
         auto currentState = queue.front();
         queue.pop();
-        for (auto &kv : currentState->success) {
-            auto transition = kv.first;
+        for (auto& kv : currentState->success) {
+            auto transition  = kv.first;
             auto targetState = nextState(currentState, transition, false);
             queue.push(targetState);
             auto traceFailureState = currentState->failure;
@@ -168,21 +164,21 @@ void constructFailureStates(Builder *b) {
     }
 }
 
-size_t addAllKeyword(Builder *b, darts::StringIterPairs &kvs, int *ret) {
+size_t addAllKeyword(Builder* b, darts::StringIterPairs& kvs, int* ret) {
     size_t maxCode = 0;
-    int64_t index = -1;
-    auto t = b->trie;
-    *ret = kvs.iter([&](darts::StringIter &k, const int64_t *v, size_t vlen) {
+    int64_t index  = -1;
+    auto t         = b->trie;
+    *ret           = kvs.iter([&](darts::StringIter& k, const int64_t* v, size_t vlen) {
         index++;
-        size_t lens = 0;
+        size_t lens       = 0;
         auto currentState = b->rootState;
-        k.iter([&](const std::string &s, size_t) {
+        k.iter([&](const std::string& s, size_t) {
             lens++;
-            auto code = t->getCode(s);
+            auto code     = t->getCode(s);
             t->CodeMap[s] = code;
-            currentState = addState(currentState, code);
+            currentState  = addState(currentState, code);
             return false;
-        });
+                  });
         addEmit(currentState, index);
         t->L.push_back(lens);
         if (lens > t->MaxLen) {
@@ -194,13 +190,13 @@ size_t addAllKeyword(Builder *b, darts::StringIterPairs &kvs, int *ret) {
         } else {
             t->V.push_back(new std::set<int64_t>());
         }
-    });
+              });
     t->MaxLen++;
     return size_t(double(maxCode + t->CodeMap.size()) / 1.5) + 1;
 }
 
 // resize data
-void resize(Builder *b, size_t newSize) {
+void resize(Builder* b, size_t newSize) {
     b->trie->Base.resize(newSize, 0);
     b->trie->Check.resize(newSize, 0);
     b->used.resize(newSize, false);
@@ -209,29 +205,28 @@ void resize(Builder *b, size_t newSize) {
 
 // Pair si tmp used
 
-std::vector<std::pair<int64_t, State *>> *fetch(State *parent) {
-    auto siblings = new std::vector<std::pair<int64_t, State *>>();
+std::vector<std::pair<int64_t, State*>>* fetch(State* parent) {
+    auto siblings = new std::vector<std::pair<int64_t, State*>>();
     siblings->reserve(parent->success.size() + 1);
     if (isAcceptable(parent)) {
         auto fakeNode = newState(-(parent->depth + 1), true);
         addEmit(fakeNode, getMaxValueID(parent));
-        siblings->push_back(std::pair<int64_t, State *>(0, fakeNode));
+        siblings->push_back(std::pair<int64_t, State*>(0, fakeNode));
     }
-    for (auto &kv : parent->success) {
-        siblings->push_back(std::pair<int64_t, State *>(kv.first + 1, kv.second));
+    for (auto& kv : parent->success) {
+        siblings->push_back(std::pair<int64_t, State*>(kv.first + 1, kv.second));
     }
     return siblings;
 }
 
-void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int64_t, State *>> *>> &queue) {
+void insert(Builder* b, std::queue<std::pair<int64_t, std::vector<std::pair<int64_t, State*>>*>>& queue) {
     auto tCurrent = queue.front();
     queue.pop();
-    auto value = tCurrent.first;
+    auto value    = tCurrent.first;
     auto siblings = tCurrent.second;
 
-
     int64_t begin = 0, nonZeroNum = 0;
-    bool first = true;
+    bool first  = true;
     int64_t pos = b->nextCheckPos - 1;
     if (pos < siblings->front().first) {
         pos = siblings->front().first;
@@ -250,7 +245,7 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
             continue;
         } else if (first) {
             b->nextCheckPos = pos;
-            first = false;
+            first           = false;
         }
 
         begin = pos - siblings->front().first;
@@ -261,7 +256,7 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
             continue;
         }
         auto allIszero = true;
-        for (auto &kv : *siblings) {
+        for (auto& kv : *siblings) {
             if (t->Check[begin + kv.first] != 0) {
                 allIszero = false;
                 break;
@@ -279,16 +274,16 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
     if (b->size < begin + siblings->back().first + 1) {
         b->size = begin + siblings->back().first + 1;
     }
-    for (auto &kv : *siblings) {
+    for (auto& kv : *siblings) {
         t->Check[begin + kv.first] = begin;
     }
-    for (auto &kv : *siblings) {
+    for (auto& kv : *siblings) {
         auto newSiblings = fetch(kv.second);
         if (newSiblings->empty()) {
             t->Base[begin + kv.first] = -(getMaxValueID(kv.second) + 1);
             delete newSiblings;
         } else {
-            queue.push(std::pair<int64_t, std::vector<std::pair<int64_t, State *>> *>(begin + kv.first, newSiblings));
+            queue.push(std::pair<int64_t, std::vector<std::pair<int64_t, State*>>*>(begin + kv.first, newSiblings));
         }
         kv.second->index = begin + kv.first;
     }
@@ -296,7 +291,7 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
         t->Base[value] = begin;
     }
     // free memory
-    for (auto &item : *siblings) {
+    for (auto& item : *siblings) {
         if (item.second->fake) {
             delete item.second;
             item.second = NULL;
@@ -306,7 +301,7 @@ void insert(Builder *b, std::queue<std::pair<int64_t, std::vector<std::pair<int6
     delete siblings;
 }
 
-int build(Builder *b, darts::StringIterPairs &kvs) {
+int build(Builder* b, darts::StringIterPairs& kvs) {
     int ret;
     size_t maxCode = addAllKeyword(b, kvs, &ret);
     if (ret) {
@@ -320,10 +315,10 @@ int build(Builder *b, darts::StringIterPairs &kvs) {
     // build double array tire base on tire
     resize(b, maxCode + 10);
     b->trie->Base[0] = 1;
-    auto siblings = fetch(b->rootState);
+    auto siblings    = fetch(b->rootState);
     if (!siblings->empty()) {
-        std::queue<std::pair<int64_t, std::vector<std::pair<int64_t, State *>> *>> queue;
-        queue.push(std::pair<int64_t, std::vector<std::pair<int64_t, State *>> *>(-1, siblings));
+        std::queue<std::pair<int64_t, std::vector<std::pair<int64_t, State*>>*>> queue;
+        queue.push(std::pair<int64_t, std::vector<std::pair<int64_t, State*>>*>(-1, siblings));
         while (!queue.empty()) {
             insert(b, queue);
         }
@@ -342,14 +337,14 @@ int build(Builder *b, darts::StringIterPairs &kvs) {
  * @param pairs
  * @param trie
  */
-int compile(darts::StringIterPairs &pairs, darts::Trie &trie) {
+int compile(darts::StringIterPairs& pairs, darts::Trie& trie) {
     Builder builder;
-    builder.size = 0;
-    builder.allocSize = 0;
+    builder.size         = 0;
+    builder.allocSize    = 0;
     builder.nextCheckPos = 0;
-    builder.rootState = newState(0, false);
-    builder.trie = &trie;
-    auto ret = build(&builder, pairs);
+    builder.rootState    = newState(0, false);
+    builder.trie         = &trie;
+    auto ret             = build(&builder, pairs);
     // clear mem
     builder.trie = NULL;
     freeState(builder.rootState);
@@ -359,16 +354,16 @@ int compile(darts::StringIterPairs &pairs, darts::Trie &trie) {
 
 class U32StrIterator : public darts::StringIter {
    private:
-    const char32_t *str;
+    const char32_t* str;
     size_t len;
 
    public:
-    U32StrIterator(const char32_t *str, size_t len) {
+    U32StrIterator(const char32_t* str, size_t len) {
         this->str = str;
         this->len = len;
     }
 
-    void iter(std::function<bool(const std::string &, size_t)> hit) {
+    void iter(std::function<bool(const std::string&, size_t)> hit) {
         if (!this->str) return;
         std::string tmp;
         for (size_t i = 0; i < this->len; ++i) {
@@ -380,24 +375,22 @@ class U32StrIterator : public darts::StringIter {
     }
 };
 
-
 class WordStrIterator : public darts::StringIter {
    private:
-    const char *str;
-    const std::set<WordType> *skiptypes;
+    const char* str;
+    const std::set<std::string>* skiptypes;
 
    public:
-    WordStrIterator(const char *str, const std::set<WordType> *skiptypes) {
-        this->str = str;
+    WordStrIterator(const char* str, const std::set<std::string>* skiptypes) {
+        this->str       = str;
         this->skiptypes = skiptypes;
     }
 
-
-    void iter(std::function<bool(const std::string &, size_t)> hit) {
+    void iter(std::function<bool(const std::string&, size_t)> hit) {
         if (!this->str) return;
         std::string tmp;
         int pos = -1;
-        atomSplit(this->str, [&](const char *chrs, WordType ttype, size_t s, size_t e) {
+        atomSplit(this->str, [&](const char* chrs, std::string& ttype, size_t s, size_t e) {
             pos++;
             tmp = chrs;
             if (this->skiptypes == NULL || skiptypes->find(ttype) == skiptypes->end()) {
@@ -413,24 +406,23 @@ class WordStrIterator : public darts::StringIter {
  */
 class FileStringPairIter : public darts::StringIterPairs {
    private:
-    const std::vector<std::string> *files;
-    const std::set<WordType> *skiptypes;
-    std::map<std::string, int64_t> *labels;
-    std::function<std::string(std::string &, std::vector<int64_t> &, std::map<std::string, int64_t> *)> lineFix;
-
+    const std::vector<std::string>* files;
+    const std::set<std::string>* skiptypes;
+    std::map<std::string, int64_t>* labels;
+    std::function<std::string(std::string&, std::vector<int64_t>&, std::map<std::string, int64_t>*)> lineFix;
 
    public:
     FileStringPairIter(
-        const std::vector<std::string> *files, std::map<std::string, int64_t> *labels,
-        const std::set<WordType> *skiptypes,
-        std::function<std::string(std::string &, std::vector<int64_t> &, std::map<std::string, int64_t> *)> lineFix) {
-        this->files = files;
-        this->labels = labels;
+        const std::vector<std::string>* files, std::map<std::string, int64_t>* labels,
+        const std::set<std::string>* skiptypes,
+        std::function<std::string(std::string&, std::vector<int64_t>&, std::map<std::string, int64_t>*)> lineFix) {
+        this->files     = files;
+        this->labels    = labels;
         this->skiptypes = skiptypes;
-        this->lineFix = lineFix;
+        this->lineFix   = lineFix;
         if (!lineFix) {
-            this->lineFix = [&](std::string &line, std::vector<int64_t> &lidxes,
-                                std::map<std::string, int64_t> *lmap) -> std::string {
+            this->lineFix = [&](std::string& line, std::vector<int64_t>& lidxes,
+                                std::map<std::string, int64_t>* lmap) -> std::string {
                 auto pos = line.find_first_of(':');
                 if (pos == std::string::npos || pos < 1 || pos >= line.size() - 1) {
                     std::cerr << "WARN: bad line:[" << line << "]" << std::endl;
@@ -449,7 +441,7 @@ class FileStringPairIter : public darts::StringIterPairs {
                 darts::toupper(key);
                 std::vector<std::string> keys;
                 darts::split(key, ",", keys);
-                for (auto &kstr : keys) {
+                for (auto& kstr : keys) {
                     darts::trim(kstr);
                     if (kstr.size() < 3) continue;
                     auto key_str = kstr.substr(1, kstr.size() - 2);
@@ -458,7 +450,7 @@ class FileStringPairIter : public darts::StringIterPairs {
                     if (it != lmap->end()) {
                         lidxes.push_back(it->second);
                     } else {
-                        auto idx = labels->size();
+                        auto idx         = labels->size();
                         (*lmap)[key_str] = idx;
                         lidxes.push_back(idx);
                     }
@@ -468,9 +460,9 @@ class FileStringPairIter : public darts::StringIterPairs {
         }
     }
 
-    int iter(std::function<void(darts::StringIter &, const int64_t *, size_t)> hit) {
+    int iter(std::function<void(darts::StringIter&, const int64_t*, size_t)> hit) {
         std::vector<int64_t> lidxes;
-        for (auto &fpath : *this->files) {
+        for (auto& fpath : *this->files) {
             std::ifstream f_in(fpath);
             if (!f_in.is_open()) {
                 std::cerr << "ERROR: read open file error," << fpath << std::endl;
@@ -510,9 +502,8 @@ class FileStringPairIter : public darts::StringIterPairs {
  * @param lineFix 行处理函数
  */
 int compileStringDict(
-    const std::vector<std::string> &paths, const std::string &pbfile, const std::set<WordType> *skiptypes = NULL,
-    std::function<std::string(std::string &, std::vector<int64_t> &, std::map<std::string, int64_t> *)> lineFix =
-        NULL) {
+    const std::vector<std::string>& paths, const std::string& pbfile, const std::set<std::string>* skiptypes = NULL,
+    std::function<std::string(std::string&, std::vector<int64_t>&, std::map<std::string, int64_t>*)> lineFix = NULL) {
     darts::Trie trie;
     std::map<std::string, int64_t> labels;
     // build trie
@@ -522,7 +513,7 @@ int compileStringDict(
     }
     // set labels
     trie.Labels.resize(labels.size());
-    for (auto &kv : labels) {
+    for (auto& kv : labels) {
         trie.Labels[kv.second] = kv.first;
     }
     return trie.writePb(pbfile);

@@ -71,57 +71,30 @@ typedef struct _GraphEdge {
     double weight;
 } * GraphEdge;
 
-class Segment {
+class SegGraph {
    private:
-    std::vector<std::shared_ptr<CellRecognizer>> cellRecognizers;
-    std::shared_ptr<CellPersenter> quantizer;
+    std::map<int, std::vector<GraphEdge>*> graph;
 
    public:
-    /**
-     * @brief  add a
-     *
-     * @param reg
-     */
-    void addRecognizer(std::shared_ptr<CellRecognizer> reg) {
-        if (reg) {
-            cellRecognizers.push_back(reg);
-        }
-    }
-
-   private:
-    /**
-     * @brief build map
-     *
-     * @param context
-     * @param cmap
-     * @param graph
-     */
-    void buildGraph(AtomList* context, CellMap* cmap, std::map<int, std::vector<GraphEdge>*>& graph) {
-        cmap->makeCurIndex();
-        this->quantizer->embed(context, cmap);
-        // add head
-        std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
-        cmap->iterRow(NULL, 0, [&](Cursor pre) {
-            auto dist = quantizer->ranging(NULL, pre->val.get());
-            tmp->push_back(new _GraphEdge{next->idx, dist});
-        });
-        graph.insert(std::make_pair(-1, head_tmp));
-
-        cmap->iterRow(NULL, -1, [&](Cursor pre) {
-            std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
-            cmap->iterRow(pre, pre->val->et, [&](Cursor next) {
-                auto dist = quantizer->ranging(pre->val.get(), next->val.get());
-                tmp->push_back(new _GraphEdge{next->idx, dist});
-            });
-            // add tail
-            if (tmp->empty()) {
-                auto dist = quantizer->ranging(pre->val.get(), NULL);
-                int cidx  = cmap->Size();
-                tmp->push_back(new _GraphEdge{cidx, dist});
+    SegGraph() {}
+    ~SegGraph() {
+        for (auto p : graph) {
+            for (auto v : *(p.second)) {
+                delete v;
             }
-            graph.insert(std::make_pair(pre->idx, tmp));
-        });
+            p.second->clear();
+            delete p.second;
+        }
+        graph.clear();
     }
+
+    /**
+     * @brief put edges
+     *
+     * @param st
+     * @param edges
+     */
+    void putEdges(int st, std::vector<GraphEdge>* edges) { graph.insert(std::make_pair(st, edges)); }
 
     /**
      * @brief select best path
@@ -129,7 +102,7 @@ class Segment {
      * @param graph
      * @param bestPaths
      */
-    void selectPath(std::map<int, std::vector<GraphEdge>*>& graph, std::vector<int>& bestPaths) {
+    void selectPath(std::vector<int>& bestPaths) {
         auto sz = graph.size();
         std::vector<double> dist;
         dist.assign(sz, -1.0);
@@ -178,6 +151,59 @@ class Segment {
         }
         std::reverse(bestPaths.begin(), bestPaths.end());
     }
+};
+
+class Segment {
+   private:
+    std::vector<std::shared_ptr<CellRecognizer>> cellRecognizers;
+    std::shared_ptr<CellPersenter> quantizer;
+
+   public:
+    /**
+     * @brief  add a
+     *
+     * @param reg
+     */
+    void addRecognizer(std::shared_ptr<CellRecognizer> reg) {
+        if (reg) {
+            cellRecognizers.push_back(reg);
+        }
+    }
+
+   private:
+    /**
+     * @brief build map
+     *
+     * @param context
+     * @param cmap
+     * @param graph
+     */
+    void buildGraph(AtomList* context, CellMap* cmap, SegGraph& graph) {
+        cmap->makeCurIndex();
+        this->quantizer->embed(context, cmap);
+        // add head
+        std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
+        cmap->iterRow(NULL, 0, [&](Cursor pre) {
+            auto dist = quantizer->ranging(NULL, pre->val.get());
+            head_tmp->push_back(new _GraphEdge{pre->idx, dist});
+        });
+        graph.putEdges(-1, head_tmp);
+
+        cmap->iterRow(NULL, -1, [&](Cursor pre) {
+            std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
+            cmap->iterRow(pre, pre->val->et, [&](Cursor next) {
+                auto dist = quantizer->ranging(pre->val.get(), next->val.get());
+                tmp->push_back(new _GraphEdge{next->idx, dist});
+            });
+            // add tail
+            if (tmp->empty()) {
+                auto dist = quantizer->ranging(pre->val.get(), NULL);
+                int cidx  = cmap->Size();
+                tmp->push_back(new _GraphEdge{cidx, dist});
+            }
+            graph.putEdges(pre->idx, tmp);
+        });
+    }
 
     /**
      * @brief 进行最优选择
@@ -189,10 +215,11 @@ class Segment {
     void splitContent(AtomList* context, CellMap* cmap, std::vector<std::shared_ptr<Word>>& ret,
                       int atom_start_pos = 0) {
         // get best path
-        std::map<int, std::vector<GraphEdge>*> graph;
+        SegGraph graph;
         buildGraph(context, cmap, graph);
         std::vector<int> bestPaths;
-        selectPath(graph, bestPaths);
+        graph.selectPath(bestPaths);
+
         // output result
         cmap->iterRow(NULL, -1, [&](Cursor cur) {
             if (std::binary_search(bestPaths.begin(), bestPaths.end(), cur->idx)) {
@@ -202,19 +229,9 @@ class Segment {
                 ret.push_back(word);
             }
         });
-        // clear memory
-        bestPaths.clear();
-        for (auto p : graph) {
-            for (auto v : *(p.second)) {
-                delete v;
-            }
-            p.second->clear();
-            delete p.second;
-        }
-        graph.clear();
     }
 
-    void buildMap(AtomList* atomList, CellMap* cmap) {
+    void buildSegPath(AtomList* atomList, CellMap* cmap) {
         auto cur = cmap->Head();
         // add basic cells
         for (size_t i = 0; i < atomList->size(); i++) {
@@ -260,7 +277,7 @@ class Segment {
             return;
         }
         auto cmap = new CellMap();
-        buildMap(atomList, cmap);
+        buildSegPath(atomList, cmap);
         if (maxMode) {
             cmap->iterRow(NULL, -1, [&](Cursor cur) {
                 auto word = cur->val;
