@@ -9,54 +9,9 @@ Modified By: Xu En (xuen@mokahr.com)
 -----
 Copyright 2021 - 2022 Your Company, Moka
 '''
-import numpy as np
 import torch
 from torch_scatter import segment_max_coo
 import torch.nn as nn
-
-
-def pin2cuda(*args):
-    return [t.pin_memory().cuda(non_blocking=True) for t in args]
-
-
-def swp2cuda(*args):
-    return [t.cuda() for t in args]
-
-
-def freeze_module(model, keep_back=True):
-    """
-    freeze model to use as a fixed function
-    """
-    model.eval()
-    for param in model.parameters():
-        param.drop_grad = True
-        param.requires_grad = keep_back
-
-
-def drop_module_grad(model):
-    """
-    if you call freeze_module() to set model grad None to free it
-    this method must call after loss.backward() and  before optimizer.step()
-    """
-    # nn.utils.clip_grad_norm_(model.parameters(), 1, 'inf')
-    # for name, p in model.named_parameters():
-    #     print(name, p.grad, p.shape)
-    for p in model.parameters():
-        if not p.requires_grad:
-            continue
-        if hasattr(p, 'drop_grad') and p.drop_grad:
-            p.grad = None
-
-
-def unfreeze_module(model):
-    """
-    call this model
-    """
-    model.train(True)
-    for param in model.parameters():
-        if hasattr(param, 'drop_grad'):
-            delattr(param, 'drop_grad')
-            param.requires_grad = True
 
 
 def run_rnn(rnn, inputs, seq_lengths):
@@ -163,32 +118,6 @@ class CRFLoss(nn.Module):
         return forward_score - gold_score
 
 
-class LabelSmoothLoss(nn.Module):
-    """NLL loss with label smoothing.
-    """
-
-    def __init__(self, smoothing=0.0):
-        """Constructor for the LabelSmoothing module.
-        :param smoothing: label smoothing factor
-        """
-        super(LabelSmoothLoss, self).__init__()
-        assert 0 <= smoothing < 0.5, "smoothing value must be a in [0,0.5)"
-        self.confidence = 1.0 - smoothing
-        self.smoothing = smoothing
-
-    def forward(self, x, target):
-        """x is float shape [N,C]
-        target is int shape (N,) and 0<=target[i]<C
-        return float tensor shape  (N,)
-        """
-        logprobs = torch.nn.functional.log_softmax(x, dim=-1)
-        nll_loss = -logprobs.gather(dim=-1, index=target.unsqueeze(1))
-        nll_loss = nll_loss.squeeze(1)
-        smooth_loss = -logprobs.sum(dim=-1)
-        beta = self.smoothing/(x.size(-1)-1)
-        return (self.confidence-beta) * nll_loss + beta * smooth_loss
-
-
 class GraphLoss(nn.Module):
     def __init__(self):
         super(GraphLoss, self).__init__()
@@ -242,47 +171,3 @@ class GraphLoss(nn.Module):
         forward_score = self._forward_alg(graph_path-graph_path.min(), weight)
 
         return gold_score+forward_score
-
-
-class SampledSoftMaxCrossEntropy(nn.Module):
-    def __init__(self, emb_size, tags_weight, nsampled):
-        """
-        emb_size is the tag embeding size is int;
-        tags_weight is a list that tags
-        nsampled how many num of negtive sample
-        """
-        super(SampledSoftMaxCrossEntropy, self).__init__()
-        self.nsampled = nsampled
-        self.weight = nn.Parameter(torch.Tensor(len(tags_weight), emb_size))
-        self.bias = nn.Parameter(torch.Tensor(len(tags_weight)))
-        self.sample_map = self.__genmap__(tags_weight)
-        self.loss_fn = nn.CrossEntropyLoss()
-
-    def __genmap__(self, weight):
-        freq = np.sum(weight).astype(np.float32)
-        weight = np.around(np.power(np.divide(weight, freq), 0.75) * freq).astype(np.int32)
-        end_tag = np.cumsum(weight)
-        start_tag = np.concatenate([[0], end_tag[:-1]])
-        sample_map = np.zeros(end_tag[-1], dtype=np.int32)
-        for i, (s, t) in enumerate(start_tag, end_tag):
-            sample_map[s:t] = i
-        return sample_map
-
-    def forward(self, inputs, labels):
-        batchs = labels.shape[0]
-        sample_ids = []
-        tmpids = set([])
-        for lab in labels.cpu().numpy().astype(np.int32):
-            while len(tmpids) < self.nsampled:
-                tmpids.update(self.sample_map[np.random.randint(self.sample_map.shape[0], size=self.nsampled - len(tmpids))])
-                if lab in tmpids:
-                    tmpids.remove(lab)
-            sample_ids.append(lab)
-            sample_ids.extend(tmpids)
-            tmpids.clear()
-
-        sample_weights = self.weight[sample_ids, :].reshape((batchs, self.nsampled + 1, -1))
-        sample_bias = self.bias[sample_ids].reshape((batchs, self.nsampled + 1))
-        logits = torch.einsum("ik,ijk->ij", inputs, sample_weights) + sample_bias
-        new_targets = torch.zeros(batchs).long().to(labels.device)
-        return self.loss_fn(logits, new_targets)

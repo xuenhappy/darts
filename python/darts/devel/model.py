@@ -103,7 +103,7 @@ class GraphTrainer(nn.Module):
             e_atom_embeding = atoms_embeding[graph[:, 1]]
             weight = self.quantizer(s_atom_embeding, e_atom_embeding)
             losses.append(self.lossfunc(graph, weight))
-        return losses
+        return sum(losses)/len(losses)
 
     def forward(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index):
         """

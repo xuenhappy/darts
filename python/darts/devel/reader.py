@@ -10,18 +10,10 @@ Modified By: Xu En (xuen@mokahr.com)
 Copyright 2021 - 2022 Your Company, Moka
 '''
 
-from multiprocessing import cpu_count
-from .fastiter import MutiProcessIter
-
 
 class LineSampleReader():
-    def __init__(self, filep, process=0):
+    def __init__(self, filep):
         self.samplefile = filep
-        with open(self.samplefile, encoding="utf-8") as fd:
-            # test open and read one
-            for _ in fd:
-                break
-        self.processNum = min(cpu_count()//2+1, process)
 
     def process(self, line):
         raise Exception("not impl")
@@ -46,6 +38,3 @@ class LineSampleReader():
                 if not result:
                     continue
                 yield result
-
-    def reset(self):
-        pass
