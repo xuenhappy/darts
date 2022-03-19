@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
             auto outfile = program1.get<std::string>("-o");
             if (!files.empty()) {
                 std::cout << "compile files to trie [" << darts::join(files, " , ") << "] " << std::endl;
-                std::set<WordType> skipType = {WordType::POS, WordType::EMPTY, WordType::NLINE};
+                std::set<std::string> skipType = {"POS", "EMPTY", "NLINE"};
                 if (!dregex::compileStringDict(files, outfile, &skipType)) {
                     std::cout << "build tire success, pb out file path:" << outfile << std::endl;
                 }
