@@ -15,7 +15,7 @@ import time
 import numpy as np
 import torch
 from torch import optim
-
+import h5py
 
 if not torch.cuda.is_available():
     print("WARN: NO CUDA DEVICE!")
@@ -29,6 +29,10 @@ def saveTorchModel(model, out_dir, epoch_num):
     # save model for numpy
     state_dict = dict((k, v.cpu().numpy()) for (k, v) in model.state_dict().items())
     np.savez(os.path.join(out_dir, "model-%d" % epoch_num), **state_dict)
+    # save model for h5
+    with h5py.File(os.path.join(out_dir, "model-%d.h5" % epoch_num), 'w') as hf:
+        for k, v in state_dict.items():
+            hf.create_dataset(k,  data=v)
     print("Write model to {}".format(out_dir))
 
 
