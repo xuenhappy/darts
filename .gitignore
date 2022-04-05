@@ -34,3 +34,7 @@ build/*
 .vscode/*
 
 .DS_Store
+GPATH
+GPATH
+GRTAGS
+GTAGS
