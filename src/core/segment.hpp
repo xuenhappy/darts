@@ -123,7 +123,7 @@ class SegGraph {
         // dijkstra
         while (used.find(sz - 1) != used.end()) {
             double minDist = DBL_MAX;
-            int u          = 0;
+            int u          = -1;
             for (auto idx : visted) {
                 if (used.find(idx) == used.end()) continue;
                 if (dist[idx] < minDist) {
@@ -131,7 +131,7 @@ class SegGraph {
                     u       = idx;
                 }
             }
-            if (u == sz - 1) break;
+            if (u == sz - 1 || u < 0) break;
             used.erase(u);
             for (auto nw : *graph[u]) {
                 auto node = nw->et;
