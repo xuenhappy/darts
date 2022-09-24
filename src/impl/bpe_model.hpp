@@ -25,7 +25,7 @@ class WordPice {
 
 /**
  * @brief  对文本预料进行新词发现，并在当前目录输出词频文件与二元语法统计词表
- *
+ * 算法参见 https://zhuanlan.zhihu.com/p/80385615
  * @param text_corpus_path 文本语料
  * @param mini_freq 最低的词频
  * @param max_words_num 输出的最大单词数目
