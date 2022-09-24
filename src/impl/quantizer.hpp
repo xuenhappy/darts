@@ -13,7 +13,6 @@
 #define SRC_IMPL_QUANTIZER_HPP_
 #include <darts.pb.h>
 #include <math.h>
-
 #include <algorithm>
 #include <filesystem>
 #include <map>
@@ -21,7 +20,6 @@
 #include <set>
 #include <string>
 #include <vector>
-
 #include "../core/segment.hpp"
 #include "../utils/cedar.h"
 #include "../utils/file_utils.hpp"
@@ -29,10 +27,18 @@
 #include "../utils/zstr.hpp"
 
 namespace darts {
-class MinCoverPersenter {
+class MinCoverPersenter : public CellPersenter {
    public:
-    int initalize(const std::map<std::string, std::string> &param) { return EXIT_SUCCESS; }
-    void embed(AtomList *dstSrc, SegPath *cmap) {}
+    int initalize(const std::map<std::string, std::string>& param) { return EXIT_SUCCESS; }
+
+    /**
+     * @brief do nothing
+     *
+     * @param dstSrc
+     * @param cmap
+     */
+    void embed(AtomList* dstSrc, SegPath* cmap) const {}
+
     /**
      * @brief
      *
@@ -40,7 +46,7 @@ class MinCoverPersenter {
      * @param next
      * @return double must >=0
      */
-    double ranging(const Word *pre, const Word *next) const {
+    double ranging(const Word* pre, const Word* next) const {
         double len_a = (pre == NULL) ? 0.0 : 100.0 / (1.0 + pre->word->image.length());
         double len_b = (next == NULL) ? 0.0 : 100.0 / (1.0 + next->word->image.length());
         return len_a + len_b;
@@ -56,9 +62,9 @@ struct bigram_key {
     bigram_key(size_t a_i, size_t a_j) : i(a_i), j(a_j) {}
 
     // you need to sort keys to be used in a map container
-    bool operator<(bigram_key const &other) const { return i < other.i || (i == other.i && j < other.j); }
+    bool operator<(bigram_key const& other) const { return i < other.i || (i == other.i && j < other.j); }
 
-    bool operator==(const bigram_key &rhs) { return i == rhs.i && j == rhs.j; }
+    bool operator==(const bigram_key& rhs) { return i == rhs.i && j == rhs.j; }
 };
 struct bigram_data {
     size_t count;  // n(ij)
@@ -70,18 +76,17 @@ struct bigram_data {
  * @brief this use cedar store thing
  *
  */
-class BigramPersenter {
+class BigramPersenter : public CellPersenter {
    private:
-    static const char *DAT_DIR_KEY;
-    static const char *KEY_IDX_FILE;
-    static const char *TABLE_FILE;
+    static const char* DAT_DIR_KEY;
+    static const char* KEY_IDX_FILE;
+    static const char* TABLE_FILE;
     cedar::da<int> idx;
     std::map<bigram_key, bigram_data> bigrams;
     std::map<size_t, size_t> freqs;
     size_t avg_single_freq = 0;
     size_t max_single_freq = 0;
-    size_t avg_union_freq = 0;
-
+    size_t avg_union_freq  = 0;
 
     /**
      * @brief Get the Word Freq object
@@ -89,7 +94,7 @@ class BigramPersenter {
      * @param word
      * @return size_t
      */
-    int getWordKey(const std::string &word) const {
+    int getWordKey(const std::string& word) const {
         auto widx = idx.exactMatchSearch<int>(word.c_str(), word.length());
         if (widx == cedar::da<int>::CEDAR_NO_VALUE) {
             return -1;
@@ -97,14 +102,13 @@ class BigramPersenter {
         return widx;
     }
 
-
     /**
      * @brief Get the Single Nlog Prop object
      * 获取某个字独立出现的词频负对数
      * @param word
      * @return double
      */
-    double getSingleNlogProp(const std::string &word) const {
+    double getSingleNlogProp(const std::string& word) const {
         int widx = getWordKey(word);
         if (widx < 0) {
             return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq / 2));
@@ -119,7 +123,7 @@ class BigramPersenter {
      * @param next
      * @return double
      */
-    double getNlogProp(const std::string &word, const std::string &next) const {
+    double getNlogProp(const std::string& word, const std::string& next) const {
         double a = 0.0, b = 0.0, n_ij = 0.0;
         int a_widx = getWordKey(word), b_widx = getWordKey(next);
         if (a_widx < 0 || b_widx < 0) {
@@ -138,7 +142,7 @@ class BigramPersenter {
                 n_ij = std::min(std::min(a, b), double(avg_union_freq)) / 2.0;
             } else {
                 double m = std::min(a, b);
-                n_ij = std::min(m, double(it->second.count)) * 0.85 + 0.15 * m;
+                n_ij     = std::min(m, double(it->second.count)) * 0.85 + 0.15 * m;
             }
         }
         return log((1.0 + a) / (1.0 + n_ij));
@@ -150,7 +154,7 @@ class BigramPersenter {
      * @param ifile
      * @return int
      */
-    int readTable(const std::string &ifile) {
+    int readTable(const std::string& ifile) {
         std::ifstream f_in(ifile, std::ios::in | std::ios::binary);
         if (!f_in.is_open()) {
             std::cerr << "ERROR: load table file failed:" << ifile << std::endl;
@@ -165,7 +169,7 @@ class BigramPersenter {
         }
         f_in.close();
         this->avg_single_freq = dat.avg_single_freq();
-        this->avg_union_freq = dat.avg_union_freq();
+        this->avg_union_freq  = dat.avg_union_freq();
         this->max_single_freq = dat.max_single_freq();
 
         auto freq = dat.freq();
@@ -173,7 +177,7 @@ class BigramPersenter {
 
         auto size = dat.table_size();
         for (size_t i = 0; i < size; i++) {
-            auto tuple = dat.table(i);
+            auto tuple                                      = dat.table(i);
             this->bigrams[bigram_key(tuple.x(), tuple.y())] = bigram_data(tuple.freq());
         }
         return EXIT_SUCCESS;
@@ -185,7 +189,7 @@ class BigramPersenter {
      * @param outfile
      * @return int
      */
-    int writeTable(const std::string &outfile) const {
+    int writeTable(const std::string& outfile) const {
         std::fstream f_out(outfile, std::ios::out | std::ios::trunc | std::ios::binary);
         if (!f_out.is_open()) {
             std::cerr << "ERROE: write table file failed:" << outfile << std::endl;
@@ -198,7 +202,7 @@ class BigramPersenter {
 
         auto freq = dat.mutable_freq();
         freq->insert(this->freqs.begin(), this->freqs.end());
-        for (auto &kv : this->bigrams) {
+        for (auto& kv : this->bigrams) {
             auto table = dat.add_table();
             table->set_x(kv.first.i);
             table->set_y(kv.first.j);
@@ -215,9 +219,8 @@ class BigramPersenter {
         return EXIT_SUCCESS;
     }
 
-
    public:
-    int initalize(const std::map<std::string, std::string> &param) {
+    int initalize(const std::map<std::string, std::string>& param) {
         auto it = param.find(DAT_DIR_KEY);
         if (it == param.end() || it->second.empty()) {
             std::cerr << "ERROR: could not find key:" << DAT_DIR_KEY << std::endl;
@@ -232,8 +235,7 @@ class BigramPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList *dstSrc, SegPath *cmap) const {}
-
+    void embed(AtomList* dstSrc, SegPath* cmap) const {}
 
     /**
      * @brief
@@ -243,8 +245,8 @@ class BigramPersenter {
      * @param outdir 输出目录
      * @return int
      */
-    static int buildDict(const std::string &single_freq_dict, const std::string &union_freq_dict,
-                         const std::string &outdir) {
+    static int buildDict(const std::string& single_freq_dict, const std::string& union_freq_dict,
+                         const std::string& outdir) {
         // create dir
         if (createDirectory(outdir)) {
             std::cerr << "ERROR:create out dir error: " << outdir << std::endl;
@@ -280,7 +282,7 @@ class BigramPersenter {
                 continue;
             }
             std::string word = trim(coloums[0]);
-            size_t freq = atol(coloums[1].c_str());
+            size_t freq      = atol(coloums[1].c_str());
             if (freq < 1 || word.empty()) {
                 std::cerr << "WARN:bad line freq for freq: " << line << std::endl;
                 continue;
@@ -291,7 +293,6 @@ class BigramPersenter {
             persenter.freqs[n - 1] = freq;
         }
         idx_in.close();
-
 
         // read table file
         std::vector<std::string> tmpkey;
@@ -313,7 +314,7 @@ class BigramPersenter {
                 continue;
             }
             std::string word = coloums[0];
-            size_t freq = atol(coloums[1].c_str());
+            size_t freq      = atol(coloums[1].c_str());
             if (freq < 1) {
                 std::cerr << "WARN:bad line freq for table: " << line << std::endl;
                 continue;
@@ -345,7 +346,7 @@ class BigramPersenter {
         table_in.close();
         // set static info
         persenter.avg_single_freq = freq_sum / (1 + n);
-        persenter.avg_union_freq = union_freq_sum / (1 + unum);
+        persenter.avg_union_freq  = union_freq_sum / (1 + unum);
         persenter.max_single_freq = max_freq;
 
         // save data
@@ -356,14 +357,13 @@ class BigramPersenter {
         return persenter.writeTable(table_path.string());
     }
 
-
     /**
      * @brief load the dictionary
      *
      * @param dictionary_dir
      * @return int
      */
-    int loadDict(const std::string &dictionary_dir) {
+    int loadDict(const std::string& dictionary_dir) {
         namespace fs = std::filesystem;
         fs::path widx_path(dictionary_dir);
         widx_path.append(KEY_IDX_FILE);
@@ -382,7 +382,7 @@ class BigramPersenter {
      * @param next
      * @return double must >=0
      */
-    double ranging(const Word *pre, const Word *next) const {
+    double ranging(const Word* pre, const Word* next) const {
         if (pre == NULL || next == NULL) {
             if (pre) {
                 return getSingleNlogProp(pre->word->image);
@@ -401,15 +401,15 @@ class BigramPersenter {
         freqs.clear();
     }
 };
-const char *BigramPersenter::KEY_IDX_FILE = "words.da";
-const char *BigramPersenter::TABLE_FILE = "table.pb.gz";
-const char *BigramPersenter::DAT_DIR_KEY = "dat.dir";
+const char* BigramPersenter::KEY_IDX_FILE = "words.da";
+const char* BigramPersenter::TABLE_FILE   = "table.pb.gz";
+const char* BigramPersenter::DAT_DIR_KEY  = "dat.dir";
 REGISTER_Persenter(BigramPersenter);
 
-class ElmoPersenter {
+class ElmoPersenter : public CellPersenter {
    private:
-    static const char *MODEL_PATH_KEY;
-    static const char *CHAR_TABLE_FILE_KEY;
+    static const char* MODEL_PATH_KEY;
+    static const char* CHAR_TABLE_FILE_KEY;
 
    public:
     /**
@@ -418,14 +418,14 @@ class ElmoPersenter {
      * @param param
      * @return int
      */
-    int initalize(const std::map<std::string, std::string> &param) { return EXIT_SUCCESS; }
+    int initalize(const std::map<std::string, std::string>& param) { return EXIT_SUCCESS; }
     /**
      * @brief set all word embeding
      *
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList *dstSrc, SegPath *cmap) const {}
+    void embed(AtomList* dstSrc, SegPath* cmap) const {}
     /**
      * @brief
      *
@@ -433,17 +433,16 @@ class ElmoPersenter {
      * @param next
      * @return double must >=0
      */
-    double ranging(const Word *pre, const Word *next) const { return 0.0; }
+    double ranging(const Word* pre, const Word* next) const { return 0.0; }
     ~ElmoPersenter() {}
 };
 
-const char *ElmoPersenter::MODEL_PATH_KEY = "model.path";
+const char* ElmoPersenter::MODEL_PATH_KEY = "model.path";
 REGISTER_Persenter(ElmoPersenter);
-
 
 class TinyBertPersenter {
    private:
-    static const char *MODEL_PATH_KEY;
+    static const char* MODEL_PATH_KEY;
 
    public:
     /**
@@ -452,14 +451,14 @@ class TinyBertPersenter {
      * @param param
      * @return int
      */
-    int initalize(const std::map<std::string, std::string> &param) { return EXIT_SUCCESS; }
+    int initalize(const std::map<std::string, std::string>& param) { return EXIT_SUCCESS; }
     /**
      * @brief set all word embeding
      *
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList *dstSrc, SegPath *cmap) const {}
+    void embed(AtomList* dstSrc, SegPath* cmap) const {}
     /**
      * @brief
      *
@@ -467,13 +466,12 @@ class TinyBertPersenter {
      * @param next
      * @return double must >=0
      */
-    double ranging(const Word *pre, const Word *next) const { return 0.0; }
+    double ranging(const Word* pre, const Word* next) const { return 0.0; }
     ~TinyBertPersenter() {}
 };
 
-const char *TinyBertPersenter::MODEL_PATH_KEY = "model.path";
+const char* TinyBertPersenter::MODEL_PATH_KEY = "model.path";
 REGISTER_Persenter(TinyBertPersenter);
-
 
 }  // namespace darts
 
