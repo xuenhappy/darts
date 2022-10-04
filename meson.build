@@ -25,6 +25,14 @@ proto_dep = dependency('protobuf', version : '>=3.17.3',
     method: 'pkg-config', required : true,
     static: enable_static,modules: ['protobuf::libprotobuf-lite']
 )
+
+fs=import('fs')
+onnxrt_dep = declare_dependency(
+    link_with : [shared_library('onnxrt',[])],
+    include_directories : [],
+    version:'1.2.1'
+)
+
 base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep,proto_dep]
 
 message('set gen the proto source.....')
@@ -33,7 +41,7 @@ if not protoc.found()
   error('MESON_SKIP_TEST: protoc tool and/or protobuf pkg-config dependency not found')
 endif
 
-fs=import('fs')
+
 proto_sources=[]
 proto_headers=[]
 
@@ -54,11 +62,9 @@ foreach pfile : files('src/utils/darts.proto')
     proto_sources+=proto_list
 endforeach
 
-proto_lib=static_library('proto',proto_sources,dependencies:proto_dep,
-    cpp_args : extra_args,c_args : extra_args
-)
+
 my_proto_deb=declare_dependency(
-    link_with : [proto_lib],
+    link_with : [static_library('proto',proto_sources,dependencies:proto_dep,cpp_args : extra_args,c_args : extra_args)],
     link_args : ['-ldl' ],
     sources:[proto_headers]
 )
