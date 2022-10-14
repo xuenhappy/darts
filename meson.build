@@ -18,9 +18,7 @@ endif
 
 message('check the deps libray.....')
 zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: enable_static)
-hdf5_dep=dependency('hdf5', version : '>=1.10.3', required : true,static: enable_static)
 jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: enable_static)
-eigen_dep = dependency('eigen3', version : '>=3.3.7', required : true,static: enable_static)
 proto_dep = dependency('protobuf', version : '>=3.17.3',
     method: 'pkg-config', required : true,
     static: enable_static,modules: ['protobuf::libprotobuf-lite']
@@ -30,10 +28,10 @@ fs=import('fs')
 onnxrt_dep = declare_dependency(
     link_with : [shared_library('onnxrt',[])],
     include_directories : [],
-    version:'1.2.1'
+    version:'1.12.1'
 )
 
-base_deps=[zlib_dep,hdf5_dep,jsoncpp_dep,jsoncpp_dep,eigen_dep,proto_dep]
+base_deps=[zlib_dep,jsoncpp_dep,jsoncpp_dep,proto_dep]
 
 message('set gen the proto source.....')
 protoc = find_program('protoc', required : false)
