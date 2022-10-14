@@ -28,7 +28,7 @@ fs=import('fs')
 
 onnx_dir='/home/enxu/onnxruntime-linux-x64-1.12.1'
 onnxrt_dep = declare_dependency(
-    link_args : [f'-L @onnx_dir@/lib/libonnxruntime.so.1.12.1 -lonnxruntime' ],
+    link_args : [f'-L@onnx_dir@/lib -lonnxruntime' ],
     include_directories : [f'@onnx_dir@/include'],
     version:'1.12.1'
 )
