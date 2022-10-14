@@ -25,13 +25,15 @@ proto_dep = dependency('protobuf', version : '>=3.17.3',
 )
 
 fs=import('fs')
+
+onnx_dir='/home/enxu/onnxruntime-linux-x64-1.12.1'
 onnxrt_dep = declare_dependency(
-    link_with : [shared_library('onnxrt',[])],
-    include_directories : [],
+    link_args : [f'-L @onnx_dir@/lib/libonnxruntime.so.1.12.1 -lonnxruntime' ],
+    include_directories : [f'@onnx_dir@/include'],
     version:'1.12.1'
 )
 
-base_deps=[zlib_dep,jsoncpp_dep,jsoncpp_dep,proto_dep]
+base_deps=[zlib_dep,jsoncpp_dep,jsoncpp_dep,proto_dep,onnxrt_dep]
 
 message('set gen the proto source.....')
 protoc = find_program('protoc', required : false)
