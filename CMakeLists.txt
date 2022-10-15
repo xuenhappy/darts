@@ -117,8 +117,10 @@ set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/dist)
 
 include_directories(
   src ${ZLIB_INCLUDE_DIRS} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS}
-  "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}")
-set(darts_libs ${Jsoncpp_LIBRARY} ${Protobuf_LIBRARIES} ${ZLIB_LIBRARIES})
+  "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}"
+  "/opt/onnxruntime-linux-x64-1.12.1/include")
+set(darts_libs ${Jsoncpp_LIBRARY} ${Protobuf_LIBRARIES} ${ZLIB_LIBRARIES}
+               "/opt/onnxruntime-linux-x64-1.12.1/lib/libonnxruntime.so")
 set(darts_src ${PROTO_SRCS})
 
 # build darts c libray

@@ -26,7 +26,7 @@ proto_dep = dependency('protobuf', version : '>=3.17.3',
 
 fs=import('fs')
 
-onnx_dir='/home/enxu/onnxruntime-linux-x64-1.12.1'
+onnx_dir='/opt/onnxruntime-linux-x64-1.12.1'
 onnxrt_dep = declare_dependency(
     link_args : [f'-L@onnx_dir@/lib -lonnxruntime' ],
     include_directories : [f'@onnx_dir@/include'],
