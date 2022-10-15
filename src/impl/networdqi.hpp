@@ -37,10 +37,10 @@ class OnnxPersenter : public CellPersenter {
      * @return int
      */
     int initalize(const std::map<std::string, std::string>& param) {
-        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "test");
+        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "darts");
         Ort::SessionOptions session_options;
-        session_options.SetIntraOpNumThreads(1);
-
+        session_options.DisableMemPattern();
+        session_options.DisableCpuMemArena();
         session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 
         Ort::Session session(env, model_path, session_options);
