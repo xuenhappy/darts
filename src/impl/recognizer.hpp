@@ -88,6 +88,15 @@ const char* DictWordRecongnizer::PB_FILE_KEY = "pbfile.path";
 // add this pulg
 REGISTER_Recognizer(DictWordRecongnizer);
 
+/**
+ * @brief 时间日期识别
+ *
+ */
+class DateRecongnizer : public CellRecognizer {
+   public:
+    void addSomeCells(AtomList* dstSrc, SegPath* cmap) const {}
+};
+
 }  // namespace darts
 
 #endif  // SRC_IMPL_RECOGNIZER_HPP_

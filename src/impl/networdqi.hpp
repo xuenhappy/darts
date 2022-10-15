@@ -28,27 +28,24 @@ class OnnxPersenter : public CellPersenter {
    private:
     static const char* PMODEL_PATH_KEY;
     static const char* QMODEL_PATH_KEY;
+    Ort::Session* pmodel_session;
+    Ort::Session* qmodel_session;
 
-   public:
-    /**
-     * @brief init this
-     *
-     * @param param
-     * @return int
-     */
-    int initalize(const std::map<std::string, std::string>& param) {
+    Ort::Session* loadmodel(const char* model_path) {
         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "darts");
         Ort::SessionOptions session_options;
         session_options.DisableMemPattern();
         session_options.DisableCpuMemArena();
         session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+        return new Ort::Session(env, model_path, session_options);
+    }
 
-        Ort::Session session(env, model_path, session_options);
+    float* runEmbModel() {
         // print model input layer (node names, types, shape etc.)
         Ort::AllocatorWithDefaultOptions allocator;
 
         // print number of model input nodes
-        size_t num_input_nodes                     = session.GetInputCount();
+        size_t num_input_nodes                     = pmodel_session->GetInputCount();
         std::vector<const char*> input_node_names  = {"input", "input_mask"};
         std::vector<const char*> output_node_names = {"output", "output_mask"};
 
@@ -78,8 +75,8 @@ class OnnxPersenter : public CellPersenter {
         ort_inputs.push_back(std::move(input_tensor));
         ort_inputs.push_back(std::move(input_mask_tensor));
         // score model & input tensor, get back output tensor
-        auto output_tensors = session.Run(Ort::RunOptions{nullptr}, input_node_names.data(), ort_inputs.data(),
-                                          ort_inputs.size(), output_node_names.data(), 2);
+        auto output_tensors = pmodel_session->Run(Ort::RunOptions{nullptr}, input_node_names.data(), ort_inputs.data(),
+                                                  ort_inputs.size(), output_node_names.data(), 2);
 
         // Get pointer to output tensor float values
         float* floatarr      = output_tensors[0].GetTensorMutableData<float>();
@@ -87,9 +84,16 @@ class OnnxPersenter : public CellPersenter {
 
         printf("Done!\n");
         return 0;
-
-        return EXIT_SUCCESS;
     }
+
+   public:
+    /**
+     * @brief init this
+     *
+     * @param param
+     * @return int
+     */
+    int initalize(const std::map<std::string, std::string>& param) { return EXIT_SUCCESS; }
     /**
      * @brief set all word embeding
      *
@@ -105,7 +109,17 @@ class OnnxPersenter : public CellPersenter {
      * @return double must >=0
      */
     double ranging(const Word* pre, const Word* next) const { return 0.0; }
-    ~OnnxPersenter() {}
+
+    ~OnnxPersenter() {
+        if (this->pmodel_session) {
+            delete this->pmodel_session;
+            this->pmodel_session = NULL;
+        }
+        if (this->qmodel_session) {
+            delete this->qmodel_session;
+            this->qmodel_session = NULL;
+        }
+    }
 };
 
 const char* OnnxPersenter::PMODEL_PATH_KEY = "pmodel.path";

@@ -10,6 +10,8 @@
  * -----
  * Copyright 2021 - 2022 Your Company, Moka
  */
+#ifndef __BPE_MODEL__H__
+#define __BPE_MODEL__H__
 
 #include <functional>
 #include <string>
@@ -35,3 +37,5 @@ class WordPice {
  */
 void bpe_train(const char* text_corpus_path, const int mini_freq, const int max_words_num, const float topk_percent,
                const float min_pmi, const float min_lw) {}
+
+#endif  //!__BPE_MODEL__H__
