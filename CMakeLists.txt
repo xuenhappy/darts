@@ -8,7 +8,7 @@ project(
 set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-fPIC -c -O2)
 
-set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".so")
 if(MSVC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
 endif()

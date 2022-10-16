@@ -17,6 +17,7 @@
 #include <vector>
 #include "../core/darts.hpp"
 #include "../core/segment.hpp"
+#include "./bpe_model.hpp"
 
 namespace darts {
 
@@ -30,6 +31,7 @@ class OnnxPersenter : public CellPersenter {
     static const char* QMODEL_PATH_KEY;
     Ort::Session* pmodel_session;
     Ort::Session* qmodel_session;
+    WordPice* wordpiece;
 
     Ort::Session* loadmodel(const char* model_path) {
         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "darts");

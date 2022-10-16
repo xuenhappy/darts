@@ -15,14 +15,23 @@
 
 #include <functional>
 #include <string>
+#include "../core/darts.hpp"
 
 class WordPice {
    public:
     /**
-     * @brief 对给定的单词进行bpe分解
+     * @brief 对给定的字符串句子进行分解
      *
      */
-    void encode(std::string, std::function<void(std::string)> hit) {}
+    void encode(const darts::AtomList& input, std::function<void(int code, int atom_postion)> hit) const {}
+
+    /**
+     * @brief 输出原始的code对应的字符串
+     *
+     * @param code
+     * @return const char32_t*
+     */
+    const char32_t* decode(int code) const;
 };
 
 /**
