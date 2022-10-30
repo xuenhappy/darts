@@ -1,5 +1,6 @@
 from .darts.devel import *
 from .cdarts import *
+from .darts import wtype
 
 
 def charSplit(unicode_strs):
@@ -13,12 +14,12 @@ def charSplit(unicode_strs):
     for ch in unicode_strs:
         ctype = wordType(ch)
         if ctype != buf_type:
-            if (ctype == '<EMPTY>' and buf_type == '<POS>'):
-                buf_type = '<POS>'
+            if (ctype == wtype.EMPTY and buf_type == wtype.POS):
+                buf_type = wtype.POS
                 chr_buffer.append(ch)
                 continue
-            if (buf_type == '<EMPTY>' and ctype == '<POS>'):
-                buf_type = '<POS>'
+            if (buf_type == wtype.EMPTY and ctype == wtype.POS):
+                buf_type = wtype.POS
                 chr_buffer.append(ch)
                 continue
 
@@ -28,7 +29,7 @@ def charSplit(unicode_strs):
 
         buf_type = ctype
 
-        if buf_type == "<CJK>":
+        if buf_type == wtype.CJK:
             yield ch, buf_type
             continue
         chr_buffer.append(ch)

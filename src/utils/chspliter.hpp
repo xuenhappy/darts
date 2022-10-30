@@ -98,7 +98,7 @@ std::string charType(uint32_t code) {
         return "NUM";
     }
     if (65313 <= code && code <= 65338) {
-        return "<ENG>";
+        return "ENG";
     }
     if (0x4e00 <= code && code <= 0x9fa5) {
         return "CJK";
