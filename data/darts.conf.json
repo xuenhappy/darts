@@ -3,6 +3,14 @@
         "inner.dict": {
             "type": "DictWordRecongnizer",
             "pbfile.path": "data/model-dict/mini_dict.pb.gz"
+        },
+        "hmm.dict": {
+            "type": "HmmRecongnizer",
+            "pbfile.path": "data/model-dict/mini_dict.pb.gz"
+        },
+        "date.dict": {
+            "type": "HmmRecongnizer",
+            "pbfile.path": "data/model-dict/mini_dict.pb.gz"
         }
     },
     "persenters": {
