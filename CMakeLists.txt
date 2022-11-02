@@ -8,7 +8,7 @@ project(
 set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-fPIC -c -O2)
 
-set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".so")
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".so" ".dylib")
 if(MSVC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
 endif()
@@ -118,9 +118,16 @@ set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/dist)
 include_directories(
   src ${ZLIB_INCLUDE_DIRS} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS}
   "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}"
-  "/opt/onnxruntime-linux-x64-1.12.1/include")
+  "/opt/onnxruntime/include")
+
+IF (CMAKE_SYSTEM_NAME MATCHES "Linux")
+	set(SO_SUFFIX ".so")
+ELSEIF (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+	set(SO_SUFFIX ".dylib")
+endif()
+
 set(darts_libs ${Jsoncpp_LIBRARY} ${Protobuf_LIBRARIES} ${ZLIB_LIBRARIES}
-               "/opt/onnxruntime-linux-x64-1.12.1/lib/libonnxruntime.so")
+               "/opt/onnxruntime/lib/libonnxruntime${SO_SUFFIX}")
 set(darts_src ${PROTO_SRCS})
 
 # build darts c libray
