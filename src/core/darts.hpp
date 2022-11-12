@@ -216,6 +216,9 @@ class AtomList {
         output << "]";
         return output;
     }
+    // support the for each
+    std::vector<std::shared_ptr<Atom>>::const_iterator begin() const { return data.begin(); }
+    std::vector<std::shared_ptr<Atom>>::const_iterator end() const { return data.end(); }
 };
 
 class Word {
