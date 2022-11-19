@@ -241,7 +241,7 @@ class Trie {
      */
     int writePb(const std::string& path) const {
         zipfile::ZipFileWriter zipf(path);
-        std::ostream* zstream = zip.Add_File("dregex.pb");
+        std::ostream* zstream = zipf.Add_File("dregex.pb");
         if (!zstream) {
             std::cerr << "ERROE: write trie file failed:" << path << std::endl;
             return EXIT_FAILURE;
