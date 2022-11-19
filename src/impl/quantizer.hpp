@@ -24,7 +24,7 @@
 #include "../utils/cedar.h"
 #include "../utils/file_utils.hpp"
 #include "../utils/str_utils.hpp"
-#include "../utils/zstr.hpp"
+#include "../utils/zipfile.hpp"
 
 namespace darts {
 class MinCoverPersenter : public CellPersenter {
@@ -155,19 +155,21 @@ class BigramPersenter : public CellPersenter {
      * @return int
      */
     int readTable(const std::string& ifile) {
-        std::ifstream f_in(ifile, std::ios::in | std::ios::binary);
-        if (!f_in.is_open()) {
+        zipfile::ZipFileReader zfile(ifile);
+        std::istream* zipIn = zfile.Get_File("table.pb");
+        if (!zipIn) {
             std::cerr << "ERROR: load table file failed:" << ifile << std::endl;
             return EXIT_FAILURE;
         }
+
         darts::BigramDat dat;
-        zstr::istream zipIn(f_in, 1024 * 1024 * 10);
-        if (!dat.ParseFromIstream(&zipIn)) {
+        if (!dat.ParseFromIstream(zipIn)) {
             std::cerr << "ERROR: Failed to read table file:" << ifile << std::endl;
-            f_in.close();
+            delete zipIn;
             return EXIT_FAILURE;
         }
-        f_in.close();
+        delete zipIn;
+
         this->avg_single_freq = dat.avg_single_freq();
         this->avg_union_freq  = dat.avg_union_freq();
         this->max_single_freq = dat.max_single_freq();
@@ -208,14 +210,15 @@ class BigramPersenter : public CellPersenter {
             table->set_y(kv.first.j);
             table->set_freq(kv.second.count);
         }
-        zstr::ostream zipOut(f_out, 1024 * 1024 * 20, Z_BEST_COMPRESSION);
-        if (!dat.SerializePartialToOstream(&zipOut)) {
+
+        zipfile::ZipFileWriter zfile(outfile);
+        std::ostream* zipOut = zfile.Add_File("table.pb");
+        if (!dat.SerializePartialToOstream(zipOut)) {
             std::cerr << "ERROR: Failed to write table file: " << outfile << std::endl;
-            f_out.close();
+            delete zipOut;
             return EXIT_FAILURE;
         }
-        zipOut.flush();
-        f_out.close();
+        delete zipOut;
         return EXIT_SUCCESS;
     }
 

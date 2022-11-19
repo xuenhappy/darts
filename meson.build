@@ -17,6 +17,26 @@ if meson.get_compiler('c').get_id() == 'clang'
 endif
 
 message('check the deps libray.....')
+# cc = meson.get_compiler('cpp')
+# zipios_dep=dependency('zipios',required:false,static: enable_static,version:'2.3.2')
+# if not zipios_dep.found()
+#     zipios_dep = cc.find_library(
+#         'zipios', required: true, header_prefix:'zipios',
+#         has_headers: ['zipios/zipfile.hpp'],
+#         static: enable_static
+#     )
+# endif
+
+onnxrt_dep=dependency('onnxruntime',version:'1.12.1',required:false)
+if not onnxrt_dep.found()
+    onnx_dir='/opt/onnxruntime'
+    onnxrt_dep = declare_dependency(
+        link_args : [f'-L@onnx_dir@/lib -lonnxruntime' ],
+        include_directories : [f'@onnx_dir@/include'],
+        version:'1.12.1'
+    )
+endif
+
 zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: enable_static)
 jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: enable_static)
 proto_dep = dependency('protobuf', version : '>=3.17.3',
@@ -24,17 +44,7 @@ proto_dep = dependency('protobuf', version : '>=3.17.3',
     static: enable_static,modules: ['protobuf::libprotobuf-lite']
 )
 
-fs=import('fs')
-
-onnx_dir='/opt/onnxruntime'
-onnxrt_dep = declare_dependency(
-    link_args : [f'-L@onnx_dir@/lib -lonnxruntime' ],
-    include_directories : [f'@onnx_dir@/include'],
-    version:'1.12.1'
-)
-
 base_deps=[zlib_dep,jsoncpp_dep,jsoncpp_dep,proto_dep,onnxrt_dep]
-
 message('set gen the proto source.....')
 protoc = find_program('protoc', required : false)
 if not protoc.found()
@@ -44,7 +54,7 @@ endif
 
 proto_sources=[]
 proto_headers=[]
-
+fs=import('fs')
 foreach pfile : files('src/utils/darts.proto') 
     proto_path=fs.parent(pfile)
     base_name=fs.stem(pfile)

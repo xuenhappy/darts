@@ -12,9 +12,7 @@
 #ifndef SRC_UTILS_DREGEX_HPP_
 #define SRC_UTILS_DREGEX_HPP_
 
-
 #include <darts.pb.h>
-
 #include <fstream>
 #include <map>
 #include <queue>
@@ -22,18 +20,16 @@
 #include <string>
 #include <utility>
 #include <vector>
-
 #include "str_utils.hpp"
-#include "zstr.hpp"
+#include "zipfile.hpp"
 
 namespace darts {
-
 
 class Trie {
    public:
     std::vector<std::string> Labels;
     std::vector<int64_t> Check, Base, Fail, L;
-    std::vector<std::set<int64_t> *> V, OutPut;
+    std::vector<std::set<int64_t>*> V, OutPut;
     size_t MaxLen;
     std::map<std::string, int> CodeMap;
 
@@ -64,13 +60,13 @@ class Trie {
     int64_t getstate(int64_t currentState, int64_t character) const {
         auto newCurrentState = this->transitionWithRoot(currentState, character);
         while (newCurrentState == -1) {
-            currentState = this->Fail[currentState];
+            currentState    = this->Fail[currentState];
             newCurrentState = this->transitionWithRoot(currentState, character);
         }
         return newCurrentState;
     }
 
-    int writePb(std::ostream &out) const {
+    int writePb(std::ostream& out) const {
         darts::DRegexDat dat;
         dat.set_maxlen(this->MaxLen);
         dat.mutable_labels()->Add(this->Labels.begin(), this->Labels.end());
@@ -79,7 +75,6 @@ class Trie {
         dat.mutable_fail()->Add(this->Fail.begin(), this->Fail.end());
         dat.mutable_l()->Add(this->L.begin(), this->L.end());
 
-
         for (auto s : this->V) {
             if (!s) {
                 dat.add_v();
@@ -87,7 +82,6 @@ class Trie {
             }
             dat.add_v()->mutable_item()->Add(s->begin(), s->end());
         }
-
 
         for (auto s : this->OutPut) {
             if (!s) {
@@ -100,7 +94,6 @@ class Trie {
         auto cmap = dat.mutable_codemap();
         cmap->insert(this->CodeMap.begin(), this->CodeMap.end());
 
-
         if (!dat.SerializePartialToOstream(&out)) {
             std::cerr << "ERROR: Failed to write Trie" << std::endl;
             return EXIT_FAILURE;
@@ -108,14 +101,14 @@ class Trie {
         return EXIT_SUCCESS;
     }
 
-    int loadPb(std::istream &in) {
+    int loadPb(std::istream& in) {
         darts::DRegexDat dat;
         if (!dat.ParseFromIstream(&in)) {
             std::cerr << "ERROR: Failed to read Trie" << std::endl;
             return EXIT_FAILURE;
         }
         this->MaxLen = dat.maxlen();
-        auto labels = dat.labels();
+        auto labels  = dat.labels();
         this->Labels.insert(this->Labels.end(), labels.begin(), labels.end());
         auto check = dat.check();
         this->Check.insert(this->Check.end(), check.begin(), check.end());
@@ -145,14 +138,13 @@ class Trie {
                 this->OutPut[i] = NULL;
                 continue;
             }
-            auto vlist = dat.output(i).item();
+            auto vlist      = dat.output(i).item();
             this->OutPut[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
         }
         auto cmap = dat.codemap();
         this->CodeMap.insert(cmap.begin(), cmap.end());
         return EXIT_SUCCESS;
     }
-
 
    public:
     ~Trie() {
@@ -176,7 +168,7 @@ class Trie {
      * @param label_idx
      * @return const std::string&
      */
-    const char *getLabel(size_t label_idx) const {
+    const char* getLabel(size_t label_idx) const {
         if (label_idx < this->Labels.size()) {
             return this->Labels[label_idx].c_str();
         }
@@ -188,7 +180,7 @@ class Trie {
      * @param word
      * @return int64_t
      */
-    int64_t getCode(const std::string &word) const {
+    int64_t getCode(const std::string& word) const {
         auto it = this->CodeMap.find(word);
         if (it == this->CodeMap.end()) {
             return this->CodeMap.size() + 1;
@@ -201,7 +193,7 @@ class Trie {
      * @param text src word list
      * @param hit match call back function
      */
-    void parse(StringIter &text, std::function<bool(size_t, size_t, const std::set<int64_t> *)> hit) const {
+    void parse(StringIter& text, std::function<bool(size_t, size_t, const std::set<int64_t>*)> hit) const {
         if (this->MaxLen < 1 || this->V.empty()) {
             std::cerr << "ERROR: parse on empty trie!" << std::endl;
             return;
@@ -209,7 +201,7 @@ class Trie {
         auto currentState = 0, indexBufferPos = 0;
         std::vector<int64_t> indexBufer;
         indexBufer.assign(this->MaxLen, 0);
-        text.iter([&](const std::string &seq, size_t position) -> bool {
+        text.iter([&](const std::string& seq, size_t position) -> bool {
             indexBufer[indexBufferPos % this->MaxLen] = position;
             indexBufferPos++;
             currentState = this->getstate(currentState, this->getCode(seq));
@@ -226,21 +218,20 @@ class Trie {
         });
     }
 
-
     /**
      * @brief load data from a pb file
      *
      * @param path
      */
-    int loadPb(const std::string &path) {
-        std::ifstream f_in(path, std::ios::in | std::ios::binary);
-        if (!f_in.is_open()) {
-            std::cerr << "ERROR: load trie file failed:" << path << std::endl;
+    int loadPb(const std::string& path) {
+        zipfile::ZipFileReader zipf(path);
+        std::istream* zstream = zipf.Get_File("dregex.pb");
+        if (!zstream) {
+            std::cerr << "ERROE: read trie file failed:" << path << std::endl;
             return EXIT_FAILURE;
         }
-        zstr::istream zstream(f_in, 1024 * 1024 * 10);
-        auto ret = this->loadPb(zstream);
-        f_in.close();
+        auto ret = this->loadPb(*zstream);
+        delete zstream;
         return ret;
     }
     /**
@@ -248,24 +239,18 @@ class Trie {
      *
      * @param path
      */
-    int writePb(const std::string &path) const {
-        if (this->Base.empty() || this->V.empty()) {
-            std::cerr << "WARN: this trie is empty,won't write anything!" << std::endl;
-            return EXIT_FAILURE;
-        }
-        std::fstream f_out(path, std::ios::out | std::ios::trunc | std::ios::binary);
-        if (!f_out.is_open()) {
+    int writePb(const std::string& path) const {
+        zipfile::ZipFileWriter zipf(path);
+        std::ostream* zstream = zip.Add_File("dregex.pb");
+        if (!zstream) {
             std::cerr << "ERROE: write trie file failed:" << path << std::endl;
             return EXIT_FAILURE;
         }
-        zstr::ostream zipOut(f_out, 1024 * 1024 * 20, Z_BEST_COMPRESSION);
-        auto ret = this->writePb(zipOut);
-        zipOut.flush();
-        f_out.close();
+        auto ret = this->writePb(*zstream);
+        delete zstream;
         return ret;
     }
 };
-
 
 }  // namespace darts
 #endif  // SRC_UTILS_DREGEX_HPP_
