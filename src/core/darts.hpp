@@ -32,6 +32,7 @@ class Atom {
     uint32_t st;        // start of this atom in str
     uint32_t et;        // end of this atom in str
     std::set<std::string>* labels;
+    bool masked = false;  // this is for training
 
     Atom(const char* image, uint32_t start, uint32_t end) {
         this->image  = image;

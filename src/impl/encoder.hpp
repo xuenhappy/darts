@@ -14,20 +14,36 @@
 #define __BPE_MODEL__H__
 
 #include <functional>
+#include <list>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include "../core/darts.hpp"
 bool is_digits(const std::string& str) {
     return std::all_of(str.begin(), str.end(), ::isdigit);  // C++11
 }
+namespace codemap {
+// const code
+static const int pad_code  = 0;
+static const int unk_code  = 1;
+static const int cls_code  = 2;
+static const int sep_code  = 3;
+static const int mask_code = 4;
+
+// const code char
+static const std::string unk_char  = "[UNK]";
+static const std::string cls_char  = "[CLS]";
+static const std::string sep_char  = "[SEP]";
+static const std::string mask_char = "[MASK]";
+static const std::string pad_char  = "[PAD]";
+}  // namespace codemap
+
 class WordPice {
    private:
     std::map<std::string, int> codes;
     std::vector<std::string> chars_list;
-    int unk_code;
-    int cls_code;
-    int sep_code;
+    // code it
 
    private:
     void numToken(const std::string& num, int piceNum, std::vector<std::string>& ret) {
@@ -57,23 +73,76 @@ class WordPice {
 
    public:
     /**
+     * @brief Construct a new Word Pice object
+     *
+     * @param dict_path 字符映射表
+     * @param engdict_dir 英文单词切分使用的数据
+     */
+    WordPice(const std::string& dict_path, const std::string& engdict_dir) {
+        std::string relpath = getResource(dict_path);
+        // load codes and chars_list
+        std::set<std::string> _list;
+        // load relpath data into _list
+        std::ifstream fin(relpath.c_str());
+        if (!fin.is_open()) {
+            std::cerr << "ERROR: open data " << relpath << " file failed " << std::endl;
+            return;
+        }
+        std::string line;
+        size_t s;
+        while (std::getline(fin, line)) {
+            darts::trim(line);
+            if (line.empty()) continue;
+            // split line use first item
+            s = line.find(' ');
+            if (s != std::string::npos) {
+                line = line.substr(0, s);
+            }
+            s = line.find('\t');
+            if (s != std::string::npos) {
+                line = line.substr(0, s);
+            }
+            if (line.empty()) continue;
+            _list.insert(line);
+        }
+        fin.close();
+        // init data
+        chars_list.reserve(_list.size() + 10);
+        chars_list.resize(5);
+        chars_list[codemap::pad_code]  = codemap::pad_char;
+        chars_list[codemap::unk_code]  = codemap::unk_char;
+        chars_list[codemap::cls_code]  = codemap::cls_char;
+        chars_list[codemap::sep_code]  = codemap::sep_char;
+        chars_list[codemap::mask_code] = codemap::mask_char;
+        chars_list.insert(chars_list.end(), _list.begin(), _list.end());
+        for (int i = 0; i < chars_list.size(); i++) {
+            codes[chars_list[i]] = i;
+        }
+    }
+    /**
      * @brief 对给定的字符串句子进行分解
      *
      */
-    void encode(const darts::AtomList& input, std::function<void(int code, int atom_postion)> hit) const {
+    void encode(const darts::AtomList& input, std::function<void(int code, int atom_postion)> hit,
+                bool skip_empty_token) const {
         std::vector<std::string> _cache;
-        hit(sep_code, -1);
+        hit(codemap::sep_code, -1);
         std::map<std::string, int>::const_iterator _it;
         int postion = -1;
         for (std::shared_ptr<darts::Atom> atom : input) {
             postion += 1;
+            if (skip_empty_token && atom->hasLabel("EMPTY")) continue;
+            if (atom->masked) {  // mask atom
+                hit(codemap::mask_code, postion);
+                continue;
+            }
             if (atom->hasLabel("ENG")) {
                 _cache.clear();
                 engToken(atom->image, _cache);
                 for (std::string w : _cache) {
                     _it = codes.find(w);
                     if (_it == codes.end()) {
-                        hit(unk_code, postion);
+                        hit(codemap::unk_code, postion);
                         continue;
                     }
                     hit(_it->second, postion);
@@ -86,7 +155,7 @@ class WordPice {
                 for (std::string w : _cache) {
                     _it = codes.find(w);
                     if (_it == codes.end()) {
-                        hit(unk_code, postion);
+                        hit(codemap::unk_code, postion);
                         continue;
                     }
                     hit(_it->second, postion);
@@ -95,12 +164,12 @@ class WordPice {
             }
             _it = codes.find(atom->image);
             if (_it == codes.end()) {
-                hit(unk_code, postion);
+                hit(codemap::unk_code, postion);
                 continue;
             }
             hit(_it->second, postion);
         }
-        hit(cls_code, -1);
+        hit(codemap::cls_code, -1);
     }
 
     /**
