@@ -55,20 +55,6 @@ class BigramDict {
     size_t avg_union_freq  = 0;
 
     /**
-     * @brief Get the Word Freq object
-     *
-     * @param word
-     * @return size_t
-     */
-    int getWordKey(const std::string& word) const {
-        auto widx = idx.exactMatchSearch<int>(word.c_str(), word.length());
-        if (widx == cedar::da<int>::CEDAR_NO_VALUE) {
-            return -1;
-        }
-        return widx;
-    }
-
-    /**
      * @brief Get the Single Nlog Prop object
      * 获取某个字独立出现的词频负对数
      * @param word
@@ -189,6 +175,20 @@ class BigramDict {
     }
 
    public:
+    /**
+     * @brief Get the Word Freq object
+     *
+     * @param word
+     * @return size_t
+     */
+    int getWordKey(const std::string& word) const {
+        auto widx = idx.exactMatchSearch<int>(word.c_str(), word.length());
+        if (widx == cedar::da<int>::CEDAR_NO_VALUE) {
+            return -1;
+        }
+        return widx;
+    }
+
     /**
      * @brief
      *

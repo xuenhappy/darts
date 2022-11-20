@@ -20,8 +20,20 @@
 #include <unordered_map>
 #include <vector>
 #include "../core/darts.hpp"
+#include "../utils/biggram.hpp"
 
 class EngWordTokenizer {
+   private:
+    darts::BigramDict dict;
+
+   public:
+    /**
+     * @brief load freq data
+     *
+     * @param ddir
+     * @return int
+     */
+    int loaddata(const std::string& ddir) { return dict.loadDict(ddir); }
     
 };
 
