@@ -17,11 +17,11 @@
 #include <math.h>
 #include <algorithm>
 #include <map>
+#include <vector>
 #include <string>
-#include <unordered_map>
-#include "cedar.h"
-#include "str_utils.hpp"
-#include "zipfile.hpp"
+#include "./cedar.h"
+#include "./str_utils.hpp"
+#include "./zipfile.hpp"
 
 namespace darts {
 
@@ -48,7 +48,7 @@ class BigramDict {
 
     cedar::da<int> idx;
     std::map<bigram_key, bigram_data> bigrams;
-    std::unordered_map<size_t, size_t> freqs;
+    std::map<size_t, size_t> freqs;
 
     size_t avg_single_freq = 0;
     size_t max_single_freq = 0;

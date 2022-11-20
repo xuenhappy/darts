@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
             auto files  = program2.get<std::vector<std::string>>("-f");
             auto outdir = program2.get<std::string>("-o");
             if (files.size() == 2) {
-                if (darts::BigramPersenter::buildDict(files[0], files[1], outdir)) {
+                if (darts::BigramDict::buildDict(files[0], files[1], outdir)) {
                     std::cout << "compile ngram files to dir " << outdir << std::endl;
                 }
             }
