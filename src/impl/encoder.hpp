@@ -34,7 +34,15 @@ class EngWordTokenizer {
      * @return int
      */
     int loaddata(const std::string& ddir) { return dict.loadDict(ddir); }
-    
+
+    void engToken(const std::string& eng, std::vector<std::string>& ret) const {
+        // token english str
+        if (eng.length() < 2 || eng.length() > 50) {  // too long or short codes
+            ret.push_back(eng);
+            return;
+        }
+        // load code
+    }
 };
 
 bool is_digits(const std::string& str) {
