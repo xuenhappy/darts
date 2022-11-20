@@ -91,7 +91,7 @@ void testDictWordRecongnizer() {
 
 void testBigramPersenterDictMake() {
     printf("----- test function %s-----------------\n", "testBigramPersenterDictMake");
-    darts::BigramPersenter::buildDict("SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt", "bigram");
+    darts::BigramDict::buildDict("SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt", "bigram");
 }
 
 void testJsonConfLoad() {
