@@ -17,21 +17,22 @@
 #include <stdint.h>
 
 #include <fstream>
+#include <unordered_map>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
 
-#include "file_utils.hpp"
-#include "str_utils.hpp"
-#include "utf8.hpp"
+#include "./file_utils.hpp"
+#include "./str_utils.hpp"
+#include "./utf8.hpp"
 
 /**
  * @brief  字符串规范化使用的工具
  *
  */
-static std::map<std::string, std::string> _WordMap;
+static std::unordered_map<std::string, std::string> _WordMap;
 /**
  * @brief add some special words map
  *
@@ -147,7 +148,7 @@ std::string normalizeStr(const std::string &str) {
     utf8_iter ITER;
     utf8_init(&ITER, str.c_str());
     std::string tmps;
-    std::map<std::string, std::string>::const_iterator it;
+    std::unordered_map<std::string, std::string>::const_iterator it;
     while (utf8_next(&ITER)) {
         tmps = utf8_getchar(&ITER);
         it = _WordMap.find(tmps);

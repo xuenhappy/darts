@@ -14,15 +14,15 @@
 #define SRC_UTILS_PINYIN_HPP_
 
 #include <fstream>
-#include <map>
+#include <unordered_map>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "file_utils.hpp"
-#include "str_utils.hpp"
-#include "utf8.hpp"
+#include "./file_utils.hpp"
+#include "./str_utils.hpp"
+#include "./utf8.hpp"
 /**
  * @brief 拼音数据
  *
@@ -34,7 +34,7 @@ typedef struct _pinyin {
     std::vector<std::string> piyins;
 } PinyinInfo;
 
-static std::map<char32_t, std::shared_ptr<PinyinInfo>> _WordPinyin;
+static std::unordered_map<char32_t, std::shared_ptr<PinyinInfo>> _WordPinyin;
 /**
  * @brief 加载拼音数据
  *

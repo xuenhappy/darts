@@ -590,12 +590,11 @@ bool ZipFileReader::Find_And_Read_Central_Header() {
     std::streamoff read_start         = max_comment_size + read_size_before_comment;
     if (read_start > end_position) read_start = end_position;
     istream.seekg(end_position - read_start);
-    char* buf = new char[static_cast<uint32_t>(read_start)];
     if (read_start <= 0) {
         std::cerr << "ZIP: Invalid read buffer size" << std::endl;
-        delete[] buf;
         return false;
     }
+    char* buf = new char[static_cast<uint32_t>(read_start)];
     istream.read(buf, read_start);
     int found = -1;
     for (uint32_t i = 0; i < read_start - 3; i++) {
