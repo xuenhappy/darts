@@ -46,7 +46,7 @@ class WordPice {
     // code it
 
    private:
-    void numToken(const std::string& num, int piceNum, std::vector<std::string>& ret) {
+    void numToken(const std::string& num, int piceNum, std::vector<std::string>& ret) const {
         // token num str
         if (num.length() < piceNum) {
             ret.push_back(num);
@@ -67,7 +67,7 @@ class WordPice {
         }
     }
 
-    void engToken(const std::string& eng, std::vector<std::string>& ret) {
+    void engToken(const std::string& eng, std::vector<std::string>& ret) const {
         // token english str
     }
 

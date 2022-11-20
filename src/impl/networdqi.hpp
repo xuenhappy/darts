@@ -17,7 +17,6 @@
 #include <vector>
 #include "../core/darts.hpp"
 #include "../core/segment.hpp"
-#include "./bpe_model.hpp"
 
 namespace darts {
 
