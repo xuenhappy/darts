@@ -16,9 +16,9 @@
 #include <cctype>
 #include <fstream>
 #include <functional>
-#include <map>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include "file_utils.hpp"
 #include "str_utils.hpp"
 #include "utf8.hpp"
@@ -27,7 +27,7 @@
  * @brief 字符串类型数据
  *
  */
-static std::map<uint32_t, std::string> _charType;
+static std::unordered_map<uint32_t, std::string> _charType;
 
 int loadCharMap() {
     std::string dat = getResource("data/chars.tmap");

@@ -15,11 +15,16 @@
 
 #include <functional>
 #include <list>
-#include <map>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "../core/darts.hpp"
+
+class EngWordTokenizer {
+    
+};
+
 bool is_digits(const std::string& str) {
     return std::all_of(str.begin(), str.end(), ::isdigit);  // C++11
 }
@@ -41,7 +46,7 @@ static const std::string pad_char  = "[PAD]";
 
 class WordPice {
    private:
-    std::map<std::string, int> codes;
+    std::unordered_map<std::string, int> codes;
     std::vector<std::string> chars_list;
     // code it
 
@@ -69,6 +74,10 @@ class WordPice {
 
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
         // token english str
+        if (eng.length() < 2 || eng.length() > 50) {  // too long or short codes
+            ret.push_back(eng);
+            return;
+        }
     }
 
    public:
@@ -127,7 +136,7 @@ class WordPice {
                 bool skip_empty_token) const {
         std::vector<std::string> _cache;
         hit(codemap::sep_code, -1);
-        std::map<std::string, int>::const_iterator _it;
+        std::unordered_map<std::string, int>::const_iterator _it;
         int postion = -1;
         for (std::shared_ptr<darts::Atom> atom : input) {
             postion += 1;

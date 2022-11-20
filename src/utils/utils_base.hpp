@@ -16,7 +16,7 @@
 #include "norm_chr.hpp"
 #include "pinyin.hpp"
 
-void initUtils() {
+int initUtils() {
     if (loadCharMap()) {
         exit(1);
     }
@@ -26,6 +26,7 @@ void initUtils() {
     if (initializeMap()) {
         exit(1);
     }
+    return 0;
 }
 
 #endif  // SRC_UTILS_UTILS_BASE_HPP_
