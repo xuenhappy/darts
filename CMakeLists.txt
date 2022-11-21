@@ -93,6 +93,7 @@ endfunction()
 find_package(Jsoncpp REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(fmt REQUIRED)
 
 file(GLOB ProtoFiles "${CMAKE_CURRENT_LIST_DIR}/src/utils/*.proto")
 set(proto_gen_path proto_gen)
@@ -103,10 +104,12 @@ message("-----------------include----path----------------")
 message("proto src file: ${ProtoFiles}")
 message("gen proto head file: ${PROTO_HDRS}")
 message("jsoncpp path: ${Jsoncpp_INCLUDE_DIR}")
+message("fmt path: ${FMT_INCLUDE_DIR}")
 message("--------------- lib--------path-----------------------")
 message("${Jsoncpp_LIBRARY}")
 message("${Protobuf_LIBRARIES}")
 message("${ZLIB_LIBRARIES}")
+message("${FMT_LIBRARY}")
 
 # set bin ouput dir
 
@@ -116,18 +119,23 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/dist)
 
 include_directories(
-  src ${ZLIB_INCLUDE_DIRS} ${Jsoncpp_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS}
+  src
+  ${ZLIB_INCLUDE_DIRS}
+  ${Jsoncpp_INCLUDE_DIR}
+  ${PROTOBUF_INCLUDE_DIRS}
+  ${FMT_INCLUDE_DIR}
   "${CMAKE_CURRENT_BINARY_DIR}/${proto_gen_path}"
   "/opt/onnxruntime/include")
 
-IF (CMAKE_SYSTEM_NAME MATCHES "Linux")
-	set(SO_SUFFIX ".so")
-ELSEIF (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-	set(SO_SUFFIX ".dylib")
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+  set(SO_SUFFIX ".so")
+elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  set(SO_SUFFIX ".dylib")
 endif()
 
-set(darts_libs ${Jsoncpp_LIBRARY} ${Protobuf_LIBRARIES} ${ZLIB_LIBRARIES}
-               "/opt/onnxruntime/lib/libonnxruntime${SO_SUFFIX}")
+set(darts_libs
+    ${Jsoncpp_LIBRARY} ${Protobuf_LIBRARIES} ${ZLIB_LIBRARIES} ${FMT_LIBRARY}
+    "/opt/onnxruntime/lib/libonnxruntime${SO_SUFFIX}" "-ldl")
 set(darts_src ${PROTO_SRCS})
 
 # build darts c libray

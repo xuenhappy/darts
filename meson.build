@@ -17,15 +17,15 @@ if meson.get_compiler('c').get_id() == 'clang'
 endif
 
 message('check the deps libray.....')
-# cc = meson.get_compiler('cpp')
-# zipios_dep=dependency('zipios',required:false,static: enable_static,version:'2.3.2')
-# if not zipios_dep.found()
-#     zipios_dep = cc.find_library(
-#         'zipios', required: true, header_prefix:'zipios',
-#         has_headers: ['zipios/zipfile.hpp'],
-#         static: enable_static
-#     )
-# endif
+cc = meson.get_compiler('cpp')
+fmt_dep=dependency('fmt',required:false,static: enable_static,version:'>=9.1.0')
+if not fmt_dep.found()
+    fmt_dep = cc.find_library(
+        'fmt', required: true,
+        has_headers: ['fmt/core.h'],
+        static: enable_static
+    )
+endif
 
 onnxrt_dep=dependency('onnxruntime',version:'1.12.1',required:false)
 if not onnxrt_dep.found()
@@ -44,7 +44,7 @@ proto_dep = dependency('protobuf', version : '>=3.17.3',
     static: enable_static,modules: ['protobuf::libprotobuf-lite']
 )
 
-base_deps=[zlib_dep,jsoncpp_dep,jsoncpp_dep,proto_dep,onnxrt_dep]
+base_deps=[zlib_dep,jsoncpp_dep,jsoncpp_dep,proto_dep,onnxrt_dep,fmt_dep]
 message('set gen the proto source.....')
 protoc = find_program('protoc', required : false)
 if not protoc.found()
