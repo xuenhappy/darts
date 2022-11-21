@@ -10,11 +10,13 @@
  * -----
  * Copyright 2021 - 2022 Your Company, Moka
  */
-#ifndef __BPE_MODEL__H__
-#define __BPE_MODEL__H__
+#ifndef SRC_IMPL_ENCODER_HPP_
+#define SRC_IMPL_ENCODER_HPP_
 
+#include <fmt/core.h>
 #include <functional>
 #include <list>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -38,12 +40,10 @@ class EngWordTokenizer {
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
         // token english str
         if (eng.length() < 2 || eng.length() > 50) {  // too long or short codes
-            ret.push_back(eng);
+            ret.push_back(fmt::format("▁{}", eng));
             return;
         }
         // load code
-        
-
     }
 };
 
@@ -59,11 +59,11 @@ static const int sep_code  = 3;
 static const int mask_code = 4;
 
 // const code char
-static const std::string unk_char  = "[UNK]";
-static const std::string cls_char  = "[CLS]";
-static const std::string sep_char  = "[SEP]";
-static const std::string mask_char = "[MASK]";
-static const std::string pad_char  = "[PAD]";
+static const char* unk_char  = "[UNK]";
+static const char* cls_char  = "[CLS]";
+static const char* sep_char  = "[SEP]";
+static const char* mask_char = "[MASK]";
+static const char* pad_char  = "[PAD]";
 }  // namespace codemap
 
 class WordPice {
@@ -217,4 +217,4 @@ class WordPice {
     }
 };
 
-#endif  //!__BPE_MODEL__H__
+#endif  // SRC_IMPL_ENCODER_HPP_

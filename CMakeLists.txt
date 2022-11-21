@@ -7,7 +7,7 @@ project(
 # set complier
 set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-fPIC -c -O2)
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".so" ".dylib")
 if(MSVC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
@@ -119,7 +119,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/dist)
 
 include_directories(
-  src
+  "${CMAKE_CURRENT_SOURCE_DIR}/src"
   ${ZLIB_INCLUDE_DIRS}
   ${Jsoncpp_INCLUDE_DIR}
   ${PROTOBUF_INCLUDE_DIRS}
