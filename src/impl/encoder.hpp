@@ -17,39 +17,40 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include <queue>
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include "../core/darts.hpp"
 #include "../utils/biggram.hpp"
 
-class EngWordTokenizer {
-   private:
-    darts::BigramDict dict;
+struct _SymbolPair {
+    int left;     // left index of this pair
+    int right;    // right index of this pair
+    float score;  // score of this pair. large is better.
+    size_t size;  // length of this piece
+};
 
+class _SymbolPairComparator {
    public:
-    /**
-     * @brief load freq data
-     *
-     * @param ddir
-     * @return int
-     */
-    int loaddata(const std::string& ddir) { return dict.loadDict(ddir); }
-
-    void engToken(const std::string& eng, std::vector<std::string>& ret) const {
-        // token english str
-        if (eng.length() < 2 || eng.length() > 50) {  // too long or short codes
-            ret.push_back(fmt::format("▁{}", eng));
-            return;
-        }
-        // load code
+    const bool operator()(_SymbolPair* h1, _SymbolPair* h2) {
+        return (h1->score < h2->score || (h1->score == h2->score && h1->left > h2->left));
     }
+};
+
+struct _Symbol {
+    int prev;     // prev index of this symbol. -1 for BOS.
+    int next;     // next index of tihs symbol. -1 for EOS.
+    bool freeze;  // this symbol is never be merged.
+    std::string piece;
 };
 
 bool is_digits(const std::string& str) {
     return std::all_of(str.begin(), str.end(), ::isdigit);  // C++11
 }
+
 namespace codemap {
 // const code
 static const int pad_code  = 0;
@@ -68,6 +69,7 @@ static const char* pad_char  = "[PAD]";
 
 class WordPice {
    private:
+    darts::BigramDict english_token_dict;
     std::unordered_map<std::string, int> codes;
     std::vector<std::string> chars_list;
     // code it
@@ -97,9 +99,137 @@ class WordPice {
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
         // token english str
         if (eng.length() < 2 || eng.length() > 50) {  // too long or short codes
-            ret.push_back(eng);
+            ret.push_back(fmt::format("▁{}", eng));
             return;
         }
+        // load code
+        using Agenda = std::priority_queue<_SymbolPair*, std::vector<_SymbolPair*>, _SymbolPairComparator>;
+        Agenda agenda;
+        std::vector<_Symbol> symbols;
+        symbols.reserve(normalized.size());
+
+        // Reverse merge rules.
+        // key: merged symbol, value: pair of original symbols.
+        std::unordered_map<std::string, std::pair<std::string, std::string>> rev_merge;
+
+        // Pre-allocates SymbolPair for efficiency.
+        constexpr size_t kPreallocateSymbolPairSize = 256;
+        model::FreeList<_SymbolPair> symbol_pair_allocator(kPreallocateSymbolPairSize);
+
+        // Lookup new symbol pair at [left, right] and inserts it to agenda.
+        auto MaybeAddNewSymbolPair = [this, &symbol_pair_allocator, &symbols, &agenda, &rev_merge](int left,
+                                                                                                   int right) {
+            if (left == -1 || right == -1 || symbols[left].freeze || symbols[right].freeze) return;
+            const std::string piece(symbols[left].piece.data(),
+                                    symbols[left].piece.size() + symbols[right].piece.size());
+            const auto it = pieces_.find(piece);
+            if (it == pieces_.end()) {
+                return;
+            }
+            auto* h  = symbol_pair_allocator.Allocate();
+            h->left  = left;
+            h->right = right;
+            h->score = GetScore(it->second);
+            h->size  = piece.size();
+            agenda.push(h);
+
+            // Makes `rev_merge` for resegmentation.
+            if (IsUnusedInlined(it->second)) {
+                rev_merge[piece] = std::make_pair(symbols[left].piece, symbols[right].piece);
+            }
+        };
+
+        // Splits the input into character sequence
+        int index = 0;
+        while (!normalized.empty()) {
+            _Symbol s;
+            const int mblen = matcher_->PrefixMatch(normalized, &s.freeze);
+            s.piece         = std::string(normalized.data(), mblen);
+            s.prev          = index == 0 ? -1 : index - 1;
+            normalized.remove_prefix(mblen);
+            s.next = normalized.empty() ? -1 : index + 1;
+            ++index;
+            symbols.emplace_back(s);
+        }
+
+        if (symbols.empty()) {
+            return {};
+        }
+
+        // Lookup all bigrams.
+        for (size_t i = 1; i < symbols.size(); ++i) {
+            MaybeAddNewSymbolPair(i - 1, i);
+        }
+
+        // BPE-dropout: https://arxiv.org/pdf/1910.13267.pdf
+        std::mt19937* rand_gen = nullptr;
+        auto skip_merge        = [&]() {
+            if (alpha <= 0.0) return false;
+            if (alpha >= 1.0) return true;
+            if (rand_gen == nullptr) rand_gen = random::GetRandomGenerator();
+            std::uniform_real_distribution<> gen(0.0, 1.0);
+            return gen(*rand_gen) < alpha;
+        };
+
+        // Main loop.
+        while (!agenda.empty()) {
+            _SymbolPair* top = agenda.top();
+            agenda.pop();
+
+            // `top` is no longer available.
+            if (symbols[top->left].piece.empty() || symbols[top->right].piece.empty() ||
+                symbols[top->left].piece.size() + symbols[top->right].piece.size() != top->size) {
+                continue;
+            }
+
+            // Note that orignal BPE-dropout paper assumes that all merged symbols are
+            // pre computed, but here we randomly skip merge opration inside this loop.
+            // This implemenation is theoretically equivalent to the original one.
+            if (skip_merge()) continue;
+
+            // Replaces symbols with `top` rule.
+            symbols[top->left].piece = std::string(symbols[top->left].piece.data(),
+                                                   symbols[top->left].piece.size() + symbols[top->right].piece.size());
+
+            // Updates prev/next pointers.
+            symbols[top->left].next = symbols[top->right].next;
+            if (symbols[top->right].next >= 0) {
+                symbols[symbols[top->right].next].prev = top->left;
+            }
+            symbols[top->right].piece = std::string("");
+
+            // Adds new symbol pairs which are newly added after symbol replacement.
+            MaybeAddNewSymbolPair(symbols[top->left].prev, top->left);
+            MaybeAddNewSymbolPair(top->left, symbols[top->left].next);
+        }
+
+        std::function<void(std::string, EncodeResult*)> resegment;
+        resegment = [this, &resegment, &rev_merge](std::string w, EncodeResult* output) -> void {
+            const int id = PieceToId(w);
+            if (id == -1 || !IsUnusedInlined(id)) {
+                output->emplace_back(w, id);
+                return;
+            }
+            const auto p = rev_merge.find(w);
+            if (p == rev_merge.end()) {
+                // This block will never be called, as `rev_merge` stores all the
+                // resegmentation info for unused id.
+                output->emplace_back(w, id);
+                return;
+            }
+            // Recursively resegment left and right symbols.
+            resegment(p->second.first, output);
+            resegment(p->second.second, output);
+        };
+
+        EncodeResult output;
+        for (int index = 0; index != -1; index = symbols[index].next) {
+            CHECK_GE(index, 0);
+            CHECK_LT(index, static_cast<int>(symbols.size()));
+            resegment(symbols[index].piece, &output);
+        }
+
+        return output;
     }
 
    public:
@@ -110,6 +240,11 @@ class WordPice {
      * @param engdict_dir 英文单词切分使用的数据
      */
     WordPice(const std::string& dict_path, const std::string& engdict_dir) {
+        std::string releng_dir = getResource(engdict_dir, true);
+        if (!english_token_dict.loadDict(ddir)) {
+            std::cerr << "ERROR: load english token dict dir " << engdict_dir << " failed " << std::endl;
+            return;
+        }
         std::string relpath = getResource(dict_path);
         // load codes and chars_list
         std::set<std::string> _list;

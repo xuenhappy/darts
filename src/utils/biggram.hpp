@@ -17,8 +17,8 @@
 #include <math.h>
 #include <algorithm>
 #include <map>
-#include <vector>
 #include <string>
+#include <vector>
 #include "./cedar.h"
 #include "./str_utils.hpp"
 #include "./zipfile.hpp"
@@ -54,14 +54,7 @@ class BigramDict {
     size_t max_single_freq = 0;
     size_t avg_union_freq  = 0;
 
-    /**
-     * @brief Get the Single Nlog Prop object
-     * 获取某个字独立出现的词频负对数
-     * @param word
-     * @return double
-     */
-    double getSingleNlogProp(const std::string& word) const {
-        int widx = getWordKey(word);
+    double getSingleNlogProp(int widx) const {
         if (widx < 0) {
             return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq / 2));
         }
@@ -69,15 +62,17 @@ class BigramDict {
     }
 
     /**
-     * @brief Get the Nlog Prop object
-     * 获取两个词联合规律负对数
+     * @brief Get the Single Nlog Prop object
+     * 获取某个字独立出现的词频负对数
      * @param word
-     * @param next
      * @return double
      */
-    double getNlogProp(const std::string& word, const std::string& next) const {
+    double getSingleNlogProp(const std::string& word) const {
+        // using word key
+        return getSingleNlogProp(getWordKey(word));
+    }
+    double getNlogProp(int a_widx, int b_widx) const {
         double a = 0.0, b = 0.0, n_ij = 0.0;
-        int a_widx = getWordKey(word), b_widx = getWordKey(next);
         if (a_widx < 0 || b_widx < 0) {
             if (a_widx < 0) {
                 a = avg_single_freq / 2;
@@ -98,6 +93,18 @@ class BigramDict {
             }
         }
         return log((1.0 + a) / (1.0 + n_ij));
+    }
+
+    /**
+     * @brief Get the Nlog Prop object
+     * 获取两个词联合规律负对数
+     * @param word
+     * @param next
+     * @return double
+     */
+    double getNlogProp(const std::string& word, const std::string& next) const {
+        int a_widx = getWordKey(word), b_widx = getWordKey(next);
+        return getNlogProp(a_widx, b_widx);
     }
 
     /**
@@ -175,6 +182,18 @@ class BigramDict {
     }
 
    public:
+    BigramDict() {}
+    void matchKey(const std::string& word, std::function<void(const std::string&, int)> hit) const {
+        const char* key = word.c_str();
+        size_t from = 0, pos = 0, len = word.size();
+        for (size_t pos = 0; pos < len;) {
+            auto widx = idx.traverse(key, from, pos, pos + 1);
+            if (widx == cedar::da<int>::CEDAR_NO_VALUE) continue;
+            if (widx == cedar::da<int>::CEDAR_NO_PATH) break;
+            hit(word.substr(from, pos), widx);
+        }
+    }
+
     /**
      * @brief Get the Word Freq object
      *
@@ -339,6 +358,19 @@ class BigramDict {
             return 0.0;
         }
         return getNlogProp(pre, next);
+    }
+
+    double wordDist(int pre_idx, int next_idx) const {
+        if (pre_idx < 0 || next_idx < 0) {
+            if (pre_idx < 0) {
+                return getSingleNlogProp(pre_idx);
+            }
+            if (next_idx < 0) {
+                return getSingleNlogProp(next_idx);
+            }
+            return 0.0;
+        }
+        return getNlogProp(pre_idx, next_idx);
     }
 
     ~BigramDict() {
