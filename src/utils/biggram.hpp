@@ -183,14 +183,20 @@ class BigramDict {
 
    public:
     BigramDict() {}
-    void matchKey(const std::string& word, std::function<void(const std::string&, int)> hit) const {
+    /**
+     * @brief
+     *
+     * @param word
+     * @param hit (start,len,idx)
+     */
+    void matchKey(const std::string& word, std::function<void(int, int, int)> hit) const {
         const char* key = word.c_str();
         size_t from = 0, pos = 0, len = word.size();
         for (size_t pos = 0; pos < len;) {
             auto widx = idx.traverse(key, from, pos, pos + 1);
             if (widx == cedar::da<int>::CEDAR_NO_VALUE) continue;
             if (widx == cedar::da<int>::CEDAR_NO_PATH) break;
-            hit(word.substr(from, pos), widx);
+            hit(from, pos, widx);
         }
     }
 

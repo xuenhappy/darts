@@ -14,7 +14,9 @@
 #define SRC_IMPL_ENCODER_HPP_
 
 #include <fmt/core.h>
+#include <algorithm>
 #include <functional>
+#include <limits>
 #include <list>
 #include <memory>
 #include <queue>
@@ -27,25 +29,20 @@
 #include "../utils/biggram.hpp"
 
 struct _SymbolPair {
-    int left;     // left index of this pair
-    int right;    // right index of this pair
-    float score;  // score of this pair. large is better.
-    size_t size;  // length of this piece
-};
-
-class _SymbolPairComparator {
-   public:
-    const bool operator()(_SymbolPair* h1, _SymbolPair* h2) {
-        return (h1->score < h2->score || (h1->score == h2->score && h1->left > h2->left));
-    }
+    int left;      // left index of this pair
+    int right;     // right index of this pair
+    double score;  // score of this pair. small is better
 };
 
 struct _Symbol {
-    int prev;     // prev index of this symbol. -1 for BOS.
-    int next;     // next index of tihs symbol. -1 for EOS.
-    bool freeze;  // this symbol is never be merged.
-    std::string piece;
+    int start;
+    int size;
+    int idx;
+    bool freeze;
 };
+bool symbol_compare(_Symbol i1, _Symbol i2) {
+    return (i1.start < i2.start) || (i1->start == i2->start && i1->size < i2->size);
+}
 
 bool is_digits(const std::string& str) {
     return std::all_of(str.begin(), str.end(), ::isdigit);  // C++11
@@ -103,133 +100,106 @@ class WordPice {
             return;
         }
         // load code
-        using Agenda = std::priority_queue<_SymbolPair*, std::vector<_SymbolPair*>, _SymbolPairComparator>;
-        Agenda agenda;
         std::vector<_Symbol> symbols;
-        symbols.reserve(normalized.size());
-
-        // Reverse merge rules.
-        // key: merged symbol, value: pair of original symbols.
-        std::unordered_map<std::string, std::pair<std::string, std::string>> rev_merge;
+        symbols.reserve(eng.size() * 2);
 
         // Pre-allocates SymbolPair for efficiency.
-        constexpr size_t kPreallocateSymbolPairSize = 256;
-        model::FreeList<_SymbolPair> symbol_pair_allocator(kPreallocateSymbolPairSize);
+        symbol_pair_pre_nums = 256;
+        std::vector<_SymbolPair> symbol_pairs(symbol_pair_pre_nums);
+        size_t symbol_pair_allocator_nums = 0;
 
-        // Lookup new symbol pair at [left, right] and inserts it to agenda.
-        auto MaybeAddNewSymbolPair = [this, &symbol_pair_allocator, &symbols, &agenda, &rev_merge](int left,
-                                                                                                   int right) {
-            if (left == -1 || right == -1 || symbols[left].freeze || symbols[right].freeze) return;
-            const std::string piece(symbols[left].piece.data(),
-                                    symbols[left].piece.size() + symbols[right].piece.size());
-            const auto it = pieces_.find(piece);
-            if (it == pieces_.end()) {
-                return;
+        // Lookup new symbol pair at [left, right]
+        auto add_symbol_pair = [this, &symbol_pair_allocator_nums, &symbol_pair_pre_nums, &symbol_pairs, &symbols](
+                                   int left, int right) {
+            if (symbol_pair_allocator_nums >= symbol_pair_pre_nums) {
+                symbol_pair_pre_nums *= 2;
+                symbol_pairs.resize(symbol_pair_pre_nums);
             }
-            auto* h  = symbol_pair_allocator.Allocate();
+            auto* h  = &symbol_pairs[symbol_pair_allocator_nums++];
             h->left  = left;
             h->right = right;
-            h->score = GetScore(it->second);
-            h->size  = piece.size();
-            agenda.push(h);
-
-            // Makes `rev_merge` for resegmentation.
-            if (IsUnusedInlined(it->second)) {
-                rev_merge[piece] = std::make_pair(symbols[left].piece, symbols[right].piece);
-            }
+            h->score =
+                left < 0 || right < 0 ? 0 : this->english_token_dict.wordDist(symbols[left].idx, symbols[right].idx);
         };
 
         // Splits the input into character sequence
-        int index = 0;
-        while (!normalized.empty()) {
+        auto token_hit = [&symbols](int pos, int size, int idx) {
+            if (size > 1) {
+                _Symbol s;
+                s.start  = pos;
+                s.size   = size;
+                s.idx    = idx;
+                s.freeze = false;
+                symbols.emplace_back(s);
+            }
+        };
+        for (size_t i = 0; i < eng.size(); i++) {
             _Symbol s;
-            const int mblen = matcher_->PrefixMatch(normalized, &s.freeze);
-            s.piece         = std::string(normalized.data(), mblen);
-            s.prev          = index == 0 ? -1 : index - 1;
-            normalized.remove_prefix(mblen);
-            s.next = normalized.empty() ? -1 : index + 1;
-            ++index;
+            s.start  = i;
+            s.size   = 1;
+            s.idx    = english_token_dict.getWordKey(eng.substr(i, 1));
+            s.freeze = false;
             symbols.emplace_back(s);
         }
-
-        if (symbols.empty()) {
-            return {};
-        }
-
+        english_token_dict.matchKey(eng, token_hit);
+        std::sort(symbols.begin(), symbols.end(), symbol_compare);
         // Lookup all bigrams.
-        for (size_t i = 1; i < symbols.size(); ++i) {
-            MaybeAddNewSymbolPair(i - 1, i);
-        }
-
-        // BPE-dropout: https://arxiv.org/pdf/1910.13267.pdf
-        std::mt19937* rand_gen = nullptr;
-        auto skip_merge        = [&]() {
-            if (alpha <= 0.0) return false;
-            if (alpha >= 1.0) return true;
-            if (rand_gen == nullptr) rand_gen = random::GetRandomGenerator();
-            std::uniform_real_distribution<> gen(0.0, 1.0);
-            return gen(*rand_gen) < alpha;
-        };
-
-        // Main loop.
-        while (!agenda.empty()) {
-            _SymbolPair* top = agenda.top();
-            agenda.pop();
-
-            // `top` is no longer available.
-            if (symbols[top->left].piece.empty() || symbols[top->right].piece.empty() ||
-                symbols[top->left].piece.size() + symbols[top->right].piece.size() != top->size) {
+        for (size_t i = 0; i < symbols.size(); i++) {
+            if (symbols[i].start == 0) {
+                add_symbol_pair(-1, i);
                 continue;
             }
-
-            // Note that orignal BPE-dropout paper assumes that all merged symbols are
-            // pre computed, but here we randomly skip merge opration inside this loop.
-            // This implemenation is theoretically equivalent to the original one.
-            if (skip_merge()) continue;
-
-            // Replaces symbols with `top` rule.
-            symbols[top->left].piece = std::string(symbols[top->left].piece.data(),
-                                                   symbols[top->left].piece.size() + symbols[top->right].piece.size());
-
-            // Updates prev/next pointers.
-            symbols[top->left].next = symbols[top->right].next;
-            if (symbols[top->right].next >= 0) {
-                symbols[symbols[top->right].next].prev = top->left;
-            }
-            symbols[top->right].piece = std::string("");
-
-            // Adds new symbol pairs which are newly added after symbol replacement.
-            MaybeAddNewSymbolPair(symbols[top->left].prev, top->left);
-            MaybeAddNewSymbolPair(top->left, symbols[top->left].next);
+            break;
         }
-
-        std::function<void(std::string, EncodeResult*)> resegment;
-        resegment = [this, &resegment, &rev_merge](std::string w, EncodeResult* output) -> void {
-            const int id = PieceToId(w);
-            if (id == -1 || !IsUnusedInlined(id)) {
-                output->emplace_back(w, id);
-                return;
+        for (size_t i = 0; i < symbols.size(); i++) {
+            auto pre_symbol = &symbols[i];
+            int nextpos     = pre_symbol->start + pre_symbol->size;
+            if (nextpos >= eng.size()) {
+                add_symbol_pair(i, -1);
+                break;
             }
-            const auto p = rev_merge.find(w);
-            if (p == rev_merge.end()) {
-                // This block will never be called, as `rev_merge` stores all the
-                // resegmentation info for unused id.
-                output->emplace_back(w, id);
-                return;
+            for (size_t j = 0; j < symbols.size(); j++) {
+                auto next_symbol = &symbols[j];
+                if (next_symbol->start == nextpos) {
+                    add_symbol_pair(i, j);
+                    continue;
+                }
+                if (next_symbol->start > nextpos) break;
             }
-            // Recursively resegment left and right symbols.
-            resegment(p->second.first, output);
-            resegment(p->second.second, output);
-        };
-
-        EncodeResult output;
-        for (int index = 0; index != -1; index = symbols[index].next) {
-            CHECK_GE(index, 0);
-            CHECK_LT(index, static_cast<int>(symbols.size()));
-            resegment(symbols[index].piece, &output);
         }
+        // select best tokens
+        std::vector<double> dist(eng.size() + 2, std::numeric_limits<double>::max);
+        std::vector<int> prev(eng.size() + 2, -2);
+        using std::pair<double, int> iPair;
+        std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair> > pq;
+        pq.push(std::make_pair(0.0, -1));
+        dist[0] = 0;
+        prev[0] = -2;
+        while (!pq.empty()) {
+            int u = pq.top()->right;
+            pq.pop();
+            if (u == -1) continue;
 
-        return output;
+            for (size_t i = u; i < symbol_pair_allocator_nums; i++) {
+                if (symbol_pairs[i].right == u) {
+                    // adjacent of u.
+                    int v         = symbol_pairs[i].left;
+                    double weight = symbol_pairs[i].score;
+
+                    int pv = v < 0 ? dist.size() - 1 : v + 1;
+
+                    // If there is shorted path to v through u.
+                    if (dist[pv] > dist[u + 1] + weight) {
+                        // Updating distance of v
+                        dist[pv] = dist[u + 1] + weight;
+                        prev[pv] = u;
+                        pq.push(std::make_pair(dist[v], v));
+                    }
+                    continue;
+                }
+                if (symbol_pairs[i].right > u) break;
+            }
+        }
     }
 
    public:
