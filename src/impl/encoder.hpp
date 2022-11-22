@@ -260,7 +260,7 @@ class WordPice {
      *
      */
     void encode(const darts::AtomList& input, std::function<void(int code, int atom_postion)> hit,
-                bool skip_empty_token) const {
+                bool skip_empty_token = true) const {
         std::vector<std::string> _cache;
         hit(codemap::sep_code, -1);
         std::unordered_map<std::string, int>::const_iterator _it;
