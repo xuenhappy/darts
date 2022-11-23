@@ -38,7 +38,6 @@ struct _Symbol {
     int start;
     int size;
     int idx;
-    bool freeze;
 };
 bool symbol_compare(_Symbol i1, _Symbol i2) {
     return (i1.start < i2.start) || (i1->start == i2->start && i1->size < i2->size);
@@ -168,19 +167,21 @@ class WordPice {
             }
         }
         // select best tokens
-        std::vector<double> dist(eng.size() + 2, std::numeric_limits<double>::max);
-        std::vector<int> prev(eng.size() + 2, -2);
+        std::vector<double> dist(symbols.size() + 2, std::numeric_limits<double>::max);
+        std::vector<int> prev(symbols.size() + 2, -2);
         using std::pair<double, int> iPair;
         std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair> > pq;
         pq.push(std::make_pair(0.0, -1));
-        dist[0] = 0;
-        prev[0] = -2;
+        dist[0]     = 0;
+        prev[0]     = -2;
+        bool _first = true;
         while (!pq.empty()) {
-            int u = pq.top()->right;
+            int u = pq.top()->second;
             pq.pop();
-            if (u == -1) continue;
+            if (u == -1 && !_first) continue;
+            _first = false;
 
-            for (size_t i = u; i < symbol_pair_allocator_nums; i++) {
+            for (size_t i = u + 1; i < symbol_pair_allocator_nums; i++) {
                 if (symbol_pairs[i].right == u) {
                     // adjacent of u.
                     int v         = symbol_pairs[i].left;
@@ -193,13 +194,22 @@ class WordPice {
                         // Updating distance of v
                         dist[pv] = dist[u + 1] + weight;
                         prev[pv] = u;
-                        pq.push(std::make_pair(dist[v], v));
+                        if (v >= 0) pq.push(std::make_pair(dist[v], v));
                     }
                     continue;
                 }
                 if (symbol_pairs[i].right > u) break;
             }
         }
+        // get code
+        int pre = prev.size() - 1;
+        while (pre > 0) {
+            pre = prev[pre];
+            if (pre > 0) {
+                ret.emplace_back(eng.substr(symbols[pre].start, symbols[pre].size));
+            }
+        }
+        std::reverse(ret.begin(), ret.end());
     }
 
    public:
