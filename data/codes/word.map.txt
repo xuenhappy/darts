@@ -1,0 +1,3 @@
+ENG 1
+NUM 1
+CJK 1
