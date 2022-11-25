@@ -1,4 +1,7 @@
 {
+    "dservices": {
+        "wordpiece.dict": {}
+    },
     "recognizers": {
         "inner.dict": {
             "type": "DictWordRecongnizer",
@@ -23,7 +26,10 @@
         },
         "elmo.embed": {
             "type": "ElmoPersenter",
-            "model.path": ""
+            "model.path": "",
+            "deps": {
+                "encoder": ""
+            }
         },
         "bert.embed": {
             "type": "TinyBertPersenter",

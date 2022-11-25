@@ -13,7 +13,9 @@
 #define SRC_IMPL_NETWORDQI_HPP_
 #include <onnxruntime_cxx_api.h>
 #include <map>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 #include "../core/darts.hpp"
 #include "../core/segment.hpp"
@@ -30,7 +32,7 @@ class OnnxPersenter : public CellPersenter {
     static const char* QMODEL_PATH_KEY;
     Ort::Session* pmodel_session;
     Ort::Session* qmodel_session;
-    WordPice* wordpiece;
+    std::shared_ptr<WordPice> wordpiece;
 
     Ort::Session* loadmodel(const char* model_path) {
         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "darts");
@@ -94,7 +96,22 @@ class OnnxPersenter : public CellPersenter {
      * @param param
      * @return int
      */
-    int initalize(const std::map<std::string, std::string>& param) { return EXIT_SUCCESS; }
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        std::map<std::string, SegmentPlugin*> it = plugins.find("");
+        if (it == plugins.end()) {
+            std::cerr << "" << std::endl;
+            return EXIT_FAILURE;
+        }
+        this->wordpiece = std::dynamic_pointer_cast<WordPice>(it->second);
+        if (this->wordpiece == nullptr) {
+            std::cerr << "" << std::endl;
+            return EXIT_FAILURE;
+        }
+        // load model
+
+        return EXIT_SUCCESS;
+    }
     /**
      * @brief set all word embeding
      *
@@ -119,6 +136,9 @@ class OnnxPersenter : public CellPersenter {
         if (this->qmodel_session) {
             delete this->qmodel_session;
             this->qmodel_session = NULL;
+        }
+        if (wordpiece != nullptr) {
+            wordpiece = nullptr;
         }
     }
 };

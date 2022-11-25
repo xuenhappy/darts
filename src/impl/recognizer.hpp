@@ -56,7 +56,8 @@ class DictWordRecongnizer : public CellRecognizer {
     DictWordRecongnizer() {}
     explicit DictWordRecongnizer(const std::string& pbfile) { this->trie.loadPb(pbfile); }
 
-    int initalize(const std::map<std::string, std::string>& param) {
+    int initalize(const std::map<std::string, std::string>& param,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& dicts) {
         auto iter = param.find(PB_FILE_KEY);
         if (iter == param.end()) {
             std::cerr << PB_FILE_KEY << " key not found in dictionary!" << std::endl;

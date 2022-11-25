@@ -23,6 +23,10 @@
 #include "../utils/registerer.hpp"
 namespace darts {
 
+/**
+ * @brief segment plugin for segment
+ *
+ */
 class SegmentPlugin {
    public:
     /**
@@ -31,10 +35,14 @@ class SegmentPlugin {
      * @param param
      * @return int
      */
-    virtual int initalize(const std::map<std::string, std::string>& param) = 0;
+    virtual int initalize(const std::map<std::string, std::string>& params,
+                          std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) = 0;
     virtual ~SegmentPlugin() {}
 };
-
+/**
+ * @brief embeding atomlist for segment
+ *
+ */
 class CellPersenter : public SegmentPlugin {
    public:
     /***
@@ -51,7 +59,10 @@ class CellPersenter : public SegmentPlugin {
     virtual double ranging(const Word* pre, const Word* next) const = 0;
     virtual ~CellPersenter() {}
 };
-
+/**
+ * @brief recongnize tokens
+ *
+ */
 class CellRecognizer : public SegmentPlugin {
    public:
     // recognizer all Wcell possable in the atomlist

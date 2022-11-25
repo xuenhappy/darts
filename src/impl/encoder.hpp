@@ -18,6 +18,7 @@
 #include <functional>
 #include <limits>
 #include <list>
+#include <map>
 #include <memory>
 #include <queue>
 #include <set>
@@ -26,6 +27,7 @@
 #include <utility>
 #include <vector>
 #include "../core/darts.hpp"
+#include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
 
 struct _SymbolPair {
@@ -61,7 +63,7 @@ class _WordGraph {
     }
 
    public:
-    _WordGraph(int nodecap) : path_nums(0), paths(256) { nodes.reserve(nodecap); }
+    explicit _WordGraph(int nodecap) : path_nums(0), paths(256) { nodes.reserve(nodecap); }
 
     void addNode(int pos, int size, int idx) {
         _Symbol s;
@@ -104,7 +106,7 @@ class _WordGraph {
         std::vector<double> dist(nodes.size() + 2, INT64_MAX);
         std::vector<int> prev(nodes.size() + 2, -2);
         using iPair = std::pair<double, int>;
-        std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair> > pq;
+        std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair>> pq;
         pq.push(std::make_pair(0.0, -1));
         dist[0] = 0;
         prev[0] = -2;
@@ -115,6 +117,7 @@ class _WordGraph {
             for (size_t i = u + 1; i < path_nums; i++) {
                 if (paths[i].right == u) {
                     // adjacent of u.
+
                     int v         = paths[i].left;
                     double weight = paths[i].score;
                     int pv        = v < 0 ? dist.size() - 1 : v + 1;
@@ -165,8 +168,10 @@ static const char* mask_char = "[MASK]";
 static const char* pad_char  = "[PAD]";
 }  // namespace codemap
 
-class WordPice {
+class WordPice ::public SegmentPlugin {
    private:
+    static const char* BASE_DIR;
+    // vars
     darts::BigramDict english_token_dict;
     std::unordered_map<std::string, int> codes;
     std::vector<std::string> chars_list;
@@ -192,6 +197,14 @@ class WordPice {
             ret.push_back(num.substr(sidx, endi - sidx));
             sidx = endi;
         }
+    }
+
+    int getTypeCode(const std::string& type) const {
+        std::unordered_map<std::string, int>::const_iterator _it = codes.find(type);
+        if (_it != codes.end()) {
+            return _it->second;
+        }
+        return codemap::unk_code;
     }
 
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
@@ -223,26 +236,31 @@ class WordPice {
     }
 
    public:
-    /**
-     * @brief Construct a new Word Pice object
-     *
-     * @param dict_path 字符映射表
-     * @param engdict_dir 英文单词切分使用的数据
-     */
-    WordPice(const std::string& dict_path, const std::string& engdict_dir) {
-        std::string releng_dir = getResource(engdict_dir, true);
-        if (!english_token_dict.loadDict(engdict_dir)) {
-            std::cerr << "ERROR: load english token dict dir " << engdict_dir << " failed " << std::endl;
-            return;
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        auto it = params.find(BASE_DIR);
+        if (it == params.end() || it->second.empty()) {
+            std::cerr << "ERROR: could not find key:" << BASE_DIR << std::endl;
+            return EXIT_FAILURE;
         }
-        std::string relpath = getResource(dict_path);
+        namespace fs = std::filesystem;
+        fs::path dict_path(it->second);
+        dict_path.append("chars.map.txt");
+        fs::path engdict_dir(it->second);
+        engdict_dir.append("engdict");
+        std::string releng_dir = getResource(engdict_dir.c_str(), true);
+        if (!english_token_dict.loadDict(releng_dir)) {
+            std::cerr << "ERROR: load english token dict dir " << releng_dir << " failed " << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::string relpath = getResource(dict_path.c_str());
         // load codes and chars_list
         std::set<std::string> _list;
         // load relpath data into _list
         std::ifstream fin(relpath.c_str());
         if (!fin.is_open()) {
             std::cerr << "ERROR: open data " << relpath << " file failed " << std::endl;
-            return;
+            return EXIT_FAILURE;
         }
         std::string line;
         size_t s;
@@ -274,7 +292,9 @@ class WordPice {
         for (int i = 0; i < chars_list.size(); i++) {
             codes[chars_list[i]] = i;
         }
+        return EXIT_SUCCESS;
     }
+
     /**
      * @brief 对给定的字符串句子进行分解
      *
@@ -298,7 +318,7 @@ class WordPice {
                 for (std::string w : _cache) {
                     _it = codes.find(w);
                     if (_it == codes.end()) {
-                        hit(codemap::unk_code, postion);
+                        hit(getTypeCode("ENG"), postion);
                         continue;
                     }
                     hit(_it->second, postion);
@@ -311,7 +331,7 @@ class WordPice {
                 for (std::string w : _cache) {
                     _it = codes.find(w);
                     if (_it == codes.end()) {
-                        hit(codemap::unk_code, postion);
+                        hit(getTypeCode("NUM"), postion);
                         continue;
                     }
                     hit(_it->second, postion);
@@ -320,7 +340,9 @@ class WordPice {
             }
             _it = codes.find(atom->image);
             if (_it == codes.end()) {
-                hit(codemap::unk_code, postion);
+                // check tye code for return value
+                std::string label(atom->maxHXlabel(nullptr));
+                hit(getTypeCode(label), postion);
                 continue;
             }
             hit(_it->second, postion);
@@ -334,11 +356,11 @@ class WordPice {
      * @param code
      * @return const char32_t*
      */
-    const char* decode(int code) const {
+    const std::string decode(int code) const {
         if (code >= 0 && code < chars_list.size()) {
-            return chars_list[code].c_str();
+            return chars_list[code];
         }
-        return NULL;
+        return "";
     }
 };
 

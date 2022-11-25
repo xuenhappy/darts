@@ -61,9 +61,10 @@ class BigramPersenter : public CellPersenter {
     BigramDict ngdict;
 
    public:
-    int initalize(const std::map<std::string, std::string>& param) {
-        auto it = param.find(DAT_DIR_KEY);
-        if (it == param.end() || it->second.empty()) {
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& dicts) {
+        auto it = params.find(DAT_DIR_KEY);
+        if (it == params.end() || it->second.empty()) {
             std::cerr << "ERROR: could not find key:" << DAT_DIR_KEY << std::endl;
             return EXIT_FAILURE;
         }
@@ -107,7 +108,10 @@ class ElmoPersenter : public CellPersenter {
      * @param param
      * @return int
      */
-    int initalize(const std::map<std::string, std::string>& param) { return EXIT_SUCCESS; }
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        return EXIT_SUCCESS;
+    }
     /**
      * @brief set all word embeding
      *
@@ -140,7 +144,10 @@ class TinyBertPersenter {
      * @param param
      * @return int
      */
-    int initalize(const std::map<std::string, std::string>& param) { return EXIT_SUCCESS; }
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        return EXIT_SUCCESS;
+    }
     /**
      * @brief set all word embeding
      *

@@ -32,9 +32,9 @@ class Atom {
     uint32_t st;        // start of this atom in str
     uint32_t et;        // end of this atom in str
     std::set<std::string>* labels;
-    bool masked = false;  // this is for training
+    bool masked;  // this is for training
 
-    Atom(const char* image, uint32_t start, uint32_t end) {
+    Atom(const char* image, uint32_t start, uint32_t end) : masked(false) {
         this->image  = image;
         this->st     = start;
         this->et     = end;
@@ -47,6 +47,34 @@ class Atom {
         this->et    = atom.et;
         if (atom.labels) {
             this->labels = new std::set<std::string>(*atom.labels);
+        }
+    }
+
+    /**
+     * @brief get HX(label) max value label
+     *
+     * @param hx_func
+     * @return const std::string
+     */
+    const std::string maxHXlabel(std::function<int(const std::string&)> hx_func) const {
+        if (labels == NULL || hx_func == nullptr || labels->empty()) {
+            return "";
+        }
+        if (hx_func == nullptr) {
+            for (std::string l : *labels) {
+                return l
+            }
+        } else {
+            int oreder = -10;
+            std::string ret;
+            for (std::string l : *labels) {
+                int xorder = hx_func(l);
+                if (xorder > oreder) {
+                    oreder = xorder;
+                    ret    = l;
+                }
+            }
+            return ret;
         }
     }
 
