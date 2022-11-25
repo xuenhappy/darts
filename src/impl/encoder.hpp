@@ -39,9 +39,111 @@ struct _Symbol {
     int size;
     int idx;
 };
-bool symbol_compare(_Symbol i1, _Symbol i2) {
-    return (i1.start < i2.start) || (i1->start == i2->start && i1->size < i2->size);
+bool symbol_compare(_Symbol& i1, _Symbol& i2) {
+    return (i1.start < i2.start) || (i1.start == i2.start && i1.size < i2.size);
 }
+
+class _WordGraph {
+   private:
+    std::vector<_Symbol> nodes;      // nodes
+    size_t path_nums;                // path nums
+    std::vector<_SymbolPair> paths;  // paths
+
+    void addPath(int left, int right, double weight) {
+        if (path_nums >= paths.size()) {
+            paths.resize(paths.size() * 2 + 1);
+        }
+
+        auto* h  = &paths[path_nums++];
+        h->left  = left;
+        h->right = right;
+        h->score = weight;
+    }
+
+   public:
+    _WordGraph(int nodecap) : path_nums(0), paths(256) { nodes.reserve(nodecap); }
+
+    void addNode(int pos, int size, int idx) {
+        _Symbol s;
+        s.start = pos;
+        s.size  = size;
+        s.idx   = idx;
+        nodes.emplace_back(s);
+    }
+
+    void setPath(int endidx, std::function<double(int, int)> idx_dist) {
+        std::sort(nodes.begin(), nodes.end(), symbol_compare);
+        // Lookup all bigrams.
+        for (size_t i = 0; i < nodes.size(); i++) {
+            if (nodes[i].start == 0) {
+                addPath(-1, i, idx_dist(-1, nodes[i].idx));
+                continue;
+            }
+            break;
+        }
+        for (size_t i = 0; i < nodes.size(); i++) {
+            auto prenode = &nodes[i];
+            int nextpos  = prenode->start + prenode->size;
+            if (nextpos >= endidx) {
+                addPath(i, -1, 0);
+                break;
+            }
+            for (size_t j = i + 1; j < nodes.size(); j++) {
+                auto nxnode = &nodes[j];
+                if (nxnode->start == nextpos) {
+                    addPath(i, j, idx_dist(prenode->idx, nxnode->idx));
+                    continue;
+                }
+                if (nxnode->start > nextpos) break;
+            }
+        }
+    }
+
+    void bestPaths(const std::string& eng, std::vector<std::string>& ret) const {
+        // init gloab val
+        std::vector<double> dist(nodes.size() + 2, INT64_MAX);
+        std::vector<int> prev(nodes.size() + 2, -2);
+        using iPair = std::pair<double, int>;
+        std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair> > pq;
+        pq.push(std::make_pair(0.0, -1));
+        dist[0] = 0;
+        prev[0] = -2;
+        // calute best path
+        while (!pq.empty()) {
+            int u = pq.top().second;
+            pq.pop();
+            for (size_t i = u + 1; i < path_nums; i++) {
+                if (paths[i].right == u) {
+                    // adjacent of u.
+                    int v         = paths[i].left;
+                    double weight = paths[i].score;
+                    int pv        = v < 0 ? dist.size() - 1 : v + 1;
+                    // If there is shorted path to v through u.
+                    if (dist[pv] > dist[u + 1] + weight) {
+                        // Updating distance of v
+                        dist[pv] = dist[u + 1] + weight;
+                        prev[pv] = u;
+                        if (v >= 0) pq.push(std::make_pair(dist[v], v));
+                    }
+                    continue;
+                }
+                if (paths[i].right > u) break;
+            }
+        }
+        // get code
+        int pre = prev[prev.size() - 1];
+        while (pre > 0) {
+            ret.emplace_back(eng.substr(nodes[pre].start, nodes[pre].size));
+        }
+        std::reverse(ret.begin(), ret.end());
+    }
+
+    ~_WordGraph() {
+        nodes.clear();
+        paths.clear();
+        path_nums = 0;
+    }
+};
 
 bool is_digits(const std::string& str) {
     return std::all_of(str.begin(), str.end(), ::isdigit);  // C++11
@@ -94,122 +196,30 @@ class WordPice {
 
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
         // token english str
-        if (eng.length() < 2 || eng.length() > 50) {  // too long or short codes
-            ret.push_back(fmt::format("▁{}", eng));
+        std::string token = fmt::format("▁{}", eng);
+        if (token.length() < 3 || token.length() > 50) {  // too long or short codes
+            ret.push_back(token);
             return;
         }
         // load code
-        std::vector<_Symbol> symbols;
-        symbols.reserve(eng.size() * 2);
-
-        // Pre-allocates SymbolPair for efficiency.
-        symbol_pair_pre_nums = 256;
-        std::vector<_SymbolPair> symbol_pairs(symbol_pair_pre_nums);
-        size_t symbol_pair_allocator_nums = 0;
-
-        // Lookup new symbol pair at [left, right]
-        auto add_symbol_pair = [this, &symbol_pair_allocator_nums, &symbol_pair_pre_nums, &symbol_pairs, &symbols](
-                                   int left, int right) {
-            if (symbol_pair_allocator_nums >= symbol_pair_pre_nums) {
-                symbol_pair_pre_nums *= 2;
-                symbol_pairs.resize(symbol_pair_pre_nums);
-            }
-            auto* h  = &symbol_pairs[symbol_pair_allocator_nums++];
-            h->left  = left;
-            h->right = right;
-            h->score =
-                left < 0 || right < 0 ? 0 : this->english_token_dict.wordDist(symbols[left].idx, symbols[right].idx);
-        };
-
+        _WordGraph graph(token.size() * 2);
         // Splits the input into character sequence
-        auto token_hit = [&symbols](int pos, int size, int idx) {
+        graph.addNode(0, 2, english_token_dict.getWordKey(token.substr(0, 2)));
+        for (size_t i = 2; i < token.size(); i++) {
+            graph.addNode(i, 1, english_token_dict.getWordKey(token.substr(i, 1)));
+        }
+        english_token_dict.matchKey(token, [&graph](int pos, int size, int idx) {
             if (size > 1) {
-                _Symbol s;
-                s.start  = pos;
-                s.size   = size;
-                s.idx    = idx;
-                s.freeze = false;
-                symbols.emplace_back(s);
+                graph.addNode(pos, size, idx);
             }
-        };
-        for (size_t i = 0; i < eng.size(); i++) {
-            _Symbol s;
-            s.start  = i;
-            s.size   = 1;
-            s.idx    = english_token_dict.getWordKey(eng.substr(i, 1));
-            s.freeze = false;
-            symbols.emplace_back(s);
-        }
-        english_token_dict.matchKey(eng, token_hit);
-        std::sort(symbols.begin(), symbols.end(), symbol_compare);
-        // Lookup all bigrams.
-        for (size_t i = 0; i < symbols.size(); i++) {
-            if (symbols[i].start == 0) {
-                add_symbol_pair(-1, i);
-                continue;
-            }
-            break;
-        }
-        for (size_t i = 0; i < symbols.size(); i++) {
-            auto pre_symbol = &symbols[i];
-            int nextpos     = pre_symbol->start + pre_symbol->size;
-            if (nextpos >= eng.size()) {
-                add_symbol_pair(i, -1);
-                break;
-            }
-            for (size_t j = 0; j < symbols.size(); j++) {
-                auto next_symbol = &symbols[j];
-                if (next_symbol->start == nextpos) {
-                    add_symbol_pair(i, j);
-                    continue;
-                }
-                if (next_symbol->start > nextpos) break;
-            }
-        }
+        });
+        // set uni-gram
+        graph.setPath(token.size(), [this](int pidx, int nidx) -> double {
+            // call dict
+            return this->english_token_dict.wordDist(pidx, nidx);
+        });
         // select best tokens
-        std::vector<double> dist(symbols.size() + 2, std::numeric_limits<double>::max);
-        std::vector<int> prev(symbols.size() + 2, -2);
-        using std::pair<double, int> iPair;
-        std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair> > pq;
-        pq.push(std::make_pair(0.0, -1));
-        dist[0]     = 0;
-        prev[0]     = -2;
-        bool _first = true;
-        while (!pq.empty()) {
-            int u = pq.top()->second;
-            pq.pop();
-            if (u == -1 && !_first) continue;
-            _first = false;
-
-            for (size_t i = u + 1; i < symbol_pair_allocator_nums; i++) {
-                if (symbol_pairs[i].right == u) {
-                    // adjacent of u.
-                    int v         = symbol_pairs[i].left;
-                    double weight = symbol_pairs[i].score;
-
-                    int pv = v < 0 ? dist.size() - 1 : v + 1;
-
-                    // If there is shorted path to v through u.
-                    if (dist[pv] > dist[u + 1] + weight) {
-                        // Updating distance of v
-                        dist[pv] = dist[u + 1] + weight;
-                        prev[pv] = u;
-                        if (v >= 0) pq.push(std::make_pair(dist[v], v));
-                    }
-                    continue;
-                }
-                if (symbol_pairs[i].right > u) break;
-            }
-        }
-        // get code
-        int pre = prev.size() - 1;
-        while (pre > 0) {
-            pre = prev[pre];
-            if (pre > 0) {
-                ret.emplace_back(eng.substr(symbols[pre].start, symbols[pre].size));
-            }
-        }
-        std::reverse(ret.begin(), ret.end());
+        graph.bestPaths(token, ret);
     }
 
    public:
@@ -221,7 +231,7 @@ class WordPice {
      */
     WordPice(const std::string& dict_path, const std::string& engdict_dir) {
         std::string releng_dir = getResource(engdict_dir, true);
-        if (!english_token_dict.loadDict(ddir)) {
+        if (!english_token_dict.loadDict(engdict_dir)) {
             std::cerr << "ERROR: load english token dict dir " << engdict_dir << " failed " << std::endl;
             return;
         }
