@@ -10,7 +10,6 @@
  * Copyright 2021 - 2022 Your Company, Moka
  */
 
-
 #ifndef SRC_UTILS_REGISTERER_HPP_
 #define SRC_UTILS_REGISTERER_HPP_
 
@@ -25,35 +24,35 @@ class Any {
     Any() : content_(NULL) {}
 
     template <typename ValueType>
-    Any(const ValueType &value)  // NOLINT
+    Any(const ValueType& value)  // NOLINT
         : content_(new Holder<ValueType>(value)) {}
 
-    Any(const Any &other) : content_(other.content_ ? other.content_->clone() : NULL) {}
+    Any(const Any& other) : content_(other.content_ ? other.content_->clone() : NULL) {}
 
     ~Any() { delete content_; }
 
     template <typename ValueType>
-    ValueType *any_cast() {
-        return content_ ? &static_cast<Holder<ValueType> *>(content_)->held_ : NULL;  // NOLINT
+    ValueType* any_cast() {
+        return content_ ? &static_cast<Holder<ValueType>*>(content_)->held_ : NULL;  // NOLINT
     }
 
    private:
     class PlaceHolder {
        public:
         virtual ~PlaceHolder() {}
-        virtual PlaceHolder *clone() const = 0;
+        virtual PlaceHolder* clone() const = 0;
     };
 
     template <typename ValueType>
     class Holder : public PlaceHolder {
        public:
-        explicit Holder(const ValueType &value) : held_(value) {}
-        virtual PlaceHolder *clone() const { return new Holder(held_); }
+        explicit Holder(const ValueType& value) : held_(value) {}
+        virtual PlaceHolder* clone() const { return new Holder(held_); }
 
         ValueType held_;
     };
 
-    PlaceHolder *content_;
+    PlaceHolder* content_;
 };
 
 class ObjectFactory {
@@ -66,36 +65,35 @@ class ObjectFactory {
    private:
 };
 
-typedef std::map<std::string, ObjectFactory *> FactoryMap;
+typedef std::map<std::string, ObjectFactory*> FactoryMap;
 typedef std::map<std::string, FactoryMap> BaseClassMap;
 
-
-BaseClassMap &global_factory_map() {
-    static BaseClassMap *factory_map = new BaseClassMap();
+BaseClassMap& global_factory_map() {
+    static BaseClassMap* factory_map = new BaseClassMap();
     return *factory_map;
 }
 
 }  // namespace registerer
 
-#define REGISTER_REGISTERER(base_class)                                        \
-    class base_class##Registerer {                                             \
-        typedef ::registerer::Any Any;                                         \
-        typedef ::registerer::FactoryMap FactoryMap;                           \
-                                                                               \
-       public:                                                                 \
-        static base_class *GetInstanceByName(const ::std::string &name) {      \
-            FactoryMap &map = ::registerer::global_factory_map()[#base_class]; \
-            FactoryMap::iterator iter = map.find(name);                        \
-            if (iter == map.end()) {                                           \
-                return NULL;                                                   \
-            }                                                                  \
-            Any object = iter->second->NewInstance();                          \
-            return *(object.any_cast<base_class *>());                         \
-        }                                                                      \
-        static bool IsValid(const ::std::string &name) {                       \
-            FactoryMap &map = ::registerer::global_factory_map()[#base_class]; \
-            return map.find(name) != map.end();                                \
-        }                                                                      \
+#define REGISTER_REGISTERER(base_class)                                                  \
+    class base_class##Registerer {                                                       \
+        typedef ::registerer::Any Any;                                                   \
+        typedef ::registerer::FactoryMap FactoryMap;                                     \
+                                                                                         \
+       public:                                                                           \
+        static base_class* GetInstanceByName(const ::std::string& name) {                \
+            FactoryMap& map           = ::registerer::global_factory_map()[#base_class]; \
+            FactoryMap::iterator iter = map.find(name);                                  \
+            if (iter == map.end()) {                                                     \
+                return NULL;                                                             \
+            }                                                                            \
+            Any object = iter->second->NewInstance();                                    \
+            return *(object.any_cast<base_class*>());                                    \
+        }                                                                                \
+        static bool IsValid(const ::std::string& name) {                                 \
+            FactoryMap& map = ::registerer::global_factory_map()[#base_class];           \
+            return map.find(name) != map.end();                                          \
+        }                                                                                \
     };
 
 #define REGISTER_CLASS(clazz, name)                                                 \
@@ -105,7 +103,7 @@ BaseClassMap &global_factory_map() {
         ::registerer::Any NewInstance() { return ::registerer::Any(new name()); }   \
     };                                                                              \
     void __attribute__((constructor)) register_factory_##name() {                   \
-        ::registerer::FactoryMap &map = ::registerer::global_factory_map()[#clazz]; \
+        ::registerer::FactoryMap& map = ::registerer::global_factory_map()[#clazz]; \
         if (map.find(#name) == map.end()) map[#name] = new ObjectFactory##name();   \
     }                                                                               \
     }

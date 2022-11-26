@@ -169,7 +169,7 @@ static const char* pad_char  = "[PAD]";
 }  // namespace codemap
 
 namespace darts {
-class WordPice :public SegmentPlugin {
+class WordPice : public SegmentPlugin {
    private:
     static const char* BASE_DIR;
     // vars
@@ -365,6 +365,5 @@ class WordPice :public SegmentPlugin {
     }
 };
 }  // end namespace darts
-
 
 #endif  // SRC_IMPL_ENCODER_HPP_
