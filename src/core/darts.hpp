@@ -62,7 +62,7 @@ class Atom {
         }
         if (hx_func == nullptr) {
             for (std::string l : *labels) {
-                return l
+                return l;
             }
         } else {
             int oreder = -10;
@@ -366,7 +366,7 @@ typedef struct _Cursor {
  * @param next
  * @return Cursor*
  */
-Cursor makeCursor(std::shared_ptr<Word> word, Cursor pre, Cursor next) {
+inline Cursor makeCursor(std::shared_ptr<Word> word, Cursor pre, Cursor next) {
     Cursor cur = new struct _Cursor();
     cur->prev  = pre;
     cur->lack  = next;

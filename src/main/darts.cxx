@@ -14,7 +14,7 @@
 #define SRC_MAIN_DARTS4PY_HPP_
 #include "./darts.h"
 #include "../core/segment.hpp"
-#include "../impl/jsonconf.hpp"
+#include "../impl/confparser.hpp"
 #include "../utils/dregex.hpp"
 #include "../utils/utils_base.hpp"
 

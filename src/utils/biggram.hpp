@@ -19,6 +19,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "./file_utils.hpp"
 #include "./cedar.h"
 #include "./str_utils.hpp"
 #include "./zipfile.hpp"
@@ -56,7 +57,7 @@ class BigramDict {
 
     double getSingleNlogProp(int widx) const {
         if (widx < 0) {
-            return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq / 2));
+            return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq*1.0 / 2));
         }
         return log((1000.0 + max_single_freq) / (1.0 + freqs.at(widx)));
     }
@@ -75,10 +76,10 @@ class BigramDict {
         double a = 0.0, b = 0.0, n_ij = 0.0;
         if (a_widx < 0 || b_widx < 0) {
             if (a_widx < 0) {
-                a = avg_single_freq / 2;
+                a = avg_single_freq*1.0 / 2;
             }
             if (b_widx < 0) {
-                b = avg_single_freq / 2;
+                b = avg_single_freq*1.0 / 2;
             }
             n_ij = std::min(std::min(a, b), double(avg_union_freq)) / 2.0;
         } else {

@@ -54,7 +54,7 @@ uint8_t unicode_charsize(uint32_t codepoint);  // calculates the number of bytes
 uint32_t utf8_converter(const char* character, uint8_t size);
 const char* unicode_converter(uint32_t codepoint, uint8_t size);
 
-void utf8_init(utf8_iter* iter, const char* ptr) {
+inline void utf8_init(utf8_iter* iter, const char* ptr) {
     if (iter) {
         iter->ptr = ptr;
         iter->codepoint = 0;
@@ -65,7 +65,7 @@ void utf8_init(utf8_iter* iter, const char* ptr) {
     }
 }
 
-void utf8_initEx(utf8_iter* iter, const char* ptr, uint32_t length) {
+inline void utf8_initEx(utf8_iter* iter, const char* ptr, uint32_t length) {
     if (iter) {
         iter->ptr = ptr;
         iter->codepoint = 0;
@@ -76,7 +76,7 @@ void utf8_initEx(utf8_iter* iter, const char* ptr, uint32_t length) {
     }
 }
 
-uint8_t utf8_next(utf8_iter* iter) {
+inline uint8_t utf8_next(utf8_iter* iter) {
     if (iter == NULL) return 0;
     if (iter->ptr == NULL) return 0;
 
@@ -104,7 +104,7 @@ uint8_t utf8_next(utf8_iter* iter) {
     }
 }
 
-uint8_t utf8_previous(utf8_iter* iter) {
+inline uint8_t utf8_previous(utf8_iter* iter) {
     if (iter == NULL) return 0;
     if (iter->ptr == NULL) return 0;
 
@@ -146,7 +146,7 @@ uint8_t utf8_previous(utf8_iter* iter) {
     }
 }
 
-const char* utf8_getchar(utf8_iter* iter) {
+inline const char* utf8_getchar(utf8_iter* iter) {
     static char str[10];
 
     str[0] = '\0';
@@ -174,7 +174,7 @@ const char* utf8_getchar(utf8_iter* iter) {
 
 // Utilities
 
-uint32_t utf8_strlen(const char* string) {
+inline uint32_t utf8_strlen(const char* string) {
     if (string == NULL) return 0;
 
     uint32_t length = 0;
@@ -188,7 +188,7 @@ uint32_t utf8_strlen(const char* string) {
     return length;
 }
 
-uint32_t utf8_strnlen(const char* string, uint32_t end) {
+inline uint32_t utf8_strnlen(const char* string, uint32_t end) {
     if (string == NULL) return 0;
 
     uint32_t length = 0;
@@ -202,7 +202,7 @@ uint32_t utf8_strnlen(const char* string, uint32_t end) {
     return length;
 }
 
-uint32_t utf8_to_unicode(const char* character) {
+inline uint32_t utf8_to_unicode(const char* character) {
     if (character == NULL) return 0;
     if (character[0] == 0) return 0;
 
@@ -213,13 +213,15 @@ uint32_t utf8_to_unicode(const char* character) {
     return utf8_converter(character, size);
 }
 
-const char* unicode_to_utf8(uint32_t codepoint) { return unicode_converter(codepoint, unicode_charsize(codepoint)); }
+inline const char* unicode_to_utf8(uint32_t codepoint) {
+    return unicode_converter(codepoint, unicode_charsize(codepoint));
+}
 
 // Internal use / Advanced use.
 
 // UTF8 to Unicode
 
-uint8_t utf8_charsize(const char* character) {
+inline uint8_t utf8_charsize(const char* character) {
     if (character == NULL) return 0;
     if (character[0] == 0) return 0;
 
@@ -241,7 +243,7 @@ uint8_t utf8_charsize(const char* character) {
 
 static const uint8_t table_unicode[] = {0, 0, 0x1F, 0xF, 0x7, 0x3, 0x1};
 
-uint32_t utf8_converter(const char* character, uint8_t size) {
+inline uint32_t utf8_converter(const char* character, uint8_t size) {
     if (size == 0) return 0;
     if (character == NULL) return 0;
     if (character[0] == 0) return 0;
@@ -264,7 +266,7 @@ uint32_t utf8_converter(const char* character, uint8_t size) {
 
 // Unicode to UTF8
 
-uint8_t unicode_charsize(uint32_t codepoint) {
+inline uint8_t unicode_charsize(uint32_t codepoint) {
     if (codepoint == 0) return 0;
 
     if (codepoint < 0x80)
@@ -285,7 +287,7 @@ uint8_t unicode_charsize(uint32_t codepoint) {
 
 static const uint8_t table_utf8[] = {0, 0, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC};
 
-const char* unicode_converter(uint32_t codepoint, uint8_t size) {
+inline const char* unicode_converter(uint32_t codepoint, uint8_t size) {
     static char str[10];
     memset(str, '\0', sizeof(str));
     if (size == 0) return str;
@@ -303,7 +305,7 @@ const char* unicode_converter(uint32_t codepoint, uint8_t size) {
 
     return str;
 }
-std::string codeStr(uint32_t code) { return std::string(unicode_to_utf8(code)); }
+inline std::string codeStr(uint32_t code) { return std::string(unicode_to_utf8(code)); }
 
 
 #endif  // SRC_UTILS_UTF8_HPP_

@@ -19,6 +19,7 @@
 #include <vector>
 #include "../core/darts.hpp"
 #include "../core/segment.hpp"
+#include "./encoder.hpp"
 
 namespace darts {
 
@@ -98,7 +99,8 @@ class OnnxPersenter : public CellPersenter {
      */
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        std::map<std::string, SegmentPlugin*> it = plugins.find("");
+        std::map<std::string,  std::shared_ptr<SegmentPlugin>>::iterator it;
+        it = plugins.find("");
         if (it == plugins.end()) {
             std::cerr << "" << std::endl;
             return EXIT_FAILURE;

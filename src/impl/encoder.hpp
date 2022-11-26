@@ -41,7 +41,7 @@ struct _Symbol {
     int size;
     int idx;
 };
-bool symbol_compare(_Symbol& i1, _Symbol& i2) {
+inline bool symbol_compare_func(_Symbol& i1, _Symbol& i2) {
     return (i1.start < i2.start) || (i1.start == i2.start && i1.size < i2.size);
 }
 
@@ -74,7 +74,7 @@ class _WordGraph {
     }
 
     void setPath(int endidx, std::function<double(int, int)> idx_dist) {
-        std::sort(nodes.begin(), nodes.end(), symbol_compare);
+        std::sort(nodes.begin(), nodes.end(), symbol_compare_func);
         // Lookup all bigrams.
         for (size_t i = 0; i < nodes.size(); i++) {
             if (nodes[i].start == 0) {
@@ -103,7 +103,7 @@ class _WordGraph {
 
     void bestPaths(const std::string& eng, std::vector<std::string>& ret) const {
         // init gloab val
-        std::vector<double> dist(nodes.size() + 2, INT64_MAX);
+        std::vector<double> dist(nodes.size() + 2, std::numeric_limits<double>::max());
         std::vector<int> prev(nodes.size() + 2, -2);
         using iPair = std::pair<double, int>;
         std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair>> pq;
@@ -148,7 +148,7 @@ class _WordGraph {
     }
 };
 
-bool is_digits(const std::string& str) {
+inline bool is_digits(const std::string& str) {
     return std::all_of(str.begin(), str.end(), ::isdigit);  // C++11
 }
 
@@ -168,7 +168,8 @@ static const char* mask_char = "[MASK]";
 static const char* pad_char  = "[PAD]";
 }  // namespace codemap
 
-class WordPice ::public SegmentPlugin {
+namespace darts {
+class WordPice :public SegmentPlugin {
    private:
     static const char* BASE_DIR;
     // vars
@@ -363,5 +364,7 @@ class WordPice ::public SegmentPlugin {
         return "";
     }
 };
+}  // end namespace darts
+
 
 #endif  // SRC_IMPL_ENCODER_HPP_

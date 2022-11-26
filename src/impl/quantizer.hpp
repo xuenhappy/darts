@@ -24,7 +24,11 @@
 namespace darts {
 class MinCoverPersenter : public CellPersenter {
    public:
-    int initalize(const std::map<std::string, std::string>& param) { return EXIT_SUCCESS; }
+    int initalize(const std::map<std::string, std::string>& params,
+        std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+            // pass
+             return EXIT_SUCCESS;
+    }
 
     /**
      * @brief do nothing
