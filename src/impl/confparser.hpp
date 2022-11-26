@@ -9,19 +9,16 @@
  * -----
  * Copyright 2021 - 2022 Your Company, Moka
  */
-#ifndef SRC_IMPL_JSONCONF_HPP_
-#define SRC_IMPL_JSONCONF_HPP_
-
+#ifndef SRC_IMPL_CONFPARSER_HPP_
+#define SRC_IMPL_CONFPARSER_HPP_
 
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
-
 #include "../core/segment.hpp"
 #include "../utils/file_utils.hpp"
 #include "../utils/str_utils.hpp"
-
 
 void getParams(Json::Value& node, std::map<std::string, std::string>& params) {
     auto mem = node.getMemberNames();
@@ -86,7 +83,7 @@ int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
         std::cerr << "ERROR: no key [modes/" << mode << "/persenter] found!" << std::endl;
         return EXIT_FAILURE;
     }
-    auto used_persenter = use_node["persenter"].asString();
+    auto used_persenter         = use_node["persenter"].asString();
     auto used_recognizers_nodes = use_node["recognizers"];
     std::vector<std::string> used_recognizers;
     if (used_recognizers_nodes.type() == Json::arrayValue) {
@@ -104,7 +101,7 @@ int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
         std::cerr << "ERROR: no key [persenters/" << used_persenter << "] found!" << std::endl;
         return EXIT_FAILURE;
     }
-    auto persenter_node = persenters_node[used_persenter];
+    auto persenter_node        = persenters_node[used_persenter];
     std::string persenter_type = persenter_node["type"].asString();
     std::map<std::string, std::string> params;
     getParams(persenter_node, params);
@@ -130,7 +127,7 @@ int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
             used_recognizers_objs.clear();
             return EXIT_FAILURE;
         }
-        auto recognizer_node = recognizers_node[name];
+        auto recognizer_node        = recognizers_node[name];
         std::string recognizer_type = recognizers_node["type"].asString();
         params.clear();
         getParams(recognizer_node, params);
@@ -160,4 +157,4 @@ int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
     return EXIT_SUCCESS;
 }
 
-#endif  // SRC_IMPL_JSONCONF_HPP_
+#endif  // SRC_IMPL_CONFPARSER_HPP_
