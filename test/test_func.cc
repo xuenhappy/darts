@@ -13,11 +13,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <iostream>
-
 #include "core/segment.hpp"
-#include "impl/jsonconf.hpp"
+#include "impl/confparser.hpp"
 #include "impl/quantizer.hpp"
 #include "impl/recognizer.hpp"
 #include "utils/argparse.hpp"
@@ -49,7 +47,6 @@ void testAtomListSplit() {
     std::cout << darts::AtomList(ori) << std::endl;
 }
 
-
 void testDregexRW() {
     printf("----- test function %s-----------------\n", "testDregexRW");
     darts::Trie dat;
@@ -69,7 +66,7 @@ void testDregexParse() {
     std::u32string text = to_utf32(teststr);
     dregex::U32StrIterator testStr(&text[0], text.size());
     std::vector<std::string> labels;
-    newTrie.parse(testStr, [&](size_t s, size_t e, const std::set<int64_t> *label) -> bool {
+    newTrie.parse(testStr, [&](size_t s, size_t e, const std::set<int64_t>* label) -> bool {
         labels.clear();
         if (label) {
             for (auto lidx : *label) {
@@ -88,7 +85,6 @@ void testDictWordRecongnizer() {
     std::cout << darts::CellRecognizerRegisterer::IsValid("DictWordRecongnizer") << std::endl;
 }
 
-
 void testBigramPersenterDictMake() {
     printf("----- test function %s-----------------\n", "testBigramPersenterDictMake");
     darts::BigramDict::buildDict("SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt", "bigram");
@@ -96,7 +92,7 @@ void testBigramPersenterDictMake() {
 
 void testJsonConfLoad() {
     printf("----- test function %s-----------------\n", "testJsonConfLoad");
-    darts::Segment *segment = NULL;
+    darts::Segment* segment = NULL;
     if (parseJsonConf(getResource("data/darts.conf.json").c_str(), &segment)) {
         std::cout << "load segment error!" << std::endl;
     } else {
@@ -107,7 +103,7 @@ void testJsonConfLoad() {
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     initUtils();
     testGetResource();
     testNormalization();
