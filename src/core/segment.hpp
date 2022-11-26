@@ -15,6 +15,7 @@
 #include <float.h>
 #include <map>
 #include <memory>
+#include <queue>
 #include <set>
 #include <string>
 #include <utility>
@@ -114,51 +115,32 @@ class SegGraph {
      * @param bestPaths
      */
     void selectPath(std::vector<int>& bestPaths) {
-        auto sz = graph.size();
-        std::vector<double> dist;
-        dist.assign(sz, -1.0);
-        std::vector<int> prev;
-        prev.assign(sz, -2);
-
-        std::set<int> used;
-        for (auto j = 1; j < sz; j++) {
-            used.insert(j);
-        }
-        std::set<int> visted;
-        for (auto nw : *graph[-1]) {
-            prev[nw->et] = -1;
-            dist[nw->et] = nw->weight;
-            visted.insert(nw->et);
-        }
+        auto sz = graph.size() + 1;
+        std::vector<double> dist(sz, std::numeric_limits<double>::max());
+        std::vector<int> prev(sz, -2);
+        using iPair = std::pair<double, int>;
+        std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair>> pq;
+        // init var
+        pq.push(std::make_pair(0.0, -1));
+        dist[0] = 0;
 
         // dijkstra
-        while (used.find(sz - 1) != used.end()) {
-            double minDist = DBL_MAX;
-            int u          = -1;
-            for (auto idx : visted) {
-                if (used.find(idx) == used.end()) continue;
-                if (dist[idx] < minDist) {
-                    minDist = dist[idx];
-                    u       = idx;
-                }
-            }
-            if (u == sz - 1 || u < 0) break;
-            used.erase(u);
+        while (!pq.empty()) {
+            int u = pq.top().second;
+            pq.pop();
             for (auto nw : *graph[u]) {
-                auto node = nw->et;
-                if (used.find(node) == used.end()) continue;
-                auto c = dist[u] + nw->weight;
-                visted.insert(node);
-                if ((dist[node] < 0) || (c < dist[node])) {
-                    dist[node] = c;
-                    prev[node] = u;
+                int v = nw->et;
+                if (dist[v + 1] > dist[u + 1] + nw->weight) {
+                    dist[v + 1] = dist[u + 1] + nw->weight;
+                    prev[v + 1] = u;
+                    pq.push(std::make_pair(dist[v + 1], v));
                 }
             }
         }
-
-        bestPaths.push_back(sz - 1);
-        while (bestPaths.back() > -1) {
-            bestPaths.push_back(prev[bestPaths.back()]);
+        int pre = prev[prev.size() - 1];
+        while (pre > -1) {
+            bestPaths.emplace_back(pre);
+            pre = prev[pre];
         }
         std::reverse(bestPaths.begin(), bestPaths.end());
     }

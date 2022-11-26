@@ -109,7 +109,6 @@ class WordGraph {
         std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair>> pq;
         pq.push(std::make_pair(0.0, -1));
         dist[0] = 0;
-        prev[0] = -2;
         // calute best path
         while (!pq.empty()) {
             int u = pq.top().second;
@@ -126,7 +125,7 @@ class WordGraph {
                         // Updating distance of v
                         dist[pv] = dist[u + 1] + weight;
                         prev[pv] = u;
-                        if (v >= 0) pq.push(std::make_pair(dist[v], v));
+                        if (v >= 0) pq.push(std::make_pair(dist[pv], v));
                     }
                     continue;
                 }
@@ -135,8 +134,9 @@ class WordGraph {
         }
         // get code
         int pre = prev[prev.size() - 1];
-        while (pre > 0) {
+        while (pre > -1) {
             ret.emplace_back(eng.substr(nodes[pre].start, nodes[pre].size));
+            pre = prev[pre];
         }
         std::reverse(ret.begin(), ret.end());
     }
