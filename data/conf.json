@@ -2,52 +2,52 @@
     "dservices": {
         "wordpiece.dict": {}
     },
-    "recognizers": {
-        "inner.dict": {
-            "type": "DictWordRecongnizer",
-            "pbfile.path": "data/model-dict/mini_dict.pb.gz"
+    "modes": {
+        "fast": {
+            "persenter": "",
+            "recognizers": []
         },
-        "hmm.dict": {
-            "type": "HmmRecongnizer",
-            "pbfile.path": "data/model-dict/mini_dict.pb.gz"
-        },
-        "date.dict": {
-            "type": "HmmRecongnizer",
-            "pbfile.path": "data/model-dict/mini_dict.pb.gz"
+        "smart": {
+            "persenter": "",
+            "recognizers": []
         }
     },
     "persenters": {
+        "bert.embed": {
+            "model.path": "",
+            "type": "TinyBertPersenter"
+        },
+        "elmo.embed": {
+            "deps": {
+                "encoder": ""
+            },
+            "model.path": "",
+            "type": "ElmoPersenter"
+        },
+        "mini.ngram": {
+            "dat.dir": "data/model-dict/bigram",
+            "type": "BigramPersenter"
+        },
         "mini.rule": {
             "type": "MinCoverPersenter"
         },
-        "mini.ngram": {
-            "type": "BigramPersenter",
-            "dat.dir": "data/model-dict/bigram"
-        },
-        "elmo.embed": {
-            "type": "ElmoPersenter",
-            "model.path": "",
-            "deps": {
-                "encoder": ""
-            }
-        },
-        "bert.embed": {
-            "type": "TinyBertPersenter",
-            "model.path": ""
-        },
         "wordvec.embed": {
-            "type": "",
-            "model.path": ""
+            "model.path": "",
+            "type": ""
         }
     },
-    "modes": {
-        "smart": {
-            "recognizers": [],
-            "persenter": ""
+    "recognizers": {
+        "date.dict": {
+            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
+            "type": "HmmRecongnizer"
         },
-        "fast": {
-            "recognizers": [],
-            "persenter": ""
+        "hmm.dict": {
+            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
+            "type": "HmmRecongnizer"
+        },
+        "inner.dict": {
+            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
+            "type": "DictWordRecongnizer"
         }
     },
     "start.mode": "smart"

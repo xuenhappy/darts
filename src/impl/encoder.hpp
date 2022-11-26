@@ -30,26 +30,26 @@
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
 
-struct _SymbolPair {
+struct symbol_pair {
     int left;      // left index of this pair
     int right;     // right index of this pair
     double score;  // score of this pair. small is better
 };
 
-struct _Symbol {
+struct symbol {
     int start;
     int size;
     int idx;
 };
-inline bool symbol_compare_func(_Symbol& i1, _Symbol& i2) {
+inline bool symbol_compare_func(symbol& i1, symbol& i2) {
     return (i1.start < i2.start) || (i1.start == i2.start && i1.size < i2.size);
 }
 
-class _WordGraph {
+class WordGraph {
    private:
-    std::vector<_Symbol> nodes;      // nodes
+    std::vector<symbol> nodes;       // nodes
     size_t path_nums;                // path nums
-    std::vector<_SymbolPair> paths;  // paths
+    std::vector<symbol_pair> paths;  // paths
 
     void addPath(int left, int right, double weight) {
         if (path_nums >= paths.size()) {
@@ -63,10 +63,10 @@ class _WordGraph {
     }
 
    public:
-    explicit _WordGraph(int nodecap) : path_nums(0), paths(256) { nodes.reserve(nodecap); }
+    explicit WordGraph(int nodecap) : path_nums(0), paths(256) { nodes.reserve(nodecap); }
 
     void addNode(int pos, int size, int idx) {
-        _Symbol s;
+        symbol s;
         s.start = pos;
         s.size  = size;
         s.idx   = idx;
@@ -141,7 +141,7 @@ class _WordGraph {
         std::reverse(ret.begin(), ret.end());
     }
 
-    ~_WordGraph() {
+    ~WordGraph() {
         nodes.clear();
         paths.clear();
         path_nums = 0;
@@ -216,7 +216,7 @@ class WordPice : public SegmentPlugin {
             return;
         }
         // load code
-        _WordGraph graph(token.size() * 2);
+        WordGraph graph(token.size() * 2);
         // Splits the input into character sequence
         graph.addNode(0, 2, english_token_dict.getWordKey(token.substr(0, 2)));
         for (size_t i = 2; i < token.size(); i++) {
