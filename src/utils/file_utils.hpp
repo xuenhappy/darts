@@ -14,7 +14,6 @@
 #ifndef SRC_UTILS_FILE_UTILS_HPP_
 #define SRC_UTILS_FILE_UTILS_HPP_
 
-
 #ifdef WIN32
 #include <direct.h>
 #include <io.h>
@@ -25,12 +24,10 @@
 #include <dlfcn.h>
 #include <stdint.h>
 #include <stdlib.h>
-
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
-
 
 #ifdef WIN32
 #define ACCESS(fileName, accessMode) _access(fileName, accessMode)
@@ -40,14 +37,13 @@
 #define MKDIR(path) mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
 #endif
 
-
 /**
  * @brief Create a Directory object
  *
  * @param directoryPath
  * @return int32_t
  */
-int32_t createDirectory(const std::string &directoryPath) {
+inline int32_t createDirectory(const std::string& directoryPath) {
     namespace fs = std::filesystem;
     // check ori path
     fs::path ori_path(directoryPath);
@@ -84,9 +80,9 @@ int32_t createDirectory(const std::string &directoryPath) {
  *
  * @return const char*
  */
-const char *dllPath(void) {
+inline const char* dllPath(void) {
     Dl_info dl_info;
-    int rc = dladdr((void *)dllPath, &dl_info);
+    int rc = dladdr((void*)dllPath, &dl_info);
     if (!rc) {
         return "";
     }
@@ -100,7 +96,7 @@ const char *dllPath(void) {
  * @param isDir if this resouce is dir otherwise is file
  * @return const std::string
  */
-const std::string getResource(const std::string &spath, bool isDir = false) {
+inline const std::string getResource(const std::string& spath, bool isDir = false) {
     namespace fs = std::filesystem;
     fs::path ori_path(spath);
     if (fs::exists(ori_path)) {
@@ -128,7 +124,6 @@ const std::string getResource(const std::string &spath, bool isDir = false) {
             }
         }
 
-
         // check dll parent
         bin_dir = dpath1.parent_path();
         bin_dir.append("../").append(spath);
@@ -142,7 +137,7 @@ const std::string getResource(const std::string &spath, bool isDir = false) {
         }
     }
 
-    char *env = getenv("DARTS_CONF_PATH");
+    char* env = getenv("DARTS_CONF_PATH");
     if (!env) {
         return spath;
     }
@@ -170,7 +165,7 @@ const std::string getResource(const std::string &spath, bool isDir = false) {
  * @param out out string
  * @return int if success
  */
-int getFileText(const std::string &path, std::string &out) {
+inline int getFileText(const std::string& path, std::string& out) {
     std::ifstream in(path);
     if (!in.is_open()) {
         std::cerr << "ERROR: open data " << path << " file failed " << std::endl;
@@ -182,6 +177,5 @@ int getFileText(const std::string &path, std::string &out) {
     out.append(sin.str());
     return EXIT_SUCCESS;
 }
-
 
 #endif  // SRC_UTILS_FILE_UTILS_HPP_
