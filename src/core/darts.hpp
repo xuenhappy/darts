@@ -76,6 +76,7 @@ class Atom {
             }
             return ret;
         }
+        return "";
     }
 
     bool hasLabel(std::string label) const {
@@ -356,7 +357,7 @@ typedef struct _Cursor {
     struct _Cursor* lack;
     std::shared_ptr<Word> val;
     int idx;
-} * Cursor;
+}* Cursor;
 
 /**
  * @brief create a cursor
