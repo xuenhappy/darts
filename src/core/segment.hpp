@@ -129,18 +129,19 @@ class SegGraph {
             int u = pq.top().second;
             pq.pop();
             for (auto nw : *graph[u]) {
-                int v = nw->et;
-                if (dist[v + 1] > dist[u + 1] + nw->weight) {
-                    dist[v + 1] = dist[u + 1] + nw->weight;
+                int v             = nw->et;
+                double new_weight = dist[u + 1] + nw->weight;
+                if (dist[v + 1] > new_weight) {
+                    dist[v + 1] = new_weight;
                     prev[v + 1] = u;
-                    pq.push(std::make_pair(dist[v + 1], v));
+                    pq.push(std::make_pair(new_weight, v));
                 }
             }
         }
         int pre = prev[prev.size() - 1];
         while (pre > -1) {
             bestPaths.emplace_back(pre);
-            pre = prev[pre];
+            pre = prev[pre + 1];
         }
         std::reverse(bestPaths.begin(), bestPaths.end());
     }

@@ -115,17 +115,15 @@ class WordGraph {
             pq.pop();
             for (size_t i = u + 1; i < path_nums; i++) {
                 if (paths[i].right == u) {
-                    // adjacent of u.
+                    int v  = paths[i].left;
+                    int pv = v < 0 ? dist.size() - 1 : v + 1;
 
-                    int v         = paths[i].left;
-                    double weight = paths[i].score;
-                    int pv        = v < 0 ? dist.size() - 1 : v + 1;
+                    double new_weight = dist[u + 1] + paths[i].score;
                     // If there is shorted path to v through u.
-                    if (dist[pv] > dist[u + 1] + weight) {
-                        // Updating distance of v
-                        dist[pv] = dist[u + 1] + weight;
+                    if (dist[pv] > new_weight) {
+                        dist[pv] = new_weight;
                         prev[pv] = u;
-                        if (v >= 0) pq.push(std::make_pair(dist[pv], v));
+                        if (v >= 0) pq.push(std::make_pair(new_weight, v));
                     }
                     continue;
                 }
@@ -136,7 +134,7 @@ class WordGraph {
         int pre = prev[prev.size() - 1];
         while (pre > -1) {
             ret.emplace_back(eng.substr(nodes[pre].start, nodes[pre].size));
-            pre = prev[pre];
+            pre = prev[pre + 1];
         }
         std::reverse(ret.begin(), ret.end());
     }
