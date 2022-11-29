@@ -13,17 +13,14 @@
 #ifndef SRC_UTILS_NORM_CHR_HPP_
 #define SRC_UTILS_NORM_CHR_HPP_
 
-
 #include <stdint.h>
-
 #include <fstream>
-#include <unordered_map>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
-
 #include "./file_utils.hpp"
 #include "./str_utils.hpp"
 #include "./utf8.hpp"
@@ -38,8 +35,7 @@ static std::unordered_map<std::string, std::string> _WordMap;
  *
  */
 
-
-void _addWordMap() {
+inline void _addWordMap() {
     // basic chars
     for (uint32_t i = 0; i < 0x20 + 1; i++) {
         _WordMap[codeStr(i)] = ' ';
@@ -62,7 +58,6 @@ void _addWordMap() {
     }
     _WordMap[codeStr(12288)] = codeStr(32);
 
-
     // special map
     std::map<std::string, std::string> special = {
         {"“", "\""},  {"”", "\""},  {"、", ","},  {"〜", "~"},  {"～", "~"},  {"－", "-"},  {"–", "-"},
@@ -72,19 +67,17 @@ void _addWordMap() {
         {"❮", "《"},  {"❯", "》"},  {"❰", "《"},  {"❱", "》"},  {"〘", "《"}, {"〙", "》"}, {"〚", "《"},
         {"〛", "》"}, {"〉", "》"}, {"《", "《"}, {"》", "》"}, {"「", "《"}, {"」", "》"}, {"『", "《"},
         {"』", "》"}, {"【", "《"}, {"】", "》"}, {"〔", "《"}, {"〕", "》"}, {"〖", "《"}, {"〗", "》"}};
-    for (auto &kv : special) {
+    for (auto& kv : special) {
         _WordMap[kv.first] = kv.second;
     }
 
-
     // check wordmap and fix it
     std::map<std::string, std::string> _TMP;
-    for (auto &kv : _WordMap) {
+    for (auto& kv : _WordMap) {
         if (kv.first != kv.second) {
             _TMP[kv.first] = kv.second;
         }
     }
-
 
     // '\n' don't replace,\t replace 4 space empty,notice!!!!!!!!!!
     _TMP.erase("\n");
@@ -92,7 +85,7 @@ void _addWordMap() {
     _TMP.erase(" ");
 
     _WordMap.clear();
-    for (auto &kv : _TMP) {
+    for (auto& kv : _TMP) {
         if (_TMP.find(kv.second) != _TMP.end()) {
             _WordMap[kv.first] = _TMP[kv.second];
         } else {
@@ -106,8 +99,8 @@ void _addWordMap() {
  *
  * @return int
  */
-int initializeMap() {
-    std::string dat = getResource("data/confuse.json");
+inline int initializeMap() {
+    std::string dat = getResource("data/kernel/confuse.json");
     std::string data;
     if (getFileText(dat, data)) {
         std::cerr << "ERROR: open json data " << dat << " file failed " << std::endl;
@@ -125,7 +118,7 @@ int initializeMap() {
             std::string key(*iter);
             for (auto i = 0; i < cnt; i++) {
                 std::string val = root[*iter][i].asString();
-                _WordMap[val] = *iter;
+                _WordMap[val]   = *iter;
             }
         } else {
             std::cerr << "ERROR: open json data " << dat << "key:" << *iter << "  failed " << std::endl;
@@ -143,7 +136,7 @@ int initializeMap() {
  * @param str
  * @return std::string
  */
-std::string normalizeStr(const std::string &str) {
+inline std::string normalizeStr(const std::string& str) {
     std::stringstream output;
     utf8_iter ITER;
     utf8_init(&ITER, str.c_str());
@@ -151,7 +144,7 @@ std::string normalizeStr(const std::string &str) {
     std::unordered_map<std::string, std::string>::const_iterator it;
     while (utf8_next(&ITER)) {
         tmps = utf8_getchar(&ITER);
-        it = _WordMap.find(tmps);
+        it   = _WordMap.find(tmps);
         if (it != _WordMap.end()) {
             output << it->second;
         } else {

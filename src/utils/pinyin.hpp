@@ -38,8 +38,8 @@ static std::unordered_map<char32_t, std::shared_ptr<PinyinInfo>> _WordPinyin;
  * @brief 加载拼音数据
  *
  */
-int loadPinyin() {
-    std::string dat = getResource("data/pinyin.txt");
+inline int loadPinyin() {
+    std::string dat = getResource("data/kernel/pinyin.txt");
     std::ifstream in(dat.c_str());
     if (!in.is_open()) {
         std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
@@ -99,7 +99,7 @@ int loadPinyin() {
  * @param word
  * @return const PinyinInfo*
  */
-const std::shared_ptr<PinyinInfo> pinyin(const char32_t word) {
+inline const std::shared_ptr<PinyinInfo> pinyin(const char32_t word) {
     auto it = _WordPinyin.find(word);
     if (it != _WordPinyin.end()) {
         return it->second;

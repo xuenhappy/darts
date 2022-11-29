@@ -20,11 +20,193 @@
 #include "../utils/file_utils.hpp"
 #include "../utils/str_utils.hpp"
 
-void getParams(Json::Value& node, std::map<std::string, std::string>& params) {
+int checkDep(Json::Value& root, Json::Value& node, std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache,
+             std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& ret);
+
+inline void getParams(Json::Value& node, std::map<std::string, std::string>& params) {
     auto mem = node.getMemberNames();
     for (auto iter = mem.begin(); iter != mem.end(); iter++) {
         params[*iter] = node[*iter].asString();
     }
+}
+
+inline void getList(Json::Value& node, std::vector<std::string>& ret) {
+    auto cnt = node.size();
+    for (auto i = 0; i < cnt; i++) {
+        ret.push_back(node[i].asString());
+    }
+}
+
+inline std::shared_ptr<darts::SegmentPlugin> loadServices(
+    Json::Value& root, Json::Value& dservices_node, std::string& name,
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache) {
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>::iterator it = cache.find(name);
+    if (it != cache.end()) {
+        return it->second;
+    }
+    if (!dservices_node.isMember(name)) {
+        std::cerr << "ERROR: no key [dservices/" << name << "] found!" << std::endl;
+        return nullptr;
+    }
+    auto snode        = dservices_node[name];
+    std::string stype = snode["type"].asString();
+    std::map<std::string, std::string> params;
+    getParams(snode, params);
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> deps;
+    if (checkDep(root, snode, cache, deps)) {
+        deps.clear();
+        return nullptr;
+    }
+    darts::SegmentPlugin* service = darts::SegmentPluginRegisterer::GetInstanceByName(stype);
+    if (!service) {
+        std::cerr << "ERROR: create class [" << stype << "] SegmentPlugin failed!" << std::endl;
+        deps.clear();
+        return nullptr;
+    }
+    if (service->initalize(params, deps)) {
+        std::cerr << "ERROR: init class [" << stype << "] SegmentPlugin obj failed!" << std::endl;
+        delete service;
+        deps.clear();
+        return nullptr;
+    }
+    std::shared_ptr<darts::SegmentPlugin> ret(service);
+    cache[name] = ret;
+    deps.clear();
+    return ret;
+}
+
+inline std::shared_ptr<darts::CellPersenter> loadPersenter(
+    Json::Value& root, Json::Value& persenters_node, std::string& used_persenter,
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache) {
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>::iterator it = cache.find(used_persenter);
+    if (it != cache.end()) {
+        return std::dynamic_pointer_cast<darts::CellPersenter>(it->second);
+    }
+    if (!persenters_node.isMember(used_persenter)) {
+        std::cerr << "ERROR: no key [persenters/" << used_persenter << "] found!" << std::endl;
+        return nullptr;
+    }
+    auto persenter_node        = persenters_node[used_persenter];
+    std::string persenter_type = persenter_node["type"].asString();
+    std::map<std::string, std::string> params;
+    getParams(persenter_node, params);
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> deps;
+    if (checkDep(root, persenter_node, cache, deps)) {
+        deps.clear();
+        return nullptr;
+    }
+    darts::CellPersenter* persenter = darts::CellPersenterRegisterer::GetInstanceByName(persenter_type);
+    if (!persenter) {
+        std::cerr << "ERROR: create class [" << persenter_type << "] CellPersenter failed!" << std::endl;
+        deps.clear();
+        return nullptr;
+    }
+    if (persenter->initalize(params, deps)) {
+        std::cerr << "ERROR: init class [" << persenter_type << "] CellPersenter obj failed!" << std::endl;
+        delete persenter;
+        deps.clear();
+        return nullptr;
+    }
+    std::shared_ptr<darts::CellPersenter> ret(persenter);
+    cache[used_persenter] = std::dynamic_pointer_cast<darts::SegmentPlugin>(ret);
+    deps.clear();
+    return ret;
+}
+inline std::shared_ptr<darts::CellRecognizer> loadRecognizer(
+    Json::Value& root, Json::Value& recognizers_node, std::string& name,
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache) {
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>::iterator it = cache.find(name);
+    if (it != cache.end()) {
+        return std::dynamic_pointer_cast<darts::CellRecognizer>(it->second);
+    }
+
+    if (!recognizers_node.isMember(name)) {
+        std::cerr << "ERROR: no key [recognizers/" << name << "] found!" << std::endl;
+        return nullptr;
+    }
+    auto recognizer_node        = recognizers_node[name];
+    std::string recognizer_type = recognizers_node["type"].asString();
+    std::map<std::string, std::string> params;
+    getParams(recognizer_node, params);
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> deps;
+    if (checkDep(root, recognizer_node, cache, deps)) {
+        deps.clear();
+        return nullptr;
+    }
+    darts::CellRecognizer* recognizer = darts::CellRecognizerRegisterer::GetInstanceByName(recognizer_type);
+    if (!recognizer) {
+        std::cerr << "ERROR: create class [" << recognizer << "] CellRecognizer failed!" << std::endl;
+        deps.clear();
+        return NULL;
+    }
+    if (recognizer->initalize(params, deps)) {
+        std::cerr << "ERROR: init class [" << recognizer << "] CellRecognizer obj failed!" << std::endl;
+        deps.clear();
+        return NULL;
+    }
+    std::shared_ptr<darts::CellRecognizer> ret(recognizer);
+    cache[name] = std::dynamic_pointer_cast<darts::SegmentPlugin>(ret);
+    deps.clear();
+    return ret;
+}
+
+inline int loadDep(Json::Value& root, std::string& depName,
+                   std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache) {
+    if (cache.find(depName) != cache.end()) {
+        return EXIT_SUCCESS;
+    }
+    // search in dservices nodes
+    if (root.isMember("dservices")) {
+        auto dservices_node = root["dservices"];
+        if (dservices_node.isMember(depName)) {
+            auto ret = loadServices(root, dservices_node, depName, cache);
+            if (!ret) {
+                return EXIT_FAILURE;
+            }
+            return EXIT_SUCCESS;
+        }
+    }
+
+    // search in persenters nodes
+    auto persenters_node = root["persenters"];
+    if (persenters_node.isMember(depName)) {
+        auto ret = loadPersenter(root, persenters_node, depName, cache);
+        if (!ret) {
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
+    }
+    // search in recognizers nodes
+    auto recognizers_node = root["recognizers"];
+    if (recognizers_node.isMember(depName)) {
+        auto ret = loadRecognizer(root, recognizers_node, depName, cache);
+        if (!ret) {
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
+    }
+    std::cerr << "ERROR: could not find any plugin name [" << depName << "] in conf file!" << std::endl;
+    return EXIT_FAILURE;
+}
+
+inline int checkDep(Json::Value& root, Json::Value& node,
+                    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache,
+                    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& ret) {
+    if (!node.isMember("deps")) {
+        // node has no deps
+        return EXIT_SUCCESS;
+    }
+    std::map<std::string, std::string> params;
+    getParams(node["deps"], params);
+    std::map<std::string, std::string>::iterator it;
+    for (it = params.begin(); it != params.end(); ++it) {
+        if (loadDep(root, it->second, cache)) {
+            ret.clear();
+            return EXIT_FAILURE;
+        }
+        ret[it->first] = cache[it->second];
+    }
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -34,7 +216,7 @@ void getParams(Json::Value& node, std::map<std::string, std::string>& params) {
  * @param segment point val pointer
  * @return int 1 error ,0 success
  */
-int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
+inline int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
     *segment = NULL;
     std::string data;
     if (getFileText(json_conf_file, data)) {
@@ -47,22 +229,25 @@ int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
         std::cerr << "ERROR: parse json data " << json_conf_file << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
-    // check key
+    // get start mode
     if (!root.isMember("start.mode")) {
         std::cerr << "ERROR: no root key [start.mode] found!" << std::endl;
         return EXIT_FAILURE;
     }
     auto mode = root["start.mode"].asString();
+    // get modes node
     if (!root.isMember("modes")) {
         std::cerr << "ERROR: no root key [modes] found!" << std::endl;
         return EXIT_FAILURE;
     }
     auto modes_node = root["modes"];
+    // get recognizers node
     if (!root.isMember("recognizers")) {
         std::cerr << "ERROR: no root key [recognizers] found!" << std::endl;
         return EXIT_FAILURE;
     }
     auto recognizers_node = root["recognizers"];
+    // get persenters node
     if (!root.isMember("persenters")) {
         std::cerr << "ERROR: no root key [persenters] found!" << std::endl;
         return EXIT_FAILURE;
@@ -85,75 +270,43 @@ int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
     }
     auto used_persenter         = use_node["persenter"].asString();
     auto used_recognizers_nodes = use_node["recognizers"];
+
     std::vector<std::string> used_recognizers;
     if (used_recognizers_nodes.type() == Json::arrayValue) {
-        auto cnt = used_recognizers_nodes.size();
-        for (auto i = 0; i < cnt; i++) {
-            used_recognizers.push_back(used_recognizers_nodes[i].asString());
-        }
+        getList(used_recognizers_nodes, used_recognizers);
     } else {
         std::cerr << "ERROR: read key [modes/" << mode << "/recognizers] failed,not string list!" << std::endl;
         return EXIT_FAILURE;
     }
 
-    // load the persenters
-    if (!persenters_node.isMember(used_persenter)) {
-        std::cerr << "ERROR: no key [persenters/" << used_persenter << "] found!" << std::endl;
-        return EXIT_FAILURE;
-    }
-    auto persenter_node        = persenters_node[used_persenter];
-    std::string persenter_type = persenter_node["type"].asString();
-    std::map<std::string, std::string> params;
-    getParams(persenter_node, params);
-    darts::CellPersenter* persenter = darts::CellPersenterRegisterer::GetInstanceByName(persenter_type);
-    if (!persenter) {
-        std::cerr << "ERROR: create class [" << persenter_type << "] CellPersenter failed!" << std::endl;
-        return EXIT_FAILURE;
-    }
-    if (persenter->initalize(params)) {
-        std::cerr << "ERROR: init class [" << persenter_type << "] CellPersenter obj failed!" << std::endl;
-        delete persenter;
-        persenter = NULL;
-        return EXIT_FAILURE;
-    }
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> _cache;
 
+    // load the persenters
+    std::shared_ptr<darts::CellPersenter> persenter = loadPersenter(root, persenters_node, used_persenter, _cache);
+    if (!persenter) {
+        _cache.clear();
+        return EXIT_FAILURE;
+    }
     // load used_recognizers_objs
-    std::vector<darts::CellRecognizer*> used_recognizers_objs;
+    std::vector<std::shared_ptr<darts::CellRecognizer>> used_recognizers_objs;
     for (auto name : used_recognizers) {
         // load the persenters and recognizers
-        if (!recognizers_node.isMember(name)) {
-            std::cerr << "ERROR: no key [recognizers/" << name << "] found!" << std::endl;
-            for (auto r : used_recognizers_objs) delete r;
-            used_recognizers_objs.clear();
-            return EXIT_FAILURE;
-        }
-        auto recognizer_node        = recognizers_node[name];
-        std::string recognizer_type = recognizers_node["type"].asString();
-        params.clear();
-        getParams(recognizer_node, params);
-        darts::CellRecognizer* recognizer = darts::CellRecognizerRegisterer::GetInstanceByName(recognizer_type);
+        std::shared_ptr<darts::CellRecognizer> recognizer = loadRecognizer(root, recognizers_node, name, _cache);
         if (!recognizer) {
-            std::cerr << "ERROR: create class [" << persenter_type << "] CellPersenter failed!" << std::endl;
-            for (auto r : used_recognizers_objs) delete r;
+            persenter = nullptr;
             used_recognizers_objs.clear();
-            return EXIT_FAILURE;
-        }
-        if (recognizer->initalize(params)) {
-            std::cerr << "ERROR: init class [" << persenter_type << "] CellPersenter obj failed!" << std::endl;
-            for (auto r : used_recognizers_objs) delete r;
-            used_recognizers_objs.clear();
-            delete recognizer;
-            recognizer = NULL;
+            _cache.clear();
             return EXIT_FAILURE;
         }
         used_recognizers_objs.push_back(recognizer);
     }
 
-    *segment = new darts::Segment(std::shared_ptr<darts::CellPersenter>(persenter));
+    *segment = new darts::Segment(persenter);
     for (auto r : used_recognizers_objs) {
-        (*segment)->addRecognizer(std::shared_ptr<darts::CellRecognizer>(r));
+        (*segment)->addRecognizer(r);
     }
     used_recognizers_objs.clear();
+    _cache.clear();
     return EXIT_SUCCESS;
 }
 

@@ -72,8 +72,10 @@ class CellRecognizer : public SegmentPlugin {
 };
 
 // define some registerer
+REGISTER_REGISTERER(SegmentPlugin);
 REGISTER_REGISTERER(CellRecognizer);
 REGISTER_REGISTERER(CellPersenter);
+#define REGISTER_Service(name) REGISTER_CLASS(SegmentPlugin, name)
 #define REGISTER_Recognizer(name) REGISTER_CLASS(CellRecognizer, name)
 #define REGISTER_Persenter(name) REGISTER_CLASS(CellPersenter, name)
 // end defined

@@ -29,8 +29,8 @@
  */
 static std::unordered_map<uint32_t, std::string> _charType;
 
-int loadCharMap() {
-    std::string dat = getResource("data/chars.tmap");
+inline int loadCharMap() {
+    std::string dat = getResource("data/kernel/chars.tmap");
     std::ifstream in(dat.c_str());
     if (!in.is_open()) {
         std::cerr << "ERROR: open data " << dat << " file failed " << std::endl;
@@ -69,7 +69,7 @@ int loadCharMap() {
  * @param code
  * @return WordType
  */
-std::string charType(uint32_t code) {
+inline std::string charType(uint32_t code) {
     if (std::isspace(code)) {
         return "EMPTY";
     }
@@ -186,7 +186,7 @@ class _U32StringIter : public darts::U32Iter {
     }
 };
 
-void atomSplit(darts::U32Iter& str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
+inline void atomSplit(darts::U32Iter& str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
     std::string chr_buffer;
     size_t bufstart      = 0;
     std::string buf_type = "";
@@ -232,12 +232,13 @@ void atomSplit(darts::U32Iter& str, std::function<void(const char*, std::string&
  * @param str 原始字符串
  * @param accept hook函数
  */
-void atomSplit(const char* str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
+inline void atomSplit(const char* str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
     _UTF8StringIter iter(str);
     atomSplit(iter, accept);
 }
 
-void atomSplit(const std::u32string& str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
+inline void atomSplit(const std::u32string& str,
+                      std::function<void(const char*, std::string&, size_t, size_t)> accept) {
     _U32StringIter iter(str);
     atomSplit(iter, accept);
 }

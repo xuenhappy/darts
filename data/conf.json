@@ -2,16 +2,6 @@
     "dservices": {
         "wordpiece.dict": {}
     },
-    "modes": {
-        "fast": {
-            "persenter": "",
-            "recognizers": []
-        },
-        "smart": {
-            "persenter": "",
-            "recognizers": []
-        }
-    },
     "persenters": {
         "bert.embed": {
             "model.path": "",
@@ -48,6 +38,16 @@
         "inner.dict": {
             "pbfile.path": "data/model-dict/mini_dict.pb.gz",
             "type": "DictWordRecongnizer"
+        }
+    },
+    "modes": {
+        "fast": {
+            "persenter": "",
+            "recognizers": []
+        },
+        "smart": {
+            "persenter": "",
+            "recognizers": []
         }
     },
     "start.mode": "smart"
