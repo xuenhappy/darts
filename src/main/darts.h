@@ -15,7 +15,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+#include <stdbool.h>
 #include <stdlib.h>
+
 /**
  * @brief init the darts somthing
  *
@@ -28,11 +30,9 @@ void init_darts();
  */
 void destroy_darts();
 
-
 typedef void* darts_ext;
 typedef struct _dregex* dregex;
 typedef struct _segment* segment;
-
 
 /**
  * @brief
@@ -59,7 +59,6 @@ int load_drgex(const char* path, dregex* regex);
  */
 void free_dregex(dregex regex);
 
-
 /**
  * @brief  正则匹配
  *
@@ -83,7 +82,6 @@ typedef bool (*dregex_hit)(size_t s, size_t e, const char** labels, size_t label
  */
 void parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data);
 
-
 /**
  * @brief load the dregex from json conf file
  *
@@ -91,7 +89,7 @@ void parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data
  * @param sg
  * @return int
  */
-int load_segment(const char* json_conf_file, segment* sg);
+int load_segment(const char* json_conf_file, segment* sg, const char* mode);
 
 /**
  * @brief token匹配函数
@@ -116,7 +114,6 @@ void token_str(segment sg, const char* txt, word_hit hit, bool max_mode, darts_e
  * @param sg
  */
 void free_segment(segment sg);
-
 
 /**
  * @brief 某个词的词类型
@@ -151,7 +148,6 @@ void word_split(const char* str, token_hit hit, darts_ext user_data);
  * @param user_data
  */
 void word_bpe(const char* str, token_hit hit, darts_ext user_data);
-
 
 #ifdef __cplusplus
 }

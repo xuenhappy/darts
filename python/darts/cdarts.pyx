@@ -10,10 +10,10 @@ cdef extern from 'darts.h':
     ctypedef _dregex* dregex
     ctypedef _segment* segment
     ctypedef void* darts_ext
-    ctypedef bool (*atom_iter)(const char** word, size_t* postion, darts_ext user_data)
-    ctypedef bool (*dregex_hit)(size_t s, size_t e, const char** labels, size_t labels_num, darts_ext user_data)
-    ctypedef void (*word_hit)(const char* str, const char* label, size_t as, size_t ae, size_t ws, size_t we,darts_ext user_data)
-    ctypedef bool (*token_hit)(const char* str, const char* label, size_t s, size_t e, darts_ext user_data)
+    ctypedef bool(*atom_iter)(const char**, size_t*, darts_ext)
+    ctypedef bool(*dregex_hit)(size_t, size_t, const char**, size_t, darts_ext)
+    ctypedef void(*word_hit)(const char*, const char*, size_t, size_t, size_t, size_t ,darts_ext )
+    ctypedef bool(*token_hit)(const char*, const char*, size_t, size_t, darts_ext )
 
     void init_darts()
     void destroy_darts()
@@ -21,7 +21,7 @@ cdef extern from 'darts.h':
     int load_drgex(const char* path, dregex* regex)
     void free_dregex(dregex regex)
     void parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data)
-    int load_segment(const char* json_conf_file, segment* sg)
+    int load_segment(const char* json_conf_file, segment* sg,const char* mode)
     void token_str(segment sg, const char* txt, word_hit hit, bool max_mode, darts_ext user_data)
     void free_segment(segment sg)
     int word_type(const char* word, char** ret)
@@ -111,12 +111,14 @@ cdef void word_hit_callback(const char* strs, const char* label, size_t ast, siz
 cdef class Segment:
     cdef segment sg
 
-    def __cinit__(self, path:str=None):
+    def __cinit__(self, path:str=None,mode:str=None):
         if path is not None:
             path="data/darts.conf.json"
+        if mode is None:
+            mode=""
         self.sg=NULL
-        load_segment(path.encode("utf-8",'ignore'), &self.sg)
-        if not self.sg:
+        flag=load_segment(path.encode("utf-8",'ignore'), &self.sg,NULL)
+        if flag or (not self.sg):
             raise IOError("load %s segment conf json file failed!"%path)
 
     def tokenize(self,strs:str,max_mode:bool=False)->list:

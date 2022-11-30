@@ -98,10 +98,10 @@ void parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data
     });
 }
 
-int load_segment(const char* json_conf_file, segment* sg) {
+int load_segment(const char* json_conf_file, segment* sg, const char* mode) {
     if (!json_conf_file) return EXIT_FAILURE;
     darts::Segment* sgemnet = NULL;
-    if (parseJsonConf(json_conf_file, &sgemnet)) {
+    if (parseJsonConf(json_conf_file, &sgemnet, mode)) {
         if (!sgemnet) delete sgemnet;
         return EXIT_FAILURE;
     }
