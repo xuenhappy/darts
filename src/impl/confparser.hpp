@@ -216,7 +216,7 @@ inline int checkDep(Json::Value& root, Json::Value& node,
  * @param segment point val pointer
  * @return int 1 error ,0 success
  */
-inline int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
+inline int parseJsonConf(const char* json_conf_file, darts::Segment** segment, const char* start_mode = NULL) {
     *segment = NULL;
     std::string data;
     if (getFileText(json_conf_file, data)) {
@@ -230,11 +230,15 @@ inline int parseJsonConf(const char* json_conf_file, darts::Segment** segment) {
         return EXIT_FAILURE;
     }
     // get start mode
-    if (!root.isMember("start.mode")) {
-        std::cerr << "ERROR: no root key [start.mode] found!" << std::endl;
-        return EXIT_FAILURE;
+    std::string mode;
+    if (!start_mode) mode = start_mode;
+    if (mode.empty()) {
+        if (!root.isMember("default.mode")) {
+            std::cerr << "ERROR: no root key [default.mode] found!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        mode = root["default.mode"].asString();
     }
-    auto mode = root["start.mode"].asString();
     // get modes node
     if (!root.isMember("modes")) {
         std::cerr << "ERROR: no root key [modes] found!" << std::endl;

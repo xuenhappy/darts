@@ -50,5 +50,5 @@
             "recognizers": []
         }
     },
-    "start.mode": "smart"
+    "default.mode": "smart"
 }

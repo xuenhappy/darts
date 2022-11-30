@@ -33,8 +33,9 @@ class Atom {
     uint32_t et;        // end of this atom in str
     std::set<std::string>* labels;
     bool masked;  // this is for training
+    int kind;     // this autom kind,default -1
 
-    Atom(const char* image, uint32_t start, uint32_t end) : masked(false) {
+    Atom(const char* image, uint32_t start, uint32_t end) : masked(false), kind(-1) {
         this->image  = image;
         this->st     = start;
         this->et     = end;
@@ -48,6 +49,8 @@ class Atom {
         if (atom.labels) {
             this->labels = new std::set<std::string>(*atom.labels);
         }
+        this->masked = atom.masked;
+        this->kind   = atom.kind;
     }
 
     /**
@@ -56,7 +59,7 @@ class Atom {
      * @param hx_func
      * @return const std::string
      */
-    const std::string maxHXlabel(std::function<int(const std::string&)> hx_func) const {
+    const std::string maxHXlabel(std::function<float(const std::string&)> hx_func) const {
         if (labels == NULL || hx_func == nullptr || labels->empty()) {
             return "";
         }
@@ -65,10 +68,10 @@ class Atom {
                 return l;
             }
         } else {
-            int oreder = -10;
+            float oreder = -10;
             std::string ret;
             for (std::string l : *labels) {
-                int xorder = hx_func(l);
+                float xorder = hx_func(l);
                 if (xorder > oreder) {
                     oreder = xorder;
                     ret    = l;
@@ -357,7 +360,7 @@ typedef struct _Cursor {
     struct _Cursor* lack;
     std::shared_ptr<Word> val;
     int idx;
-}* Cursor;
+} * Cursor;
 
 /**
  * @brief create a cursor

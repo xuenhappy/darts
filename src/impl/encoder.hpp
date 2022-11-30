@@ -151,6 +151,11 @@ inline bool is_digits(const std::string& str) {
 }
 
 namespace codemap {
+static const int special_image_code_nums = 5;
+
+static const char* special_image[special_image_code_nums] = {
+    "[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]",
+};
 // const code
 static const int pad_code  = 0;
 static const int unk_code  = 1;
@@ -158,12 +163,15 @@ static const int cls_code  = 2;
 static const int sep_code  = 3;
 static const int mask_code = 4;
 
-// const code char
-static const char* unk_char  = "[UNK]";
-static const char* cls_char  = "[CLS]";
-static const char* sep_char  = "[SEP]";
-static const char* mask_char = "[MASK]";
-static const char* pad_char  = "[PAD]";
+// kind code
+static const int special_kind_code_nums = 5;
+
+static const int pad_kind_code  = 0;
+static const int unk_kind_code  = 1;
+static const int cls_kind_code  = 2;
+static const int sep_kind_code  = 3;
+static const int mask_kind_code = 4;
+
 }  // namespace codemap
 
 namespace darts {
@@ -173,6 +181,7 @@ class WordPice : public SegmentPlugin {
     // vars
     darts::BigramDict english_token_dict;
     std::unordered_map<std::string, int> codes;
+    std::unordered_map<std::string, std::pair<int, float>> kind_codes;
     std::vector<std::string> chars_list;
     // code it
 
@@ -198,12 +207,40 @@ class WordPice : public SegmentPlugin {
         }
     }
 
-    int getTypeCode(const std::string& type) const {
-        std::unordered_map<std::string, int>::const_iterator _it = codes.find(type);
-        if (_it != codes.end()) {
-            return _it->second;
+    int getKindCode(std::shared_ptr<darts::Atom> atom) const {
+        int kind_code = atom->kind;
+        if (kind_code < 0) {
+            auto labelHx = [this](const std::string& label) -> float {
+                std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
+                _it = this->kind_codes.find(label);
+                if (_it == this->kind_codes.end()) {
+                    return 0;
+                }
+                return _it->second.second;
+            };
+            std::string label(atom->maxHXlabel(labelHx));
+            std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
+            _it = kind_codes.find(label);
+            if (_it == kind_codes.end()) {
+                kind_code = codemap::unk_kind_code;
+            } else {
+                kind_code = _it->second.first + codemap::special_kind_code_nums;
+            }
+        } else {
+            // keep dealut kind label
+            kind_code += codemap::special_kind_code_nums;
         }
-        return codemap::unk_code;
+        return kind_code;
+    }
+
+    int getImageCode(const std::string& image) const {
+        std::unordered_map<std::string, int>::const_iterator _it;
+        _it = codes.find(image);
+        if (_it == codes.end()) {
+            return codemap::unk_code;
+        }
+        // keep special image label
+        return _it->second + codemap::special_image_code_nums;
     }
 
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
@@ -233,26 +270,26 @@ class WordPice : public SegmentPlugin {
         // select best tokens
         graph.bestPaths(token, ret);
     }
+    int loadKindCodeMap(const std::string& relpath) {
+        // load relpath data into _list
+        std::ifstream fin(relpath.c_str());
+        if (!fin.is_open()) {
+            std::cerr << "ERROR: open kind data " << relpath << " file failed " << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::string line;
+        size_t s;
+        while (std::getline(fin, line)) {
+            darts::trim(line);
+            if (line.empty()) continue;
+            // TODO: set data
+        }
+        fin.close();
+        // init data
+        return EXIT_SUCCESS;
+    }
 
-   public:
-    int initalize(const std::map<std::string, std::string>& params,
-                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        auto it = params.find(BASE_DIR);
-        if (it == params.end() || it->second.empty()) {
-            std::cerr << "ERROR: could not find key:" << BASE_DIR << std::endl;
-            return EXIT_FAILURE;
-        }
-        namespace fs = std::filesystem;
-        fs::path dict_path(it->second);
-        dict_path.append("chars.map.txt");
-        fs::path engdict_dir(it->second);
-        engdict_dir.append("engdict");
-        std::string releng_dir = getResource(engdict_dir.c_str(), true);
-        if (!english_token_dict.loadDict(releng_dir)) {
-            std::cerr << "ERROR: load english token dict dir " << releng_dir << " failed " << std::endl;
-            return EXIT_FAILURE;
-        }
-        std::string relpath = getResource(dict_path.c_str());
+    int loadCodeMap(const std::string& relpath) {
         // load codes and chars_list
         std::set<std::string> _list;
         // load relpath data into _list
@@ -280,17 +317,47 @@ class WordPice : public SegmentPlugin {
         }
         fin.close();
         // init data
-        chars_list.reserve(_list.size() + 10);
-        chars_list.resize(5);
-        chars_list[codemap::pad_code]  = codemap::pad_char;
-        chars_list[codemap::unk_code]  = codemap::unk_char;
-        chars_list[codemap::cls_code]  = codemap::cls_char;
-        chars_list[codemap::sep_code]  = codemap::sep_char;
-        chars_list[codemap::mask_code] = codemap::mask_char;
+        chars_list.reserve(_list.size());
         chars_list.insert(chars_list.end(), _list.begin(), _list.end());
+        std::sort(chars_list.begin(), chars_list.end());
         for (int i = 0; i < chars_list.size(); i++) {
             codes[chars_list[i]] = i;
         }
+        return EXIT_SUCCESS;
+    }
+
+   public:
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        auto it = params.find(BASE_DIR);
+        if (it == params.end() || it->second.empty()) {
+            std::cerr << "ERROR: could not find key:" << BASE_DIR << std::endl;
+            return EXIT_FAILURE;
+        }
+        namespace fs = std::filesystem;
+
+        fs::path engdict_dir(it->second);
+        engdict_dir.append("engdict");
+        std::string releng_dir = getResource(engdict_dir.c_str(), true);
+        if (!english_token_dict.loadDict(releng_dir)) {
+            std::cerr << "ERROR: load english token dict dir " << releng_dir << " failed " << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        fs::path dict_path(it->second);
+        dict_path.append("chars.map.txt");
+        std::string relpath = getResource(dict_path.c_str());
+        if (loadCodeMap(relpath)) {
+            return EXIT_FAILURE;
+        }
+
+        fs::path kind_dict_path(it->second);
+        kind_dict_path.append("type.hx.txt");
+        std::string rel_kind_path = getResource(kind_dict_path.c_str());
+        if (loadKindCodeMap(rel_kind_path)) {
+            return EXIT_FAILURE;
+        }
+
         return EXIT_SUCCESS;
     }
 
@@ -298,29 +365,24 @@ class WordPice : public SegmentPlugin {
      * @brief 对给定的字符串句子进行分解
      *
      */
-    void encode(const darts::AtomList& input, std::function<void(int code, int atom_postion)> hit,
+    void encode(const darts::AtomList& input, std::function<void(int code, int kind_code, int atom_postion)> hit,
                 bool skip_empty_token = true) const {
         std::vector<std::string> _cache;
-        hit(codemap::sep_code, -1);
-        std::unordered_map<std::string, int>::const_iterator _it;
+        hit(codemap::sep_code, codemap::sep_kind_code, -1);
         int postion = -1;
         for (std::shared_ptr<darts::Atom> atom : input) {
             postion += 1;
             if (skip_empty_token && atom->hasLabel("EMPTY")) continue;
             if (atom->masked) {  // mask atom
-                hit(codemap::mask_code, postion);
+                hit(codemap::mask_code, codemap::mask_kind_code, postion);
                 continue;
             }
+            int kind_code = getKindCode(atom);
             if (atom->hasLabel("ENG")) {
                 _cache.clear();
                 engToken(atom->image, _cache);
                 for (std::string w : _cache) {
-                    _it = codes.find(w);
-                    if (_it == codes.end()) {
-                        hit(getTypeCode("ENG"), postion);
-                        continue;
-                    }
-                    hit(_it->second, postion);
+                    hit(getImageCode(w), kind_code, postion);
                 }
                 continue;
             }
@@ -328,25 +390,13 @@ class WordPice : public SegmentPlugin {
                 _cache.clear();
                 numToken(atom->image, 3, _cache);
                 for (std::string w : _cache) {
-                    _it = codes.find(w);
-                    if (_it == codes.end()) {
-                        hit(getTypeCode("NUM"), postion);
-                        continue;
-                    }
-                    hit(_it->second, postion);
+                    hit(getImageCode(w), kind_code, postion);
                 }
                 continue;
             }
-            _it = codes.find(atom->image);
-            if (_it == codes.end()) {
-                // check tye code for return value
-                std::string label(atom->maxHXlabel(nullptr));
-                hit(getTypeCode(label), postion);
-                continue;
-            }
-            hit(_it->second, postion);
+            hit(getImageCode(atom->image), kind_code, postion);
         }
-        hit(codemap::cls_code, -1);
+        hit(codemap::cls_code, codemap::cls_kind_code, -1);
     }
 
     /**
@@ -356,6 +406,10 @@ class WordPice : public SegmentPlugin {
      * @return const char32_t*
      */
     const std::string decode(int code) const {
+        if (code < codemap::special_image_code_nums) {
+            return codemap::special_image[code];
+        }
+        code -= codemap::special_image_code_nums;
         if (code >= 0 && code < chars_list.size()) {
             return chars_list[code];
         }
