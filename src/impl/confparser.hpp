@@ -20,7 +20,8 @@
 #include "../utils/file_utils.hpp"
 #include "../utils/str_utils.hpp"
 
-int checkDep(Json::Value& root, Json::Value& node, std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache,
+int checkDep(Json::Value& root, Json::Value& node, std::string& fname,
+             std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache,
              std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& ret);
 
 inline void getParams(Json::Value& node, std::map<std::string, std::string>& params) {
@@ -53,7 +54,7 @@ inline std::shared_ptr<darts::SegmentPlugin> loadServices(
     std::map<std::string, std::string> params;
     getParams(snode, params);
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> deps;
-    if (checkDep(root, snode, cache, deps)) {
+    if (checkDep(root, snode, name, cache, deps)) {
         deps.clear();
         return nullptr;
     }
@@ -91,7 +92,7 @@ inline std::shared_ptr<darts::CellPersenter> loadPersenter(
     std::map<std::string, std::string> params;
     getParams(persenter_node, params);
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> deps;
-    if (checkDep(root, persenter_node, cache, deps)) {
+    if (checkDep(root, persenter_node, used_persenter, cache, deps)) {
         deps.clear();
         return nullptr;
     }
@@ -129,7 +130,7 @@ inline std::shared_ptr<darts::CellRecognizer> loadRecognizer(
     std::map<std::string, std::string> params;
     getParams(recognizer_node, params);
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> deps;
-    if (checkDep(root, recognizer_node, cache, deps)) {
+    if (checkDep(root, recognizer_node, name, cache, deps)) {
         deps.clear();
         return nullptr;
     }
@@ -155,6 +156,7 @@ inline int loadDep(Json::Value& root, std::string& depName,
     if (cache.find(depName) != cache.end()) {
         return EXIT_SUCCESS;
     }
+    // set
     // search in dservices nodes
     if (root.isMember("dservices")) {
         auto dservices_node = root["dservices"];
@@ -189,16 +191,20 @@ inline int loadDep(Json::Value& root, std::string& depName,
     return EXIT_FAILURE;
 }
 
-inline int checkDep(Json::Value& root, Json::Value& node,
+inline int checkDep(Json::Value& root, Json::Value& node, std::string& fname,
                     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache,
                     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& ret) {
     if (!node.isMember("deps")) {
         // node has no deps
         return EXIT_SUCCESS;
     }
+    // set fnode prevent circular dependencies
+    cache[fname] = nullptr;
+    // get mapcode
     std::map<std::string, std::string> params;
     getParams(node["deps"], params);
     std::map<std::string, std::string>::iterator it;
+    //set ret
     for (it = params.begin(); it != params.end(); ++it) {
         if (loadDep(root, it->second, cache)) {
             ret.clear();
