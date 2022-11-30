@@ -24,6 +24,10 @@
         "wordvec.embed": {
             "model.path": "",
             "type": ""
+        },
+        "pinyin.embeder": {
+            "type": "",
+            "model.path": ""
         }
     },
     "recognizers": {
@@ -38,6 +42,10 @@
         "inner.dict": {
             "pbfile.path": "data/model-dict/mini_dict.pb.gz",
             "type": "DictWordRecongnizer"
+        },
+        "pinyin.dict": {
+            "type": "",
+            "data.dir": ""
         }
     },
     "modes": {
@@ -48,6 +56,12 @@
         "smart": {
             "persenter": "",
             "recognizers": []
+        },
+        "pinyin": {
+            "persenter": "pinyin.embeder",
+            "recognizers": [
+                "pinyin.dict"
+            ]
         }
     },
     "default.mode": "smart"
