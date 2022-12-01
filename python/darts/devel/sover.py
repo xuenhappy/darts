@@ -32,7 +32,7 @@ def saveTorchModel(model, out_dir, epoch_num):
     # save model for h5
     with h5py.File(os.path.join(out_dir, "model-%d.h5" % epoch_num), 'w') as hf:
         for k, v in state_dict.items():
-            hf.create_dataset(k,  data=v)
+            hf.create_dataset(k, data=v)
     print("Write model to {}".format(out_dir))
 
 
@@ -54,6 +54,7 @@ def loadInitModel(model, modeldir, filename="model-init.npz"):
 
 
 class TeachSolver():
+
     def __init__(self, model, train_iter, conf={}):
         self.train_iter = train_iter
         for (k, v) in conf.items():
@@ -80,10 +81,14 @@ class TeachSolver():
                 continue
             weight_p.append(p)
 
-        self.optimizer = optim.Adam([
-            {'params': weight_p, 'weight_decay': 1e-5},
-            {'params': bias_p, 'weight_decay': 0}
-        ], lr=self.lrate)
+        self.optimizer = optim.Adam([{
+            'params': weight_p,
+            'weight_decay': 1e-5
+        }, {
+            'params': bias_p,
+            'weight_decay': 0
+        }],
+            lr=self.lrate)
 
     def solve(self):
         # init flag data

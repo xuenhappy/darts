@@ -12,6 +12,7 @@ Copyright 2021 - 2022 Your Company, Moka
 
 
 class LineSampleReader():
+
     def __init__(self, filep):
         self.samplefile = filep
 

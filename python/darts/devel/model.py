@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 '''
 @author: enxu
 '''
@@ -38,10 +37,10 @@ class SentenceEncoder(nn.Module):
         self.embeding = Embeder(token_size, hidden_size)
         if type_size > 0:
             self.type_embeding = nn.Embedding(type_size, hidden_size)
-        self.encoder = nn.GRU(hidden_size, hidden_size*2, batch_first=True, bidirectional=True)
+        self.encoder = nn.GRU(hidden_size, hidden_size * 2, batch_first=True, bidirectional=True)
         self.dropin = nn.Dropout(0.3)
-        self.imner = nn.Linear(hidden_size*2, hidden_size)
-        self.imgate = nn.Linear(hidden_size*2, hidden_size)
+        self.imner = nn.Linear(hidden_size * 2, hidden_size)
+        self.imgate = nn.Linear(hidden_size * 2, hidden_size)
         self.output = nn.Linear(hidden_size, hidden_size)
         self.normal = nn.LayerNorm(hidden_size)
         self.dropout = nn.Dropout(0.2)
@@ -63,10 +62,10 @@ class SentenceEncoder(nn.Module):
             encoding = run_rnn(self.encoder, embeding, seq_lengths)
 
         encoding = self.dropin(encoding)
-        output = self.output(self.imner(encoding)*torch.sigmoid(self.imgate(encoding)))
+        output = self.output(self.imner(encoding) * torch.sigmoid(self.imgate(encoding)))
         output = self.normal(output)
         if attention_mask is not None:
-            output = output*attention_mask.to(output.dtype)
+            output = output * attention_mask.to(output.dtype)
         return self.drop(output)
 
 
@@ -81,7 +80,7 @@ class Quantizer(nn.Module):
 
     def distance(self, x, y):
         K, Q = self.Kmap(x), self.Qmap(y)
-        dist = torch.einsum('ij,ij->i', K, Q)/self.alpha
+        dist = torch.einsum('ij,ij->i', K, Q) / self.alpha
         return F.silu(dist).squeeze(-1)
 
 
@@ -108,7 +107,7 @@ class GraphTrainer(nn.Module):
             e_atom_embeding = atoms_embeding[atom_index[:, 1]]
             weight = self.quantizer(s_atom_embeding, e_atom_embeding)
             losses.append(self.lossfunc(graph, weight))
-        return sum(losses)/len(losses)
+        return sum(losses) / len(losses)
 
     def forward(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index):
         """
@@ -136,4 +135,5 @@ class GraphTrainer(nn.Module):
             batch_type_idxs = batch_type_idxs.cuda()
             batch_atoms = batch_atoms.cuda()
 
-        return self.loss(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index)
+        return self.loss(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph,
+            graph_index)
