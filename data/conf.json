@@ -1,7 +1,10 @@
+// Configuration options
 {
+    //the services for segment plugin used
     "dservices": {
         "wordpiece.dict": {}
     },
+    // all the persenter plugins
     "persenters": {
         "bert.embed": {
             "model.path": "",
@@ -30,6 +33,7 @@
             "model.path": ""
         }
     },
+    //all the recognizer plugin
     "recognizers": {
         "date.dict": {
             "pbfile.path": "data/model-dict/mini_dict.pb.gz",
@@ -48,6 +52,7 @@
             "data.dir": ""
         }
     },
+    // all mode that the segment working
     "modes": {
         "fast": {
             "persenter": "",
@@ -64,5 +69,6 @@
             ]
         }
     },
+    //which model to load for default
     "default.mode": "smart"
 }
