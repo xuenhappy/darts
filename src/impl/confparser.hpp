@@ -19,6 +19,9 @@
 #include "../core/segment.hpp"
 #include "../utils/file_utils.hpp"
 #include "../utils/str_utils.hpp"
+#include "./encoder.hpp"
+#include "./quantizer.hpp"
+#include "./recognizer.hpp"
 
 int checkDep(Json::Value& root, Json::Value& node, std::string& fname,
              std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache,
@@ -204,7 +207,7 @@ inline int checkDep(Json::Value& root, Json::Value& node, std::string& fname,
     std::map<std::string, std::string> params;
     getParams(node["deps"], params);
     std::map<std::string, std::string>::iterator it;
-    //set ret
+    // set ret
     for (it = params.begin(); it != params.end(); ++it) {
         if (loadDep(root, it->second, cache)) {
             ret.clear();
