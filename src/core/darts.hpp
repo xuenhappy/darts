@@ -186,7 +186,7 @@ class Word {
     }
 
     Word(const AtomList& alist, int start, int end) : feat(-1) {
-        this->image = alist.subAtom(st, et);
+        this->image = alist.subAtom(start, end);
         this->st    = start;
         this->et    = end;
         this->att   = nullptr;
