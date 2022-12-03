@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cctype>
 #include <functional>
+#include <iostream>
 #include <locale>
 #include <memory>
 #include <set>
@@ -69,7 +70,7 @@ class U32Iter {
  * @param delt
  * @return std::string
  */
-std::string join(const std::vector<std::string>& v, const std::string& delt) {
+static inline std::string join(const std::vector<std::string>& v, const std::string& delt) {
     std::stringstream ss;
     std::vector<std::string>::const_iterator it = v.begin();
     if (it != v.end()) {
@@ -82,7 +83,7 @@ std::string join(const std::vector<std::string>& v, const std::string& delt) {
     return ss.str();
 }
 
-std::string join(const std::set<std::string>& v, const std::string& delt) {
+static inline std::string join(const std::set<std::string>& v, const std::string& delt) {
     std::stringstream ss;
     std::set<std::string>::const_iterator it = v.begin();
     if (it != v.end()) {

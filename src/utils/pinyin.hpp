@@ -68,10 +68,12 @@ inline int loadPinyin() {
         darts::trim(nums);
         std::string pinyin = line.substr(s + 1, e);
         darts::trim(pinyin);
-        uint32_t code                    = std::stoul(nums, nullptr, 16);
+        uint32_t code = std::stoul(nums, nullptr, 16);
+
         std::shared_ptr<PinyinInfo> info = std::make_shared<PinyinInfo>();
-        info->code                       = code;
-        info->key                        = unicode_to_utf8(code);
+
+        info->code = code;
+        info->key  = unicode_to_utf8(code);
         darts::split(pinyin, ",", info->piyins);
         std::vector<std::string>::iterator it = info->piyins.begin();
         while (it != info->piyins.end()) {

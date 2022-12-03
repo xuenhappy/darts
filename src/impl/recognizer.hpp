@@ -24,12 +24,12 @@
 namespace darts {
 class AtomListIterator : public StringIter {
    private:
-    AtomList* m_list;
+    const AtomList* m_list;
     std::set<std::string> skiptypes;
 
    public:
-    explicit AtomListIterator(AtomList* m_list) {
-        this->m_list = m_list;
+    explicit AtomListIterator(const AtomList& m_list) {
+        this->m_list = &m_list;
         this->skiptypes.insert("EMPTY");
     }
 
@@ -37,7 +37,7 @@ class AtomListIterator : public StringIter {
         std::string tmp;
         for (auto i = 0; i < m_list->size(); i++) {
             auto a = m_list->at(i);
-            if (a->hasLabel(&skiptypes)) {
+            if (skiptypes.find(a->char_type) != skiptypes.end()) {
                 continue;
             }
             tmp = a->image;
@@ -66,21 +66,20 @@ class DictWordRecongnizer : public CellRecognizer {
         return this->trie.loadPb(iter->second);
     }
 
-    void addSomeCells(AtomList* dstSrc, SegPath* cmap) const {
-        auto cur = cmap->Head();
+    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {
+        auto cur = cmap.Head();
         AtomListIterator iter(dstSrc);
         this->trie.parse(iter, [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
-            auto word = std::make_shared<Word>(dstSrc->at(s, e), s, e);
+            auto word = std::make_shared<Word>(dstSrc, s, e);
             if (labels) {
                 for (auto tidx : *labels) {
                     auto tag = this->trie.getLabel(tidx);
                     if (tag) {
-                        std::string label = tag;
-                        word->addLabel(label);
+                        word->addLabel(tag);
                     }
                 }
             }
-            cur = cmap->addCell(word, cur);
+            cur = cmap.addCell(word, cur);
             return false;
         });
     }

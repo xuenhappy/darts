@@ -49,7 +49,7 @@ class CellPersenter : public SegmentPlugin {
     /***
      * 对每个Word进行向量表示
      **/
-    virtual void embed(AtomList* dstSrc, SegPath* cmap) const = 0;
+    virtual void embed(const AtomList& dstSrc, SegPath& cmap) const = 0;
     /**
      * @brief
      *
@@ -67,7 +67,7 @@ class CellPersenter : public SegmentPlugin {
 class CellRecognizer : public SegmentPlugin {
    public:
     // recognizer all Wcell possable in the atomlist
-    virtual void addSomeCells(AtomList* dstSrc, SegPath* cmap) const = 0;
+    virtual void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const = 0;
     virtual ~CellRecognizer() {}
 };
 
@@ -174,27 +174,27 @@ class Segment {
      * @param cmap
      * @param graph
      */
-    void buildGraph(AtomList* context, SegPath* cmap, SegGraph& graph) {
-        cmap->makeCurIndex();
+    void buildGraph(const AtomList& context, SegPath& cmap, SegGraph& graph) {
+        cmap.makeCurIndex();
         this->quantizer->embed(context, cmap);
         // add head
         std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
-        cmap->iterRow(NULL, 0, [&](Cursor pre) {
+        cmap.iterRow(NULL, 0, [&](Cursor pre) {
             auto dist = quantizer->ranging(NULL, pre->val.get());
             head_tmp->push_back(new _GraphEdge{pre->idx, dist});
         });
         graph.putEdges(-1, head_tmp);
 
-        cmap->iterRow(NULL, -1, [&](Cursor pre) {
+        cmap.iterRow(NULL, -1, [&](Cursor pre) {
             std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
-            cmap->iterRow(pre, pre->val->et, [&](Cursor next) {
+            cmap.iterRow(pre, pre->val->et, [&](Cursor next) {
                 auto dist = quantizer->ranging(pre->val.get(), next->val.get());
                 tmp->push_back(new _GraphEdge{next->idx, dist});
             });
             // add tail
             if (tmp->empty()) {
                 auto dist = quantizer->ranging(pre->val.get(), NULL);
-                int cidx  = cmap->Size();
+                int cidx  = cmap.Size();
                 tmp->push_back(new _GraphEdge{cidx, dist});
             }
             graph.putEdges(pre->idx, tmp);
@@ -208,7 +208,7 @@ class Segment {
      * @param cmap
      * @param ret
      */
-    void splitContent(AtomList* context, SegPath* cmap, std::vector<std::shared_ptr<Word>>& ret,
+    void splitContent(const AtomList& context, SegPath& cmap, std::vector<std::shared_ptr<Word>>& ret,
                       int atom_start_pos = 0) {
         // get best path
         SegGraph graph;
@@ -217,7 +217,7 @@ class Segment {
         graph.selectPath(bestPaths);
 
         // output result
-        cmap->iterRow(NULL, -1, [&](Cursor cur) {
+        cmap.iterRow(NULL, -1, [&](Cursor cur) {
             if (std::binary_search(bestPaths.begin(), bestPaths.end(), cur->idx)) {
                 auto word = cur->val;
                 word->st += atom_start_pos;
@@ -227,12 +227,12 @@ class Segment {
         });
     }
 
-    void buildSegPath(AtomList* atomList, SegPath* cmap) {
-        auto cur = cmap->Head();
+    void buildSegPath(const AtomList& atomList, SegPath& cmap) {
+        auto cur = cmap.Head();
         // add basic cells
-        for (size_t i = 0; i < atomList->size(); i++) {
-            auto a = atomList->at(i);
-            cur    = cmap->addNext(cur, std::make_shared<Word>(a, i, i + 1));
+        for (size_t i = 0; i < atomList.size(); i++) {
+            auto a = atomList.at(i);
+            cur    = cmap.addNext(cur, std::make_shared<Word>(a->image, i, i + 1));
         }
         // add cell regnize
         for (auto recognizer : cellRecognizers) {
@@ -262,18 +262,18 @@ class Segment {
      * @param ret
      * @param maxMode
      */
-    void smartCut(AtomList* atomList, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
+    void smartCut(const AtomList& atomList, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
                   int atom_start_pos = 0) {
-        if (!atomList || atomList->size() < 1) {
+        if (atomList.size() < 1) {
             return;
         }
-        if (atomList->size() == 1) {
-            auto atom = atomList->at(0);
-            ret.push_back(std::make_shared<Word>(atom, atom_start_pos, atom_start_pos + 1));
+        if (atomList.size() == 1) {
+            auto atom = atomList.at(0);
+            ret.push_back(std::make_shared<Word>(atom->image, atom_start_pos, atom_start_pos + 1));
             return;
         }
         auto cmap = new SegPath();
-        buildSegPath(atomList, cmap);
+        buildSegPath(atomList, *cmap);
         if (maxMode) {
             cmap->iterRow(NULL, -1, [&](Cursor cur) {
                 auto word = cur->val;
@@ -282,7 +282,7 @@ class Segment {
                 ret.push_back(word);
             });
         } else {
-            splitContent(atomList, cmap, ret, atom_start_pos);
+            splitContent(atomList, *cmap, ret, atom_start_pos);
         }
         delete cmap;
     }
@@ -298,12 +298,10 @@ const std::set<std::string> SENTENCE_POS = {"!", "。", ",", "?", ";", ":", "！
  * @param ret
  * @param maxMode
  */
-void tokenize(Segment& sg, const char* src, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
+void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
               size_t maxLineLength = 100, size_t minLineLength = 10) {
-    if (!src) return;
-    AtomList ori(src);
     if (ori.size() <= maxLineLength) {
-        sg.smartCut(&ori, ret, maxMode);
+        sg.smartCut(ori, ret, maxMode);
         return;
     }
     // too long context
@@ -313,7 +311,7 @@ void tokenize(Segment& sg, const char* src, std::vector<std::shared_ptr<Word>>& 
         if (pos - pre >= maxLineLength) {
             continue;
             AtomList temp(ori, pre, pos + 1);
-            sg.smartCut(&temp, ret, maxMode, pre);
+            sg.smartCut(temp, ret, maxMode, pre);
             pre = pos + 1;
         }
 
@@ -324,12 +322,12 @@ void tokenize(Segment& sg, const char* src, std::vector<std::shared_ptr<Word>>& 
             continue;
         }
         AtomList temp(ori, pre, pos + 1);
-        sg.smartCut(&temp, ret, maxMode, pre);
+        sg.smartCut(temp, ret, maxMode, pre);
         pre = pos + 1;
     }
     if (pre < ori.size()) {
         AtomList temp(ori, pre, ori.size());
-        sg.smartCut(&temp, ret, maxMode, pre);
+        sg.smartCut(temp, ret, maxMode, pre);
         return;
     }
 }

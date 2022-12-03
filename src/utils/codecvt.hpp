@@ -12,7 +12,6 @@
 #ifndef SRC_UTILS_CODECVT_HPP_
 #define SRC_UTILS_CODECVT_HPP_
 
-
 #include <codecvt>
 #include <locale>
 #include <string>
@@ -20,59 +19,59 @@
 
 #if _MSC_VER == 1900  // work around for bug in MS Visual C++ 2015
 
-std::string to_utf8(const std::u16string &s) {
+std::string to_utf8(const std::u16string& s) {
     std::wstring_convert<std::codecvt_utf8<int16_t>, int16_t> convert;
-    auto p = reinterpret_cast<const int16_t *>(s.data());
+    auto p = reinterpret_cast<const int16_t*>(s.data());
     return convert.to_bytes(p, p + s.size());
 }
 
-std::string to_utf8(const std::u32string &s) {
+std::string to_utf8(const std::u32string& s) {
     std::wstring_convert<std::codecvt_utf8<int32_t>, int32_t> convert;
-    auto p = reinterpret_cast<const int32_t *>(s.data());
+    auto p = reinterpret_cast<const int32_t*>(s.data());
     return convert.to_bytes(p, p + s.size());
 }
 
-std::u16string to_utf16(const std::string &s) {
+std::u16string to_utf16(const std::string& s) {
     std::wstring_convert<std::codecvt_utf8<int16_t>, int16_t> convert;
     auto asInt = convert.from_bytes(s);
-    return std::u16string(reinterpret_cast<char16_t const *>(asInt.data()), asInt.length());
+    return std::u16string(reinterpret_cast<char16_t const*>(asInt.data()), asInt.length());
 }
 
-std::u32string to_utf32(const std::string &s) {
+std::u32string to_utf32(const std::string& s) {
     std::wstring_convert<std::codecvt_utf8<int32_t>, int32_t> convert;
     auto asInt = convert.from_bytes(s);
-    return std::u32string(reinterpret_cast<char32_t const *>(asInt.data()), asInt.length());
+    return std::u32string(reinterpret_cast<char32_t const*>(asInt.data()), asInt.length());
 }
 
 #else
 
-std::string to_utf8(const std::u16string &s) {
+std::string to_utf8(const std::u16string& s) {
     std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> conv;
     return conv.to_bytes(s);
 }
 
-std::string to_utf8(const std::u32string &s) {
+std::string to_utf8(const std::u32string& s) {
     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> conv;
     return conv.to_bytes(s);
 }
 
-std::u16string to_utf16(const std::string &s) {
+std::u16string to_utf16(const std::string& s) {
     std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> convert;
     return convert.from_bytes(s);
 }
 
-std::u32string to_utf32(const std::string &s) {
+std::u32string to_utf32(const std::string& s) {
     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> conv;
     return conv.from_bytes(s);
 }
 
 #endif
 
-std::u16string to_utf16(const std::u32string &s) { return to_utf16(to_utf8(s)); }
+std::u16string to_utf16(const std::u32string& s) { return to_utf16(to_utf8(s)); }
 
-std::u32string to_utf32(const std::u16string &s) { return to_utf32(to_utf8(s)); }
+std::u32string to_utf32(const std::u16string& s) { return to_utf32(to_utf8(s)); }
 
-std::u32string read_with_bom(std::istream &src) {
+std::u32string read_with_bom(std::istream& src) {
     enum encoding {
         encoding_utf32be = 0,
         encoding_utf32le,
@@ -93,7 +92,7 @@ std::u32string read_with_bom(std::istream &src) {
     for (unsigned int i = 0; i < boms.size(); ++i) {
         std::string testBom = boms[i];
         if (buffer.compare(0, testBom.length(), testBom) == 0) {
-            enc = encoding(i);
+            enc    = encoding(i);
             buffer = buffer.substr(testBom.length());
             break;
         }
@@ -104,7 +103,7 @@ std::u32string read_with_bom(std::istream &src) {
             if (buffer.length() % 4 != 0) {
                 throw std::logic_error("size in bytes must be a multiple of 4");
             }
-            int count = buffer.length() / 4;
+            int count           = buffer.length() / 4;
             std::u32string temp = std::u32string(count, 0);
             for (int i = 0; i < count; ++i) {
                 temp[i] = static_cast<char32_t>(buffer[i * 4 + 3] << 0 | buffer[i * 4 + 2] << 8 |
@@ -116,7 +115,7 @@ std::u32string read_with_bom(std::istream &src) {
             if (buffer.length() % 4 != 0) {
                 throw std::logic_error("size in bytes must be a multiple of 4");
             }
-            int count = buffer.length() / 4;
+            int count           = buffer.length() / 4;
             std::u32string temp = std::u32string(count, 0);
             for (int i = 0; i < count; ++i) {
                 temp[i] = static_cast<char32_t>(buffer[i * 4 + 0] << 0 | buffer[i * 4 + 1] << 8 |
@@ -128,7 +127,7 @@ std::u32string read_with_bom(std::istream &src) {
             if (buffer.length() % 2 != 0) {
                 throw std::logic_error("size in bytes must be a multiple of 2");
             }
-            int count = buffer.length() / 2;
+            int count           = buffer.length() / 2;
             std::u16string temp = std::u16string(count, 0);
             for (int i = 0; i < count; ++i) {
                 temp[i] = static_cast<char16_t>(buffer[i * 2 + 1] << 0 | buffer[i * 2 + 0] << 8);
@@ -139,7 +138,7 @@ std::u32string read_with_bom(std::istream &src) {
             if (buffer.length() % 2 != 0) {
                 throw std::logic_error("size in bytes must be a multiple of 2");
             }
-            int count = buffer.length() / 2;
+            int count           = buffer.length() / 2;
             std::u16string temp = std::u16string(count, 0);
             for (int i = 0; i < count; ++i) {
                 temp[i] = static_cast<char16_t>(buffer[i * 2 + 0] << 0 | buffer[i * 2 + 1] << 8);

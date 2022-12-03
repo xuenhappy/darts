@@ -53,7 +53,7 @@ inline int loadCharMap() {
             continue;
         }
         utf8_iter ITER;
-        utf8_init(&ITER, line.c_str());
+        utf8_initEx(&ITER, line.c_str(), line.length());
         while (utf8_next(&ITER)) {
             _charType[ITER.codepoint] = prefix;
         }
@@ -124,7 +124,7 @@ inline std::string charType(uint32_t code) {
  * @param str
  * @return size_t
  */
-size_t wordLen(const char* str) {
+static inline size_t wordLen(const char* str) {
     if (!str) return 0;
     size_t nums          = 0;
     std::string buf_type = "";
@@ -157,14 +157,14 @@ size_t wordLen(const char* str) {
 
 class _UTF8StringIter : public darts::U32Iter {
    private:
-    const char* str;
+    const std::string* str;
 
    public:
-    explicit _UTF8StringIter(const char* str) { this->str = str; }
+    explicit _UTF8StringIter(const std::string& str) { this->str = &str; }
     void iter(std::function<void(int64_t, const char*, size_t)> hit) {
         utf8_iter ITER;
         int position = -1;
-        utf8_init(&ITER, this->str);
+        utf8_initEx(&ITER, str->c_str(), str->length());
         while (utf8_next(&ITER)) {
             position++;
             hit(ITER.codepoint, utf8_getchar(&ITER), position);
@@ -232,7 +232,7 @@ inline void atomSplit(darts::U32Iter& str, std::function<void(const char*, std::
  * @param str 原始字符串
  * @param accept hook函数
  */
-inline void atomSplit(const char* str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
+inline void atomSplit(const std::string& str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
     _UTF8StringIter iter(str);
     atomSplit(iter, accept);
 }

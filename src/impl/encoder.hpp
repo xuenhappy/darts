@@ -151,9 +151,9 @@ inline bool is_digits(const std::string& str) {
 }
 
 namespace codemap {
-static const int special_image_code_nums = 5;
+static const int special_code_nums = 5;
 
-static const char* special_image[special_image_code_nums] = {
+static const char* special_image[special_code_nums] = {
     "[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]",
 };
 // const code
@@ -162,15 +162,6 @@ static const int unk_code  = 1;
 static const int cls_code  = 2;
 static const int sep_code  = 3;
 static const int mask_code = 4;
-
-// kind code
-static const int special_kind_code_nums = 5;
-
-static const int pad_kind_code  = 0;
-static const int unk_kind_code  = 1;
-static const int cls_kind_code  = 2;
-static const int sep_kind_code  = 3;
-static const int mask_kind_code = 4;
 
 }  // namespace codemap
 
@@ -181,7 +172,6 @@ class WordPice : public SegmentPlugin {
     // vars
     darts::BigramDict english_token_dict;
     std::unordered_map<std::string, int> codes;
-    std::unordered_map<std::string, std::pair<int, float>> kind_codes;
     std::vector<std::string> chars_list;
     // code it
 
@@ -207,40 +197,17 @@ class WordPice : public SegmentPlugin {
         }
     }
 
-    int getKindCode(std::shared_ptr<darts::Atom> atom) const {
-        int kind_code = atom->kind;
-        if (kind_code < 0) {
-            auto labelHx = [this](const std::string& label) -> float {
-                std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
-                _it = this->kind_codes.find(label);
-                if (_it == this->kind_codes.end()) {
-                    return 0;
-                }
-                return _it->second.second;
-            };
-            std::string label(atom->maxHXlabel(labelHx));
-            std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
-            _it = kind_codes.find(label);
-            if (_it == kind_codes.end()) {
-                kind_code = codemap::unk_kind_code;
-            } else {
-                kind_code = _it->second.first + codemap::special_kind_code_nums;
-            }
-        } else {
-            // keep dealut kind label
-            kind_code += codemap::special_kind_code_nums;
-        }
-        return kind_code;
-    }
-
-    int getImageCode(const std::string& image) const {
+    int getImageCode(const std::string& image, const std::string& ttype) const {
         std::unordered_map<std::string, int>::const_iterator _it;
         _it = codes.find(image);
         if (_it == codes.end()) {
-            return codemap::unk_code;
+            _it = codes.find(ttype);
+            if (_it == codes.end()) {
+                return codemap::unk_code;
+            }
         }
         // keep special image label
-        return _it->second + codemap::special_image_code_nums;
+        return _it->second + codemap::special_code_nums;
     }
 
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
@@ -269,24 +236,6 @@ class WordPice : public SegmentPlugin {
         });
         // select best tokens
         graph.bestPaths(token, ret);
-    }
-    int loadKindCodeMap(const std::string& relpath) {
-        // load relpath data into _list
-        std::ifstream fin(relpath.c_str());
-        if (!fin.is_open()) {
-            std::cerr << "ERROR: open kind data " << relpath << " file failed " << std::endl;
-            return EXIT_FAILURE;
-        }
-        std::string line;
-        size_t s;
-        while (std::getline(fin, line)) {
-            darts::trim(line);
-            if (line.empty()) continue;
-            // TODO: set data
-        }
-        fin.close();
-        // init data
-        return EXIT_SUCCESS;
     }
 
     int loadCodeMap(const std::string& relpath) {
@@ -351,13 +300,6 @@ class WordPice : public SegmentPlugin {
             return EXIT_FAILURE;
         }
 
-        fs::path kind_dict_path(it->second);
-        kind_dict_path.append("type.hx.txt");
-        std::string rel_kind_path = getResource(kind_dict_path.c_str());
-        if (loadKindCodeMap(rel_kind_path)) {
-            return EXIT_FAILURE;
-        }
-
         return EXIT_SUCCESS;
     }
 
@@ -365,38 +307,37 @@ class WordPice : public SegmentPlugin {
      * @brief 对给定的字符串句子进行分解
      *
      */
-    void encode(const darts::AtomList& input, std::function<void(int code, int kind_code, int atom_postion)> hit,
+    void encode(const darts::AtomList& input, std::function<void(int code, int atom_postion)> hit,
                 bool skip_empty_token = true) const {
         std::vector<std::string> _cache;
-        hit(codemap::sep_code, codemap::sep_kind_code, -1);
+        hit(codemap::sep_code, -1);
         int postion = -1;
         for (std::shared_ptr<darts::Atom> atom : input) {
             postion += 1;
-            if (skip_empty_token && atom->hasLabel("EMPTY")) continue;
+            if (skip_empty_token && !atom->char_type.compare("EMPTY")) continue;
             if (atom->masked) {  // mask atom
-                hit(codemap::mask_code, codemap::mask_kind_code, postion);
+                hit(codemap::mask_code, postion);
                 continue;
             }
-            int kind_code = getKindCode(atom);
-            if (atom->hasLabel("ENG")) {
+            if (!atom->char_type.compare("ENG")) {
                 _cache.clear();
                 engToken(atom->image, _cache);
                 for (std::string w : _cache) {
-                    hit(getImageCode(w), kind_code, postion);
+                    hit(getImageCode(w, atom->char_type), postion);
                 }
                 continue;
             }
-            if (atom->hasLabel("NUM") && is_digits(atom->image)) {
+            if (!atom->char_type.compare("NUM") && is_digits(atom->image)) {
                 _cache.clear();
                 numToken(atom->image, 3, _cache);
                 for (std::string w : _cache) {
-                    hit(getImageCode(w), kind_code, postion);
+                    hit(getImageCode(w, atom->char_type), postion);
                 }
                 continue;
             }
-            hit(getImageCode(atom->image), kind_code, postion);
+            hit(getImageCode(atom->image, atom->char_type), postion);
         }
-        hit(codemap::cls_code, codemap::cls_kind_code, -1);
+        hit(codemap::cls_code, -1);
     }
 
     /**
@@ -406,16 +347,93 @@ class WordPice : public SegmentPlugin {
      * @return const char32_t*
      */
     const std::string decode(int code) const {
-        if (code < codemap::special_image_code_nums) {
+        if (code < codemap::special_code_nums) {
             return codemap::special_image[code];
         }
-        code -= codemap::special_image_code_nums;
+        code -= codemap::special_code_nums;
         if (code >= 0 && code < chars_list.size()) {
             return chars_list[code];
         }
         return "";
     }
 };
+
+class LabelEncoder : public SegmentPlugin {
+   private:
+    static const char* LABEL_HX_FILE;
+    std::unordered_map<std::string, std::pair<int, float>> kind_codes;
+    std::vector<std::string> labels;
+
+   private:
+    int loadKindCodeMap(const std::string& relpath) {
+        // load relpath data into _list
+        std::ifstream fin(relpath.c_str());
+        if (!fin.is_open()) {
+            std::cerr << "ERROR: open kind data " << relpath << " file failed " << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::string line;
+        size_t s;
+        while (std::getline(fin, line)) {
+            darts::trim(line);
+            if (line.empty()) continue;
+            // TODO: set data
+        }
+        fin.close();
+        // init data
+        return EXIT_SUCCESS;
+    }
+
+   public:
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        auto it = params.find(LABEL_HX_FILE);
+        if (it == params.end() || it->second.empty()) {
+            std::cerr << "ERROR: could not find key:" << LABEL_HX_FILE << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (loadKindCodeMap(it->second)) {
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
+    }
+
+    int encode(const std::shared_ptr<darts::Word> word) const {
+        auto labelHx = [this](const std::string& label) -> float {
+            std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
+            _it = this->kind_codes.find(label);
+            if (_it == this->kind_codes.end()) {
+                return 0;
+            }
+            return _it->second.second;
+        };
+        std::string label(word->maxHXlabel(labelHx));
+        std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
+        _it = kind_codes.find(label);
+        if (_it == kind_codes.end()) {
+            return codemap::unk_code;
+        }
+        return _it->second.first + codemap::special_code_nums;
+    }
+
+    /**
+     * @brief 输出原始的code对应的字符串
+     *
+     * @param code
+     * @return const char32_t*
+     */
+    const std::string decode(int code) const {
+        if (code < codemap::special_code_nums) {
+            return codemap::special_image[code];
+        }
+        code -= codemap::special_code_nums;
+        if (code >= 0 && code < labels.size()) {
+            return labels[code];
+        }
+        return "";
+    }
+};
+
 }  // end namespace darts
 
 #endif  // SRC_IMPL_ENCODER_HPP_

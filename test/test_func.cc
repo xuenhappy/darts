@@ -93,7 +93,7 @@ void testBigramPersenterDictMake() {
 void testJsonConfLoad() {
     printf("----- test function %s-----------------\n", "testJsonConfLoad");
     darts::Segment* segment = NULL;
-    if (parseJsonConf(getResource("data/darts.conf.json").c_str(), &segment)) {
+    if (loadSegment(getResource("data/darts.conf.json").c_str(), &segment)) {
         std::cout << "load segment error!" << std::endl;
     } else {
         std::cout << "load segment success!" << std::endl;

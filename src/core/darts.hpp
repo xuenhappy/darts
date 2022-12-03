@@ -31,125 +31,26 @@ class Atom {
     std::string image;  // image of atom
     uint32_t st;        // start of this atom in str
     uint32_t et;        // end of this atom in str
-    std::set<std::string>* labels;
+    std::string char_type;
     bool masked;  // this is for training
-    int kind;     // this autom kind,default -1
 
-    Atom(const char* image, uint32_t start, uint32_t end) : masked(false), kind(-1) {
-        this->image  = image;
-        this->st     = start;
-        this->et     = end;
-        this->labels = NULL;
+    Atom(const char* image, uint32_t start, uint32_t end) : masked(false) {
+        this->image = image;
+        this->st    = start;
+        this->et    = end;
     }
-
     Atom(const Atom& atom) {
         this->image = atom.image;
-        this->st    = atom.st;
-        this->et    = atom.et;
-        if (atom.labels) {
-            this->labels = new std::set<std::string>(*atom.labels);
-        }
-        this->masked = atom.masked;
-        this->kind   = atom.kind;
-    }
 
-    /**
-     * @brief get HX(label) max value label
-     *
-     * @param hx_func
-     * @return const std::string
-     */
-    const std::string maxHXlabel(std::function<float(const std::string&)> hx_func) const {
-        if (labels == NULL || hx_func == nullptr || labels->empty()) {
-            return "";
-        }
-        if (hx_func == nullptr) {
-            for (std::string l : *labels) {
-                return l;
-            }
-        } else {
-            float oreder = -10;
-            std::string ret;
-            for (std::string l : *labels) {
-                float xorder = hx_func(l);
-                if (xorder > oreder) {
-                    oreder = xorder;
-                    ret    = l;
-                }
-            }
-            return ret;
-        }
-        return "";
-    }
+        this->st = atom.st;
+        this->et = atom.et;
 
-    bool hasLabel(std::string label) const {
-        if (!labels) return false;
-        return labels->find(label) != labels->end();
+        this->masked    = atom.masked;
+        this->char_type = atom.char_type;
     }
-
-    bool hasLabel(std::set<std::string>* labels) const {
-        if (labels == NULL || this->labels == NULL) {
-            return false;
-        }
-        for (auto& t : *labels) {
-            if (this->labels->find(t) != this->labels->end()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    void addLabel(std::string& label) {
-        if (!this->labels) {
-            this->labels = new std::set<std::string>();
-        }
-        this->labels->insert(label);
-    }
-
-    void addLabels(std::set<std::string>* otags) {
-        if (otags) {
-            if (!this->labels) {
-                this->labels = new std::set<std::string>();
-            }
-            this->labels->insert(otags->begin(), otags->end());
-        }
-    }
-
-    void addLabels(std::vector<std::string>* otags) {
-        if (otags) {
-            if (!this->labels) {
-                this->labels = new std::set<std::string>();
-            }
-            this->labels->insert(otags->begin(), otags->end());
-        }
-    }
-
-    void joinLabel(std::set<std::string>* otags) {
-        if (!otags) return;
-        if (!labels || labels->empty()) {
-            this->labels = new std::set<std::string>(*otags);
-            return;
-        }
-        for (auto it = labels->begin(); it != labels->end();) {
-            if (otags->find(*it) == otags->end()) {
-                it = labels->erase(it);
-                continue;
-            }
-            ++it;
-        }
-    }
-
-    ~Atom() {
-        if (labels != NULL) {
-            labels->clear();
-            delete labels;
-            labels = NULL;
-        }
-    }
-
+    ~Atom() {}
     friend std::ostream& operator<<(std::ostream& output, const Atom& D) {
-        std::string tags = D.labels == NULL ? "" : join(*D.labels, ",");
-        output << "Atom['" << D.image << "':{" << tags << "}]";
+        output << "Atom['" << D.image << "':{" << D.char_type << "}]";
         return output;
     }
 };
@@ -168,8 +69,8 @@ class AtomList {
         this->str = to_utf32(str);
         data.reserve(str.length());
         atomSplit(this->str, [&](const char* astr, std::string& ttype, size_t s, size_t e) {
-            auto atom = std::make_shared<Atom>(astr, s, e);
-            atom->addLabel(ttype);
+            auto atom       = std::make_shared<Atom>(astr, s, e);
+            atom->char_type = ttype;
             this->data.push_back(atom);
         });
     }
@@ -222,10 +123,15 @@ class AtomList {
         auto et           = data[end - 1]->et;
         std::string image = to_utf8(str.substr(st, et - st));
         auto atom         = std::make_shared<Atom>(image.c_str(), st, et);
-        for (auto i = start; i < end; ++i) {
-            atom->joinLabel(data[i]->labels);
-        }
+        atom->char_type   = data[start]->char_type;
         return atom;
+    }
+
+    std::string subAtom(size_t start, size_t end) const {
+        if (start < 0 || end >= data.size() || start >= end) return "";
+        auto st = data[start]->st;
+        auto et = data[end - 1]->et;
+        return to_utf8(str.substr(st, et - st));
     }
 
     /**
@@ -234,7 +140,7 @@ class AtomList {
      * @param index
      * @return std::shared_ptr<Atom>
      */
-    std::shared_ptr<Atom> at(size_t index) {
+    std::shared_ptr<Atom> at(size_t index) const {
         if (0 <= index && index < data.size()) {
             return data[index];
         }
@@ -256,14 +162,14 @@ class AtomList {
 
 class Word {
    private:
-    void* att;                                  // att adata
-    std::function<void(void*)> att_clean_func;  // att clean function
+    std::shared_ptr<void> att;  // att data
+    std::set<std::string> labels;
+    std::string image;
 
    public:
-    std::shared_ptr<Atom> word;  // the word image
-    int st;                      // the word in atomlist start
-    int et;                      // the words in atom list end
-    uint16_t feat;               // this word other type
+    int st;    // the word in atomlist start
+    int et;    // the words in atom list end
+    int feat;  // this word other type
 
     /**
      * @brief Construct a new Word object
@@ -272,78 +178,58 @@ class Word {
      * @param start  start of postion in atom list
      * @param end  end of postion in atom list
      */
-    Word(std::shared_ptr<Atom> atom, int start, int end) {
-        this->word = atom;
-        this->st   = start;
-        this->et   = end;
-        this->att  = nullptr;
-        this->feat = 0;
+    Word(const std::string& image, int start, int end) : feat(-1) {
+        this->image = image;
+        this->st    = start;
+        this->et    = end;
+        this->att   = nullptr;
+    }
+
+    Word(const AtomList& alist, int start, int end) : feat(-1) {
+        this->image = alist.subAtom(st, et);
+        this->st    = start;
+        this->et    = end;
+        this->att   = nullptr;
     }
 
     Word(const Word& wd) {
-        this->word = wd.word;
         this->st   = wd.st;
         this->et   = wd.et;
         this->feat = wd.feat;
         this->att  = wd.att;
+        labels.insert(wd.labels.begin(), wd.labels.end());
     }
 
     ~Word() {
-        if (word) {
-            word = nullptr;
-        }
-        if (att) {
-            if (att_clean_func != nullptr) {
-                att_clean_func(att);
-            }
-            att = NULL;
-        }
-        st = et = feat = 0;
+        att = nullptr;
+        labels.clear();
+        image.clear();
     }
     bool operator==(const Word& D) { return D.st == st && D.et == et && D.feat == feat; }
 
+    const std::string& text() const { return this->image; }
+
     friend std::ostream& operator<<(std::ostream& output, const Word& D) {
-        if (D.word) {
-            output << "Word[ " << *D.word << "]";
-        } else {
-            output << "Word[NULL] ";
-        }
+        output << "Word[ " << D.image << "(" << D.st << "," << D.et << ")]";
         return output;
     }
 
-    /**
-     * @brief Set the Att object
-     *
-     * @param att
-     * @param clean_func
-     */
-    void setAtt(void* att, std::function<void(void*)> clean_func) {
-        if (this->att != NULL && this->att_clean_func != nullptr) {
-            this->att_clean_func(this->att);
+    void setAtt(std::shared_ptr<void> att) { this->att = att; }
+
+    std::shared_ptr<void> getAtt() { return this->att; }
+
+    void addLabels(const std::set<std::string>* tags) {
+        if (tags != NULL) {
+            labels.insert(tags->begin(), tags->end());
         }
-        this->att            = att;
-        this->att_clean_func = clean_func;
+    }
+    void addLabels(const std::shared_ptr<Word> other) {
+        if (other != nullptr) {
+            labels.insert(other->labels.begin(), other->labels.end());
+        }
     }
 
-    /**
-     * @brief Get the Att object
-     *
-     * @return void*
-     */
-    void* getAtt() { return this->att; }
-
-    /**
-     * @brief add tags into this words
-     *
-     * @param tags
-     */
-    void addLabels(std::set<std::string>* tags) {
-        if (word != nullptr) word->addLabels(tags);
-    }
-
-    void addLabel(std::string& tag) {
-        if (word != nullptr) word->addLabel(tag);
-    }
+    void addLabel(const std::string& tag) { labels.insert(tag); }
 
     /**
      * @brief add tags into words
@@ -351,7 +237,66 @@ class Word {
      * @param tags
      */
     void addLabels(std::vector<std::string>* tags) {
-        if (word != nullptr) word->addLabels(tags);
+        if (tags != NULL) {
+            labels.insert(tags->begin(), tags->end());
+        }
+    }
+    /**
+     * @brief get HX(label) max value label
+     *
+     * @param hx_func
+     * @return const std::string
+     */
+    const std::string maxHXlabel(std::function<float(const std::string&)> hx_func) const {
+        if (labels.empty()) {
+            return "";
+        }
+        if (hx_func == nullptr) {
+            for (std::string l : labels) {
+                return l;
+            }
+        } else {
+            float oreder = -10;
+            std::string ret;
+            for (std::string l : labels) {
+                float xorder = hx_func(l);
+                if (xorder > oreder) {
+                    oreder = xorder;
+                    ret    = l;
+                }
+            }
+            return ret;
+        }
+        return "";
+    }
+
+    bool hasLabel(const std::string& label) const { return labels.find(label) != labels.end(); }
+
+    bool hasLabel(const std::set<std::string>* labels) const {
+        if (labels == NULL || this->labels.empty()) {
+            return false;
+        }
+        for (auto& t : *labels) {
+            if (this->labels.find(t) != this->labels.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    void joinLabel(const std::set<std::string>* otags) {
+        if (!otags || otags->empty()) return;
+
+        if (labels.empty()) {
+            addLabels(otags);
+            return;
+        }
+        for (auto it = labels.begin(); it != labels.end();) {
+            if (otags->find(*it) == otags->end()) {
+                it = labels.erase(it);
+                continue;
+            }
+            ++it;
+        }
     }
 };
 
@@ -394,7 +339,7 @@ class SegPath {
     size_t Column() const { return this->colums; }
 
     SegPath() {
-        this->head      = makeCursor(std::make_shared<Word>(nullptr, -1, 0), NULL, NULL);
+        this->head      = makeCursor(std::make_shared<Word>("", -1, 0), NULL, NULL);
         this->head->idx = -1;
         this->rows = this->colums = this->size = 0;
     }
@@ -489,7 +434,7 @@ class SegPath {
                 }
                 if (nval->et == cell->et) {
                     if (*nval == *cell) {
-                        nval->addLabels(cell->word->labels);
+                        nval->addLabels(cell);
                         return n;
                     }
                     cur = n;
@@ -532,7 +477,7 @@ class SegPath {
                 }
                 if (nval->et == cell->et) {
                     if (*nval == *cell) {
-                        nval->addLabels(cell->word->labels);
+                        nval->addLabels(cell);
                         return n;
                     }
                     cur = n;

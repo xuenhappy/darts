@@ -38,25 +38,25 @@ static std::unordered_map<std::string, std::string> _WordMap;
 inline void _addWordMap() {
     // basic chars
     for (uint32_t i = 0; i < 0x20 + 1; i++) {
-        _WordMap[codeStr(i)] = ' ';
+        _WordMap[u32str(i)] = ' ';
     }
-    _WordMap[codeStr(0x7F)] = ' ';
+    _WordMap[u32str(0x7F)] = ' ';
     for (uint32_t i = 8198; i < 8208; i++) {
-        _WordMap[codeStr(i)] = ' ';
+        _WordMap[u32str(i)] = ' ';
     }
     for (uint32_t i = 8232; i < 8240; i++) {
-        _WordMap[codeStr(i)] = ' ';
+        _WordMap[u32str(i)] = ' ';
     }
     for (uint32_t i = 8287; i < 8304; i++) {
-        _WordMap[codeStr(i)] = ' ';
+        _WordMap[u32str(i)] = ' ';
     }
     for (uint32_t i = 0xFE00; i < 0xFE0F + 1; i++) {
-        _WordMap[codeStr(i)] = ' ';
+        _WordMap[u32str(i)] = ' ';
     }
     for (uint32_t i = 65281; i < 65374 + 1; i++) {
-        _WordMap[codeStr(i)] = codeStr(i - 65248);
+        _WordMap[u32str(i)] = u32str(i - 65248);
     }
-    _WordMap[codeStr(12288)] = codeStr(32);
+    _WordMap[u32str(12288)] = u32str(32);
 
     // special map
     std::map<std::string, std::string> special = {
@@ -139,7 +139,7 @@ inline int initializeMap() {
 inline std::string normalizeStr(const std::string& str) {
     std::stringstream output;
     utf8_iter ITER;
-    utf8_init(&ITER, str.c_str());
+    utf8_initEx(&ITER, str.c_str(), str.length());
     std::string tmps;
     std::unordered_map<std::string, std::string>::const_iterator it;
     while (utf8_next(&ITER)) {

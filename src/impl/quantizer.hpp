@@ -36,7 +36,7 @@ class MinCoverPersenter : public CellPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList* dstSrc, SegPath* cmap) const {}
+    void embed(const AtomList& dstSrc, SegPath& cmap) const {}
 
     /**
      * @brief
@@ -46,8 +46,8 @@ class MinCoverPersenter : public CellPersenter {
      * @return double must >=0
      */
     double ranging(const Word* pre, const Word* next) const {
-        double len_a = (pre == NULL) ? 0.0 : 100.0 / (1.0 + pre->word->image.length());
-        double len_b = (next == NULL) ? 0.0 : 100.0 / (1.0 + next->word->image.length());
+        double len_a = (pre == NULL) ? 0.0 : 100.0 / (1.0 + pre->text().length());
+        double len_b = (next == NULL) ? 0.0 : 100.0 / (1.0 + next->text().length());
         return len_a + len_b;
     }
     ~MinCoverPersenter() {}
@@ -81,7 +81,7 @@ class BigramPersenter : public CellPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList* dstSrc, SegPath* cmap) const {}
+    void embed(const AtomList& dstSrc, SegPath& cmap) const {}
 
     /**
      * @brief
@@ -91,8 +91,7 @@ class BigramPersenter : public CellPersenter {
      * @return double must >=0
      */
     double ranging(const Word* pre, const Word* next) const {
-        return ngdict.wordDist(pre == NULL ? NULL : pre->word->image.c_str(),
-                               next == NULL ? NULL : next->word->image.c_str());
+        return ngdict.wordDist(pre == NULL ? NULL : pre->text().c_str(), next == NULL ? NULL : next->text().c_str());
     }
 
     ~BigramPersenter() {}
@@ -122,7 +121,7 @@ class ElmoPersenter : public CellPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList* dstSrc, SegPath* cmap) const {}
+    void embed(const AtomList& dstSrc, SegPath& cmap) const {}
     /**
      * @brief
      *
@@ -137,7 +136,7 @@ class ElmoPersenter : public CellPersenter {
 const char* ElmoPersenter::MODEL_PATH_KEY = "model.path";
 REGISTER_Persenter(ElmoPersenter);
 
-class TinyBertPersenter {
+class TinyBertPersenter : public CellPersenter {
    private:
     static const char* MODEL_PATH_KEY;
 
@@ -158,7 +157,7 @@ class TinyBertPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList* dstSrc, SegPath* cmap) const {}
+    void embed(const AtomList& dstSrc, SegPath& cmap) const {}
     /**
      * @brief
      *

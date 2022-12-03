@@ -15,7 +15,6 @@
 
 #include <stdint.h>
 #include <string.h>
-
 #include <string>
 typedef struct utf8_iter {
     const char* ptr;
@@ -56,23 +55,23 @@ const char* unicode_converter(uint32_t codepoint, uint8_t size);
 
 inline void utf8_init(utf8_iter* iter, const char* ptr) {
     if (iter) {
-        iter->ptr = ptr;
+        iter->ptr       = ptr;
         iter->codepoint = 0;
-        iter->position = 0;
-        iter->next = 0;
-        iter->count = 0;
-        iter->length = ptr == NULL ? 0 : strlen(ptr);
+        iter->position  = 0;
+        iter->next      = 0;
+        iter->count     = 0;
+        iter->length    = ptr == NULL ? 0 : strlen(ptr);
     }
 }
 
 inline void utf8_initEx(utf8_iter* iter, const char* ptr, uint32_t length) {
     if (iter) {
-        iter->ptr = ptr;
+        iter->ptr       = ptr;
         iter->codepoint = 0;
-        iter->position = 0;
-        iter->next = 0;
-        iter->count = 0;
-        iter->length = length;
+        iter->position  = 0;
+        iter->next      = 0;
+        iter->count     = 0;
+        iter->length    = length;
     }
 }
 
@@ -85,12 +84,12 @@ inline uint8_t utf8_next(utf8_iter* iter) {
     if (iter->next < iter->length) {
         iter->position = iter->next;
 
-        pointer = iter->ptr + iter->next;  // Set Current Pointer
+        pointer    = iter->ptr + iter->next;  // Set Current Pointer
         iter->size = utf8_charsize(pointer);
 
         if (iter->size == 0) return 0;
 
-        iter->next = iter->next + iter->size;
+        iter->next      = iter->next + iter->size;
         iter->codepoint = utf8_converter(pointer, iter->size);
 
         if (iter->codepoint == 0) return 0;
@@ -111,7 +110,7 @@ inline uint8_t utf8_previous(utf8_iter* iter) {
     if (iter->length != 0) {
         if (iter->position == 0 && iter->next == 0) {
             iter->position = iter->length;
-            iter->count = utf8_strnlen(iter->ptr, iter->length);
+            iter->count    = utf8_strnlen(iter->ptr, iter->length);
         }
     }
 
@@ -177,7 +176,7 @@ inline const char* utf8_getchar(utf8_iter* iter) {
 inline uint32_t utf8_strlen(const char* string) {
     if (string == NULL) return 0;
 
-    uint32_t length = 0;
+    uint32_t length   = 0;
     uint32_t position = 0;
 
     while (string[position]) {
@@ -191,7 +190,7 @@ inline uint32_t utf8_strlen(const char* string) {
 inline uint32_t utf8_strnlen(const char* string, uint32_t end) {
     if (string == NULL) return 0;
 
-    uint32_t length = 0;
+    uint32_t length   = 0;
     uint32_t position = 0;
 
     while (string[position] && position < end) {
@@ -298,14 +297,14 @@ inline const char* unicode_converter(uint32_t codepoint, uint8_t size) {
     }
 
     for (uint8_t i = size - 1; i > 0; i--) {
-        str[i] = 0x80 | (codepoint & 0x3F);
+        str[i]    = 0x80 | (codepoint & 0x3F);
         codepoint = codepoint >> 6;
     }
     str[0] = table_utf8[size] | codepoint;
 
     return str;
 }
-inline std::string codeStr(uint32_t code) { return std::string(unicode_to_utf8(code)); }
 
+inline std::string u32str(uint32_t code) { return std::string(unicode_to_utf8(code)); }
 
 #endif  // SRC_UTILS_UTF8_HPP_

@@ -101,7 +101,7 @@ void parse(dregex regex, atom_iter atomlist, dregex_hit hit, ext_data user_data)
 int load_segment(const char* json_conf_file, segment* sg, const char* mode) {
     if (!json_conf_file) return EXIT_FAILURE;
     darts::Segment* sgemnet = NULL;
-    if (parseJsonConf(json_conf_file, &sgemnet, mode)) {
+    if (loadSegment(json_conf_file, &sgemnet, mode)) {
         if (!sgemnet) delete sgemnet;
         return EXIT_FAILURE;
     }
@@ -125,8 +125,7 @@ void token_str(segment sg, const char* txt, word_hit hit, bool max_mode, ext_dat
     std::vector<std::shared_ptr<darts::Word>> ret;
     darts::tokenize(*sgment, txt, ret, max_mode);
     for (auto w : ret) {
-        auto a = w->word;
-        hit(a->image.c_str(), NULL, a->st, a->et, w->st, w->et, user_data);
+        hit(w->text().c_str(), NULL, a->st, a->et, w->st, w->et, user_data);
     }
 }
 

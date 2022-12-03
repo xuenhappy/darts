@@ -120,7 +120,7 @@ class OnnxPersenter : public CellPersenter {
      * @param dstSrc
      * @param cmap
      */
-    void embed(AtomList* dstSrc, SegPath* cmap) const {}
+    void embed(const AtomList& dstSrc, SegPath& cmap) const {}
     /**
      * @brief
      *
