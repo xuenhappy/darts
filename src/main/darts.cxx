@@ -63,11 +63,11 @@ void free_dregex(dregex regex) {
 
 class _C_AtomListIter : public darts::StringIter {
    private:
-    darts_ext user_data;
+    ext_data user_data;
     atom_iter iter_func;
 
    public:
-    _C_AtomListIter(darts_ext user_data, atom_iter iter_func) {
+    _C_AtomListIter(ext_data user_data, atom_iter iter_func) {
         this->user_data = user_data;
         this->iter_func = iter_func;
     }
@@ -82,7 +82,7 @@ class _C_AtomListIter : public darts::StringIter {
     }
 };
 
-void parse(dregex regex, atom_iter atomlist, dregex_hit hit, darts_ext user_data) {
+void parse(dregex regex, atom_iter atomlist, dregex_hit hit, ext_data user_data) {
     if (!regex || !regex->dat) return;
     auto dat = regex->dat;
     _C_AtomListIter alist(user_data, atomlist);
@@ -119,7 +119,7 @@ void free_segment(segment sg) {
     }
 }
 
-void token_str(segment sg, const char* txt, word_hit hit, bool max_mode, darts_ext user_data) {
+void token_str(segment sg, const char* txt, word_hit hit, bool max_mode, ext_data user_data) {
     if (!sg || !sg->segment || !txt) return;
     auto sgment = sg->segment;
     std::vector<std::shared_ptr<darts::Word>> ret;
@@ -140,13 +140,13 @@ int word_type(const char* word, char** ret) {
     return tname.size();
 }
 
-void word_split(const char* str, token_hit hit, darts_ext user_data) {
+void word_split(const char* str, token_hit hit, ext_data user_data) {
     if (!str) return;
     atomSplit(str, [&](const char* atom, std::string& type, size_t s, size_t e) {
         hit(atom, type.c_str(), s, e, user_data);
     });
 }
-void word_bpe(const char* str, token_hit hit, darts_ext user_data) {
+void word_bpe(const char* str, token_hit hit, ext_data user_data) {
     if (!str) return;
 }
 #endif  // SRC_MAIN_DARTS4PY_HPP_
