@@ -182,7 +182,7 @@ class Segment {
      * @param graph
      */
     void buildGraph(const AtomList& context, SegPath& cmap, SegGraph& graph) {
-        cmap.makeCurIndex();
+        cmap.indexIt();
         this->quantizer->embed(context, cmap);
         // add head
         std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();

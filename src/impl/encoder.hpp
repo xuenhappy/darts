@@ -359,7 +359,20 @@ class WordPice : public SegmentPlugin {
     }
 };
 
-class LabelEncoder : public SegmentPlugin {
+class TypeEncoder : public SegmentPlugin {
+   public:
+    /**
+     * get word type code
+     */
+    virtual int encode(const std::shared_ptr<darts::Word> word) const = 0;
+
+    /**
+     * explain a type code
+     */
+    virtual const std::string decode(int code) const = 0;
+};
+
+class LabelEncoder : public TypeEncoder {
    private:
     static const char* LABEL_HX_FILE;
     std::unordered_map<std::string, std::pair<int, float>> kind_codes;
@@ -438,7 +451,7 @@ class LabelEncoder : public SegmentPlugin {
 /**
  * pinyin标注
  */
-class PinyinEncoder : public SegmentPlugin {
+class PinyinEncoder : public TypeEncoder {
    public:
     const static int pad = 0;
     const static int st  = 1;
@@ -473,6 +486,12 @@ class PinyinEncoder : public SegmentPlugin {
             return unk;
         }
         return it->second + 4;
+    }
+
+    int encode(const std::shared_ptr<darts::Word> word) const {
+        if(word->feat>=0)return word->feat;
+        // encode word
+        return encode(word->maxHXlabel(nullptr));
     }
 
     const std::string decode(int code) const {

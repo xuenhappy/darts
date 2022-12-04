@@ -228,6 +228,7 @@ class Word {
             labels.insert(other->labels.begin(), other->labels.end());
         }
     }
+    size_t labels_nums() { return labels.size(); }
 
     void addLabel(const std::string& tag) { labels.insert(tag); }
 
@@ -329,7 +330,13 @@ class SegPath {
     Cursor head;
     size_t rows, colums, size;
 
+    std::shared_ptr<Word> src_node;
+    std::shared_ptr<Word> end_node;
+
    public:
+    std::shared_ptr<Word> SrcNode() { return src_node; }
+    std::shared_ptr<Word> EndNode() { return end_node; }
+
     Cursor Head() { return this->head; }
 
     size_t Size() const { return this->size; }
@@ -339,12 +346,17 @@ class SegPath {
     size_t Column() const { return this->colums; }
 
     SegPath() {
-        this->head      = makeCursor(std::make_shared<Word>("", -1, 0), NULL, NULL);
+        this->head = makeCursor(nullptr, NULL, NULL);
+        src_node   = std::make_shared<Word>("", -1, 0);
+        end_node   = std::make_shared<Word>("", -1, -1);
+
         this->head->idx = -1;
         this->rows = this->colums = this->size = 0;
     }
 
     ~SegPath() {
+        src_node  = nullptr;
+        end_node  = nullptr;
         auto node = head;
         while (node) {
             auto next = node->lack;
@@ -361,7 +373,7 @@ class SegPath {
      * @brief 创建原始索引
      *
      */
-    void makeCurIndex() {
+    void indexIt() {
         auto node = this->head;
         node->idx = -1;
         int index = node->idx;
