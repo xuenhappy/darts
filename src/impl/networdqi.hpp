@@ -163,7 +163,15 @@ class OnnxPersenter : public CellPersenter {
      * @param next
      * @return double must >=0
      */
-    double ranging(const Word* pre, const Word* next) const { return 0.0; }
+    double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
+        if (pre == nullptr || next == nullptr) return 0.0;
+        if (pre->getAtt() == nullptr || next->getAtt() == nullptr) {
+            return 0.0;
+        }
+        // TODO
+
+        return 0.0;
+    }
 
     ~OnnxPersenter() {
         if (this->encode_model) {

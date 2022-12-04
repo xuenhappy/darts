@@ -57,7 +57,7 @@ class CellPersenter : public SegmentPlugin {
      * @param next
      * @return double must >=0
      */
-    virtual double ranging(const Word* pre, const Word* next) const = 0;
+    virtual double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const = 0;
     virtual ~CellPersenter() {}
 };
 /**
@@ -187,7 +187,7 @@ class Segment {
         // add head
         std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
         cmap.iterRow(NULL, 0, [&](Cursor pre) {
-            auto dist = quantizer->ranging(NULL, pre->val.get());
+            auto dist = quantizer->ranging(cmap.SrcNode(), pre->val);
             head_tmp->push_back(new _GraphEdge{pre->idx, dist});
         });
         graph.putEdges(-1, head_tmp);
@@ -195,12 +195,12 @@ class Segment {
         cmap.iterRow(NULL, -1, [&](Cursor pre) {
             std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
             cmap.iterRow(pre, pre->val->et, [&](Cursor next) {
-                auto dist = quantizer->ranging(pre->val.get(), next->val.get());
+                auto dist = quantizer->ranging(pre->val, next->val);
                 tmp->push_back(new _GraphEdge{next->idx, dist});
             });
             // add tail
             if (tmp->empty()) {
-                auto dist = quantizer->ranging(pre->val.get(), NULL);
+                auto dist = quantizer->ranging(pre->val, cmap.EndNode());
                 int cidx  = cmap.Size();
                 tmp->push_back(new _GraphEdge{cidx, dist});
             }

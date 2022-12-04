@@ -45,9 +45,9 @@ class MinCoverPersenter : public CellPersenter {
      * @param next
      * @return double must >=0
      */
-    double ranging(const Word* pre, const Word* next) const {
-        double len_a = (pre == NULL) ? 0.0 : 100.0 / (1.0 + pre->text().length());
-        double len_b = (next == NULL) ? 0.0 : 100.0 / (1.0 + next->text().length());
+    double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
+        double len_a = (pre == nullptr || pre->isStSpecial()) ? 0.0 : 100.0 / (1.0 + pre->text().length());
+        double len_b = (next == nullptr || next->isEtSpecial()) ? 0.0 : 100.0 / (1.0 + next->text().length());
         return len_a + len_b;
     }
     ~MinCoverPersenter() {}
@@ -90,8 +90,9 @@ class BigramPersenter : public CellPersenter {
      * @param next
      * @return double must >=0
      */
-    double ranging(const Word* pre, const Word* next) const {
-        return ngdict.wordDist(pre == NULL ? NULL : pre->text().c_str(), next == NULL ? NULL : next->text().c_str());
+    double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
+        return ngdict.wordDist(pre == nullptr || pre->isStSpecial() ? NULL : pre->text().c_str(),
+                               next == nullptr || next->isEtSpecial() ? NULL : next->text().c_str());
     }
 
     ~BigramPersenter() {}

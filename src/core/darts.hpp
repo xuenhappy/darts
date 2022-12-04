@@ -171,6 +171,12 @@ class Word {
     int et;    // the words in atom list end
     int feat;  // this word other type
 
+    bool isStSpecial() { return st < 0; }
+
+    bool isEtSpecial() { return et < 0; }
+
+    bool isSpecial() { return st < 0 || et < 0; }
+
     /**
      * @brief Construct a new Word object
      *
@@ -348,7 +354,7 @@ class SegPath {
     SegPath() {
         this->head = makeCursor(nullptr, NULL, NULL);
         src_node   = std::make_shared<Word>("", -1, 0);
-        end_node   = std::make_shared<Word>("", -1, -1);
+        end_node   = std::make_shared<Word>("", 0, -1);
 
         this->head->idx = -1;
         this->rows = this->colums = this->size = 0;
