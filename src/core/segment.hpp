@@ -68,6 +68,8 @@ class CellRecognizer : public SegmentPlugin {
    public:
     // recognizer all Wcell possable in the atomlist
     virtual void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const = 0;
+    // is this plugin exclusive other plugin
+    bool exclusive() { return false; }
     virtual ~CellRecognizer() {}
 };
 
@@ -162,6 +164,11 @@ class Segment {
      */
     void addRecognizer(std::shared_ptr<CellRecognizer> reg) {
         if (reg) {
+            if (!cellRecognizers.empty() && reg->exclusive()) {
+                std::cerr
+                    << "WARN: this segment add a exclusive plugin but cellRecognizers not empty!please check conf file"
+                    << std::endl;
+            }
             cellRecognizers.push_back(reg);
         }
     }

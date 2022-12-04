@@ -33,7 +33,7 @@ typedef struct _pinyin {
     std::vector<std::string> piyins;
 } PinyinInfo;
 
-static std::unordered_map<char32_t, std::shared_ptr<PinyinInfo>> _WordPinyin;
+static std::unordered_map<std::string, std::shared_ptr<PinyinInfo>> _WordPinyin;
 /**
  * @brief 加载拼音数据
  *
@@ -86,7 +86,7 @@ inline int loadPinyin() {
         }
         if (!info->piyins.empty()) {
             // std::cout << info->key << "," << darts::join(info->piyins, "|") << std::endl;
-            _WordPinyin[code] = std::move(info);
+            _WordPinyin[info->key] = std::move(info);
         }
     }
 
@@ -101,7 +101,7 @@ inline int loadPinyin() {
  * @param word
  * @return const PinyinInfo*
  */
-inline const std::shared_ptr<PinyinInfo> pinyin(const char32_t word) {
+inline const std::shared_ptr<PinyinInfo> pinyin(const std::string& word) {
     auto it = _WordPinyin.find(word);
     if (it != _WordPinyin.end()) {
         return it->second;

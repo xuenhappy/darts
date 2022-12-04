@@ -12,6 +12,8 @@
 
 #ifndef SRC_IMPL_RECOGNIZER_HPP_
 #define SRC_IMPL_RECOGNIZER_HPP_
+#include <cstddef>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <set>
@@ -19,7 +21,9 @@
 #include <vector>
 #include "../core/segment.hpp"
 #include "../utils/dregex.hpp"
+#include "../utils/pinyin.hpp"
 #include "../utils/str_utils.hpp"
+#include "./encoder.hpp"
 
 namespace darts {
 class AtomListIterator : public StringIter {
@@ -94,8 +98,61 @@ REGISTER_Recognizer(DictWordRecongnizer);
  */
 class DateRecongnizer : public CellRecognizer {
    public:
-    void addSomeCells(AtomList* dstSrc, SegPath* cmap) const {}
+    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {}
 };
+
+/**
+ * pinyin标注,该插件不可以❌和其他插件混用
+ */
+class PinyinRecongnizer : public CellRecognizer {
+   private:
+    std::shared_ptr<PinyinEncoder> encoder;
+    static const char* ENCODER_PARAM;
+
+   public:
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        auto it = plugins.find(ENCODER_PARAM);
+        if (it == plugins.end()) {
+            std::cerr << "could not find plugin " << ENCODER_PARAM << std::endl;
+            return EXIT_FAILURE;
+        }
+        this->encoder = std::dynamic_pointer_cast<PinyinEncoder>(it->second);
+        if (this->encoder == nullptr) {
+            std::cerr << "plugin in init error " << ENCODER_PARAM << std::endl;
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
+    }
+
+    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {
+        std::vector<std::shared_ptr<Word>> adds;
+        cmap.iterRow(NULL, -1, [this, &adds](Cursor cur) {
+            auto pw   = cur->val;
+            auto pyin = pinyin(pw->text());
+            if (pyin == nullptr) return;
+            pw->addLabel(pyin->piyins[0]);
+            pw->feat = encoder->encode(pyin->piyins[0]);
+            for (size_t i = 1; i < pyin->piyins.size(); ++i) {
+                auto w = std::make_shared<Word>(pw->text(), pw->st, pw->et);
+                w->addLabel(pyin->piyins[i]);
+                w->feat = encoder->encode(pyin->piyins[i]);
+                adds.push_back(w);
+            }
+        });
+        if (!adds.empty()) {
+            auto cur = cmap.Head();
+            for (auto w : adds) {
+                cur = cmap.addCell(w, cur);
+            }
+        }
+    }
+    bool exclusive() { return true; }
+};
+
+const char* PinyinRecongnizer::ENCODER_PARAM = "pyin.encoder";
+// add this pulg
+REGISTER_Recognizer(PinyinRecongnizer);
 
 }  // namespace darts
 

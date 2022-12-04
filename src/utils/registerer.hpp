@@ -102,7 +102,7 @@ BaseClassMap& global_factory_map() {
        public:                                                                      \
         ::registerer::Any NewInstance() { return ::registerer::Any(new name()); }   \
     };                                                                              \
-    void __attribute__((constructor)) register_factory_##name() {                   \
+    inline void __attribute__((constructor)) register_factory_##name() {            \
         ::registerer::FactoryMap& map = ::registerer::global_factory_map()[#clazz]; \
         if (map.find(#name) == map.end()) map[#name] = new ObjectFactory##name();   \
     }                                                                               \

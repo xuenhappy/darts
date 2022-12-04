@@ -81,7 +81,7 @@ class Quantizer(nn.Module):
     def distance(self, x, y):
         K, Q = self.Kmap(x), self.Qmap(y)
         dist = torch.einsum('ij,ij->i', K, Q) / self.alpha
-        return F.silu(dist).squeeze(-1)
+        return F.softplus(dist).squeeze(-1)
 
 
 class GraphTrainer(nn.Module):

@@ -29,6 +29,7 @@
 #include "../core/darts.hpp"
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
+#include "../utils/pinyin.hpp"
 
 struct symbol_pair {
     int left;      // left index of this pair
@@ -429,6 +430,55 @@ class LabelEncoder : public SegmentPlugin {
         code -= codemap::special_code_nums;
         if (code >= 0 && code < labels.size()) {
             return labels[code];
+        }
+        return "";
+    }
+};
+
+/**
+ * pinyin标注
+ */
+class PinyinEncoder : public SegmentPlugin {
+   public:
+    const static int pad = 0;
+    const static int st  = 1;
+    const static int et  = 2;
+    const static int unk = 3;
+
+   private:
+    std::map<std::string, int> pyin_codes;
+    std::vector<std::string> plist;
+
+   public:
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        std::set<std::string> datas;
+        for (auto it = _WordPinyin.begin(); it != _WordPinyin.end(); ++it) {
+            for (auto w : it->second->piyins) {
+                datas.insert(w);
+            }
+        }
+        plist.reserve(datas.size());
+        plist.insert(plist.end(), datas.begin(), datas.end());
+        std::sort(plist.begin(), plist.end());
+        for (int i = 0; i < plist.size(); ++i) {
+            pyin_codes[plist[i]] = i;
+        }
+        return EXIT_SUCCESS;
+    }
+
+    int encode(const std::string& pinyin) const {
+        auto it = pyin_codes.find(pinyin);
+        if (it == pyin_codes.end()) {
+            return unk;
+        }
+        return it->second + 4;
+    }
+
+    const std::string decode(int code) const {
+        code -= 4;
+        if (code >= 0 && code < plist.size()) {
+            return plist[code];
         }
         return "";
     }
