@@ -263,14 +263,15 @@ class Segment {
         cellRecognizers.clear();
     }
     /**
-     * @brief 对数据进行切分
+     * @brief select best token that split
      *
      * @param atomList
      * @param ret
      * @param maxMode
+     * @param atom_start_pos
      */
     void select(const AtomList& atomList, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
-                  int atom_start_pos = 0) {
+                int atom_start_pos = 0) {
         if (atomList.size() < 1) {
             return;
         }
