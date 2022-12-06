@@ -33,8 +33,8 @@
             "model.path": ""
         }
     },
-    //all the recognizer plugin
-    "recognizers": {
+    //all the decider plugin
+    "deciders": {
         "date.dict": {
             "pbfile.path": "data/model-dict/mini_dict.pb.gz",
             "type": "HmmRecongnizer"
@@ -55,15 +55,15 @@
     // all mode that the segment working
     "modes": {
         "fast": {
-            "persenter": "",
+            "decider": "",
             "recognizers": []
         },
         "smart": {
-            "persenter": "",
+            "decider": "",
             "recognizers": []
         },
         "pinyin": {
-            "persenter": "pinyin.embeder",
+            "decider": "pinyin.embeder",
             "recognizers": [
                 "pinyin.dict"
             ]

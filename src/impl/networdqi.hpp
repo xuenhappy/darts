@@ -28,7 +28,7 @@ namespace darts {
  * @brief 利用ONNX神经网络对数据进行表示与
  *
  */
-class OnnxPersenter : public CellPersenter {
+class OnnxPersenter : public Decider {
    private:
     static const char* PMODEL_PATH_KEY;
     static const char* QMODEL_PATH_KEY;

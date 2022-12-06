@@ -79,40 +79,40 @@ inline std::shared_ptr<darts::SegmentPlugin> loadServices(
     return ret;
 }
 
-inline std::shared_ptr<darts::CellPersenter> loadPersenter(
-    Json::Value& root, Json::Value& persenters_node, std::string& used_persenter,
+inline std::shared_ptr<darts::Decider> loaddecider(
+    Json::Value& root, Json::Value& deciders_node, std::string& used_decider,
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>& cache) {
-    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>::iterator it = cache.find(used_persenter);
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>>::iterator it = cache.find(used_decider);
     if (it != cache.end()) {
-        return std::dynamic_pointer_cast<darts::CellPersenter>(it->second);
+        return std::dynamic_pointer_cast<darts::Decider>(it->second);
     }
-    if (!persenters_node.isMember(used_persenter)) {
-        std::cerr << "ERROR: no key [persenters/" << used_persenter << "] found!" << std::endl;
+    if (!deciders_node.isMember(used_decider)) {
+        std::cerr << "ERROR: no key [deciders/" << used_decider << "] found!" << std::endl;
         return nullptr;
     }
-    auto persenter_node        = persenters_node[used_persenter];
-    std::string persenter_type = persenter_node["type"].asString();
+    auto decider_node        = deciders_node[used_decider];
+    std::string decider_type = decider_node["type"].asString();
     std::map<std::string, std::string> params;
-    getParams(persenter_node, params);
+    getParams(decider_node, params);
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> deps;
-    if (checkDep(root, persenter_node, used_persenter, cache, deps)) {
+    if (checkDep(root, decider_node, used_decider, cache, deps)) {
         deps.clear();
         return nullptr;
     }
-    darts::CellPersenter* persenter = darts::CellPersenterRegisterer::GetInstanceByName(persenter_type);
-    if (!persenter) {
-        std::cerr << "ERROR: create class [" << persenter_type << "] CellPersenter failed!" << std::endl;
+    darts::Decider* decider = darts::DeciderRegisterer::GetInstanceByName(decider_type);
+    if (!decider) {
+        std::cerr << "ERROR: create class [" << decider_type << "] Decider failed!" << std::endl;
         deps.clear();
         return nullptr;
     }
-    if (persenter->initalize(params, deps)) {
-        std::cerr << "ERROR: init class [" << persenter_type << "] CellPersenter obj failed!" << std::endl;
-        delete persenter;
+    if (decider->initalize(params, deps)) {
+        std::cerr << "ERROR: init class [" << decider_type << "] Decider obj failed!" << std::endl;
+        delete decider;
         deps.clear();
         return nullptr;
     }
-    std::shared_ptr<darts::CellPersenter> ret(persenter);
-    cache[used_persenter] = std::dynamic_pointer_cast<darts::SegmentPlugin>(ret);
+    std::shared_ptr<darts::Decider> ret(decider);
+    cache[used_decider] = std::dynamic_pointer_cast<darts::SegmentPlugin>(ret);
     deps.clear();
     return ret;
 }
@@ -172,10 +172,10 @@ inline int loadDep(Json::Value& root, std::string& depName,
         }
     }
 
-    // search in persenters nodes
-    auto persenters_node = root["persenters"];
-    if (persenters_node.isMember(depName)) {
-        auto ret = loadPersenter(root, persenters_node, depName, cache);
+    // search in deciders nodes
+    auto deciders_node = root["deciders"];
+    if (deciders_node.isMember(depName)) {
+        auto ret = loaddecider(root, deciders_node, depName, cache);
         if (!ret) {
             return EXIT_FAILURE;
         }
@@ -260,12 +260,12 @@ inline int loadSegment(const char* json_conf_file, darts::Segment** segment, con
         return EXIT_FAILURE;
     }
     auto recognizers_node = root["recognizers"];
-    // get persenters node
-    if (!root.isMember("persenters")) {
-        std::cerr << "ERROR: no root key [persenters] found!" << std::endl;
+    // get deciders node
+    if (!root.isMember("deciders")) {
+        std::cerr << "ERROR: no root key [deciders] found!" << std::endl;
         return EXIT_FAILURE;
     }
-    auto persenters_node = root["persenters"];
+    auto deciders_node = root["deciders"];
 
     // path check
     if (!modes_node.isMember(mode)) {
@@ -277,11 +277,11 @@ inline int loadSegment(const char* json_conf_file, darts::Segment** segment, con
         std::cerr << "ERROR: no key [modes/" << mode << "/recognizers] found!" << std::endl;
         return EXIT_FAILURE;
     }
-    if (!use_node.isMember("persenter")) {
-        std::cerr << "ERROR: no key [modes/" << mode << "/persenter] found!" << std::endl;
+    if (!use_node.isMember("decider")) {
+        std::cerr << "ERROR: no key [modes/" << mode << "/decider] found!" << std::endl;
         return EXIT_FAILURE;
     }
-    auto used_persenter         = use_node["persenter"].asString();
+    auto used_decider         = use_node["decider"].asString();
     auto used_recognizers_nodes = use_node["recognizers"];
 
     std::vector<std::string> used_recognizers;
@@ -294,19 +294,19 @@ inline int loadSegment(const char* json_conf_file, darts::Segment** segment, con
 
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> _cache;
 
-    // load the persenters
-    std::shared_ptr<darts::CellPersenter> persenter = loadPersenter(root, persenters_node, used_persenter, _cache);
-    if (!persenter) {
+    // load the deciders
+    std::shared_ptr<darts::Decider> decider = loaddecider(root, deciders_node, used_decider, _cache);
+    if (!decider) {
         _cache.clear();
         return EXIT_FAILURE;
     }
     // load used_recognizers_objs
     std::vector<std::shared_ptr<darts::CellRecognizer>> used_recognizers_objs;
     for (auto name : used_recognizers) {
-        // load the persenters and recognizers
+        // load the deciders and recognizers
         std::shared_ptr<darts::CellRecognizer> recognizer = loadRecognizer(root, recognizers_node, name, _cache);
         if (!recognizer) {
-            persenter = nullptr;
+            decider = nullptr;
             used_recognizers_objs.clear();
             _cache.clear();
             return EXIT_FAILURE;
@@ -314,7 +314,7 @@ inline int loadSegment(const char* json_conf_file, darts::Segment** segment, con
         used_recognizers_objs.push_back(recognizer);
     }
 
-    *segment = new darts::Segment(persenter);
+    *segment = new darts::Segment(decider);
     for (auto r : used_recognizers_objs) {
         (*segment)->addRecognizer(r);
     }

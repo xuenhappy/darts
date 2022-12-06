@@ -44,7 +44,7 @@ class SegmentPlugin {
  * @brief embeding atomlist for segment
  *
  */
-class CellPersenter : public SegmentPlugin {
+class Decider : public SegmentPlugin {
    public:
     /***
      * 对每个Word进行向量表示
@@ -58,7 +58,7 @@ class CellPersenter : public SegmentPlugin {
      * @return double must >=0
      */
     virtual double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const = 0;
-    virtual ~CellPersenter() {}
+    virtual ~Decider() {}
 };
 /**
  * @brief recongnize tokens
@@ -76,10 +76,10 @@ class CellRecognizer : public SegmentPlugin {
 // define some registerer
 REGISTER_REGISTERER(SegmentPlugin);
 REGISTER_REGISTERER(CellRecognizer);
-REGISTER_REGISTERER(CellPersenter);
+REGISTER_REGISTERER(Decider);
 #define REGISTER_Service(name) REGISTER_CLASS(SegmentPlugin, name)
 #define REGISTER_Recognizer(name) REGISTER_CLASS(CellRecognizer, name)
-#define REGISTER_Persenter(name) REGISTER_CLASS(CellPersenter, name)
+#define REGISTER_Persenter(name) REGISTER_CLASS(Decider, name)
 // end defined
 
 typedef struct _GraphEdge {
@@ -154,7 +154,7 @@ class SegGraph {
 class Segment {
    private:
     std::vector<std::shared_ptr<CellRecognizer>> cellRecognizers;
-    std::shared_ptr<CellPersenter> quantizer;
+    std::shared_ptr<Decider> decider;
 
    public:
     /**
@@ -183,11 +183,11 @@ class Segment {
      */
     void buildGraph(const AtomList& context, SegPath& cmap, SegGraph& graph) {
         cmap.indexIt();
-        this->quantizer->embed(context, cmap);
+        this->decider->embed(context, cmap);
         // add head
         std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
         cmap.iterRow(NULL, 0, [&](Cursor pre) {
-            auto dist = quantizer->ranging(cmap.SrcNode(), pre->val);
+            auto dist = decider->ranging(cmap.SrcNode(), pre->val);
             head_tmp->push_back(new _GraphEdge{pre->idx, dist});
         });
         graph.putEdges(-1, head_tmp);
@@ -195,12 +195,12 @@ class Segment {
         cmap.iterRow(NULL, -1, [&](Cursor pre) {
             std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
             cmap.iterRow(pre, pre->val->et, [&](Cursor next) {
-                auto dist = quantizer->ranging(pre->val, next->val);
+                auto dist = decider->ranging(pre->val, next->val);
                 tmp->push_back(new _GraphEdge{next->idx, dist});
             });
             // add tail
             if (tmp->empty()) {
-                auto dist = quantizer->ranging(pre->val, cmap.EndNode());
+                auto dist = decider->ranging(pre->val, cmap.EndNode());
                 int cidx  = cmap.Size();
                 tmp->push_back(new _GraphEdge{cidx, dist});
             }
@@ -248,13 +248,13 @@ class Segment {
     }
 
    public:
-    explicit Segment(std::shared_ptr<CellPersenter> quantizer) {
+    explicit Segment(std::shared_ptr<Decider> quantizer) {
         assert(!quantizer);  // quantizer must be not null
-        this->quantizer = quantizer;
+        this->decider = quantizer;
     }
     ~Segment() {
-        if (this->quantizer) {
-            this->quantizer = nullptr;
+        if (this->decider) {
+            this->decider = nullptr;
         }
         auto iter = cellRecognizers.begin();
         while (iter != cellRecognizers.end()) {
@@ -269,7 +269,7 @@ class Segment {
      * @param ret
      * @param maxMode
      */
-    void smartCut(const AtomList& atomList, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
+    void select(const AtomList& atomList, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
                   int atom_start_pos = 0) {
         if (atomList.size() < 1) {
             return;
@@ -308,7 +308,7 @@ const std::set<std::string> SENTENCE_POS = {"!", "。", ",", "?", ";", ":", "！
 void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
               size_t maxLineLength = 100, size_t minLineLength = 10) {
     if (ori.size() <= maxLineLength) {
-        sg.smartCut(ori, ret, maxMode);
+        sg.select(ori, ret, maxMode);
         return;
     }
     // too long context
@@ -318,7 +318,7 @@ void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_ptr<Word
         if (pos - pre >= maxLineLength) {
             continue;
             AtomList temp(ori, pre, pos + 1);
-            sg.smartCut(temp, ret, maxMode, pre);
+            sg.select(temp, ret, maxMode, pre);
             pre = pos + 1;
         }
 
@@ -329,12 +329,12 @@ void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_ptr<Word
             continue;
         }
         AtomList temp(ori, pre, pos + 1);
-        sg.smartCut(temp, ret, maxMode, pre);
+        sg.select(temp, ret, maxMode, pre);
         pre = pos + 1;
     }
     if (pre < ori.size()) {
         AtomList temp(ori, pre, ori.size());
-        sg.smartCut(temp, ret, maxMode, pre);
+        sg.select(temp, ret, maxMode, pre);
         return;
     }
 }

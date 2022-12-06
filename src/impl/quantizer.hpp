@@ -22,7 +22,7 @@
 #include "../utils/file_utils.hpp"
 
 namespace darts {
-class MinCoverPersenter : public CellPersenter {
+class MinCoverPersenter : public Decider {
    public:
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
@@ -59,7 +59,7 @@ REGISTER_Persenter(MinCoverPersenter);
  * @brief this use cedar store thing
  *
  */
-class BigramPersenter : public CellPersenter {
+class BigramPersenter : public Decider {
    private:
     static const char* DAT_DIR_KEY;
     BigramDict ngdict;
