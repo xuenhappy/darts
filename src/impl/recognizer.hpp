@@ -12,6 +12,7 @@
 
 #ifndef SRC_IMPL_RECOGNIZER_HPP_
 #define SRC_IMPL_RECOGNIZER_HPP_
+#include <assert.h>
 #include <darts.pb.h>
 #include <cstddef>
 #include <cstdlib>
@@ -148,7 +149,7 @@ class PinyinRecongnizer : public CellRecognizer {
         if (!adds.empty()) {
             auto cur = cmap.Head();
             for (auto w : adds) {
-                cur = cmap.addCell(w, cur);
+                cur = cmap.addNext(cur, w);
             }
         }
     }
@@ -198,7 +199,10 @@ class HmmRecongnizer : public CellRecognizer {
             std::vector<double> tmp(val.begin(), val.end());
             feature_prop[key] = tmp;
         }
-
+        // check basic token
+        assert(feature_prop.find("<ST>") != feature_prop.end());
+        assert(feature_prop.find("<ET>") != feature_prop.end());
+        assert(feature_prop.find("<UNK>") != feature_prop.end());
         return EXIT_SUCCESS;
     }
 
@@ -208,10 +212,23 @@ class HmmRecongnizer : public CellRecognizer {
      * @param dstSrc
      * @param props
      */
-    void getfeateure_embeding(const AtomList& dstSrc, std::vector<double*>& props) {
+    void getfeateure_embeding(const AtomList& dstSrc, std::vector<double*>& props) const {
         props.reserve(dstSrc.size() + 2);
+        std::unordered_map<std::string, std::vector<double>>::const_iterator it;
+        it = feature_prop.find("<ST>");
+        props.emplace_back(&(it->second[0]));
         // add head
+
+        for (auto atom : dstSrc) {
+            it = feature_prop.find(atom->image);
+            if (it == feature_prop.end()) {
+                it = feature_prop.find("<UNK>");
+            }
+            props.emplace_back(&(it->second[0]));
+        }
         // add end
+        it = feature_prop.find("<ET>");
+        props.emplace_back(&(it->second[0]));
     }
 
     /**
@@ -220,7 +237,7 @@ class HmmRecongnizer : public CellRecognizer {
      * @param props
      * @param seq
      */
-    void viterbi_decode(const std::vector<double*>& props, std::vector<size_t>& seq) {
+    void viterbi_decode(const std::vector<double*>& props, std::vector<size_t>& seq) const {
         seq.resize(props.size(), 0);
         size_t length = props.size();
 
@@ -268,7 +285,19 @@ class HmmRecongnizer : public CellRecognizer {
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
         return EXIT_SUCCESS;
     }
-    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {}
+    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {
+        // get feature props
+        std::vector<double*> feature;
+        getfeateure_embeding(dstSrc, feature);
+        // get label
+        std::vector<size_t> label_idx;
+        viterbi_decode(feature, label_idx);
+        Cursor cur = cmap.Head();
+        for (int i = 1; i < label_idx.size() - 1; ++i) {
+            // TODO: add label words
+            cmap.addNext(cur, nullptr);
+        }
+    }
 };
 
 const char* HmmRecongnizer::DATA_PATH_KEY = "data.path";
