@@ -108,18 +108,18 @@ class Trie {
             return EXIT_FAILURE;
         }
         this->MaxLen = dat.maxlen();
-        auto labels  = dat.labels();
+        auto& labels = dat.labels();
         this->Labels.insert(this->Labels.end(), labels.begin(), labels.end());
-        auto check = dat.check();
+        auto& check = dat.check();
         this->Check.insert(this->Check.end(), check.begin(), check.end());
 
-        auto base = dat.base();
+        auto& base = dat.base();
         this->Base.insert(this->Base.end(), base.begin(), base.end());
 
-        auto fail = dat.fail();
+        auto& fail = dat.fail();
         this->Fail.insert(this->Fail.end(), fail.begin(), fail.end());
 
-        auto l = dat.l();
+        auto& l = dat.l();
         this->L.insert(this->L.end(), l.begin(), l.end());
         auto size = dat.v_size();
         this->V.assign(size, NULL);
@@ -128,8 +128,8 @@ class Trie {
                 this->V[i] = NULL;
                 continue;
             }
-            auto vlist = dat.v(i).item();
-            this->V[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
+            auto& vlist = dat.v(i).item();
+            this->V[i]  = new std::set<int64_t>(vlist.begin(), vlist.end());
         }
         size = dat.output_size();
         this->OutPut.assign(size, NULL);
@@ -138,10 +138,10 @@ class Trie {
                 this->OutPut[i] = NULL;
                 continue;
             }
-            auto vlist      = dat.output(i).item();
+            auto& vlist     = dat.output(i).item();
             this->OutPut[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
         }
-        auto cmap = dat.codemap();
+        auto& cmap = dat.codemap();
         this->CodeMap.insert(cmap.begin(), cmap.end());
         return EXIT_SUCCESS;
     }
