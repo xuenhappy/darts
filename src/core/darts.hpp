@@ -91,21 +91,12 @@ class AtomList {
         this->data.insert(data.end(), other.data.begin() + s, other.data.begin() + e);
     }
 
-    /**
-     * @brief
-     *
-     */
-    void clear() {
-        auto iter = data.begin();
-        while (iter != data.end()) {
-            iter = data.erase(iter);
-        }
-        data.clear();
-    }
-
     size_t size() const { return data.size(); }
 
-    ~AtomList() { clear(); }
+    ~AtomList() {
+        data.clear();
+        str.clear();
+    }
 
     std::string subAtom(size_t start, size_t end) const {
         if (start < 0 || end > data.size() || start >= end) return "";
@@ -126,6 +117,8 @@ class AtomList {
         }
         return nullptr;
     }
+
+    std::shared_ptr<Atom> operator[](int index) const { return at(index); }
 
     friend std::ostream& operator<<(std::ostream& output, const AtomList& D) {
         output << "AtomList[ ";

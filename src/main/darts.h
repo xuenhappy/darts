@@ -20,6 +20,11 @@ extern "C" {
 
 typedef void* ext_data;
 typedef struct _dregex* dregex;
+
+typedef struct _atom* atom;
+typedef struct _decider* decider;
+typedef struct _atomlist* atomlist;
+typedef struct _wordlist* wordlist;
 typedef struct _segment* segment;
 typedef struct _encoder* encoder;
 
@@ -57,13 +62,7 @@ const char* word_type(const char* word, size_t len);
  * @param regex
  * @return int
  */
-int load_drgex(const char* path, dregex* regex);
-
-/**
- * @brief free memory
- *
- * @param regex
- */
+dregex load_dregex(const char* path);
 void free_dregex(dregex regex);
 
 /**
@@ -100,43 +99,12 @@ void parse(dregex regex, atom_iter atomlist, dregex_hit hit, ext_data user_data)
  */
 int compile_regex(const char* outpath, kv_iter kvs, ext_data user_data);
 
-/**
- * @brief load the dregex from json conf file
- *
- * @param json_conf_file
- * @param sg
- * @return int
- */
-int load_segment(const char* json_conf_file, segment* sg, const char* mode);
-
-/**
- * @brief token匹配函数
- *
- */
-typedef void (*word_hit)(const char* str, const char* label, size_t as, size_t ae, size_t ws, size_t we,
-                         ext_data user_data);
-/**
- * @brief 分词
- *
- * @param sg
- * @param txt
- * @param len
- * @param ret
- * @return int 分词的结果数，如果-1失败
- */
-void token_str(segment sg, const char* txt, size_t textlen, word_hit hit, bool max_mode, bool normal_before,
-               ext_data user_data);
-
-/**
- * @brief free segment
- *
- * @param sg
- */
+atomlist asplit(const char* txt, size_t textlen);
+void free_alist(atomlist alist);
+segment load_segment(const char* conf_file, const char* mode);
 void free_segment(segment sg);
-
-int load_encoder(const char* confdir, encoder* cdr);
-int free_encoder(encoder cdr);
-void encode_alist(encoder cdr, segment sg, const char* txt, size_t textlen, word_hit hit, ext_data user_data);
+wordlist token_str(segment sg, atomlist alist, bool max_mode, bool normal_before);
+void free_wordlist(wordlist wlist);
 
 #ifdef __cplusplus
 }

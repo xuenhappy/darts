@@ -306,8 +306,8 @@ const std::set<std::string> SENTENCE_POS = {"!", "。", ",", "?", ";", ":", "！
  * @param ret
  * @param maxMode
  */
-void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
-              size_t maxLineLength = 100, size_t minLineLength = 10) {
+inline void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
+                     size_t maxLineLength = 100, size_t minLineLength = 10) {
     if (ori.size() <= maxLineLength) {
         sg.select(ori, ret, maxMode);
         return;
