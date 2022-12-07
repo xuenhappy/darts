@@ -16,6 +16,7 @@
 #include <darts.pb.h>
 #include <cstddef>
 #include <cstdlib>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <set>
@@ -283,8 +284,24 @@ class HmmRecongnizer : public CellRecognizer {
 
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+        auto iter = params.find(DATA_PATH_KEY);
+        if (iter == params.end()) {
+            std::cerr << DATA_PATH_KEY << " key not found in dictionary!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::ifstream in(iter->second);
+        if (!in.is_open()) {
+            std::cerr << "ERROR: open data " << iter->second << " file failed " << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (loadParam(&in)) {
+            in.close();
+            return EXIT_FAILURE;
+        }
+        in.close();
         return EXIT_SUCCESS;
     }
+
     void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {
         // get feature props
         std::vector<double*> feature;
@@ -292,10 +309,32 @@ class HmmRecongnizer : public CellRecognizer {
         // get label
         std::vector<size_t> label_idx;
         viterbi_decode(feature, label_idx);
+
         Cursor cur = cmap.Head();
-        for (int i = 1; i < label_idx.size() - 1; ++i) {
-            // TODO: add label words
-            cmap.addNext(cur, nullptr);
+        size_t pos = 1;
+        for (size_t i = 1; i < label_idx.size() - 1; ++i) {
+            const std::string& nlabel  = labels[label_idx[i]];
+            const std::string& nxlabel = labels[label_idx[i + 1]];
+            if (nlabel == nxlabel) continue;
+            if (nlabel[0] == 'I') {
+                auto w = std::make_shared<Word>(dstSrc, pos, i + 1);
+                if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
+                cur = cmap.addNext(cur, w);
+                pos = i + 1;
+                continue;
+            }
+            if (nlabel.size() > 2 && nlabel.substr(1) == nxlabel.substr(1)) continue;
+            auto w = std::make_shared<Word>(dstSrc, pos, i + 1);
+            if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
+            cur = cmap.addNext(cur, w);
+            pos = i + 1;
+        }
+        if (pos < label_idx.size() - 1) {
+            auto w = std::make_shared<Word>(dstSrc, pos, label_idx.size());
+
+            const std::string& nlabel = labels[label_idx[pos]];
+            if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
+            cmap.addNext(cur, w);
         }
     }
 };

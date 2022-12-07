@@ -82,14 +82,12 @@ class AtomList {
      * @param s
      * @param e
      */
-    AtomList(const AtomList& other, int s = 0, int e = -1) {
-        if (e < 0) {
-            e = other.str.size();
-        }
-        if (s <= e) {
-            return;
-        }
-        this->str = other.str.substr(0, e - s);
+    AtomList(const AtomList& other, int s, int e) {
+        if (s >= e) return;
+        auto st = data[s]->st;
+        auto et = data[e - 1]->et;
+
+        this->str = other.str.substr(st, et - st);
         this->data.insert(data.end(), other.data.begin() + s, other.data.begin() + e);
     }
 
@@ -109,26 +107,8 @@ class AtomList {
 
     ~AtomList() { clear(); }
 
-    /**
-     * @brief Get the Atom object
-     *
-     * @param start
-     * @param end
-     * @return std::shared_ptr<Atom>
-     */
-    std::shared_ptr<Atom> at(size_t start, size_t end) const {
-        assert(start >= 0 && end < data.size());
-        if (start >= end) return nullptr;
-        auto st           = data[start]->st;
-        auto et           = data[end - 1]->et;
-        std::string image = to_utf8(str.substr(st, et - st));
-        auto atom         = std::make_shared<Atom>(image.c_str(), st, et);
-        atom->char_type   = data[start]->char_type;
-        return atom;
-    }
-
     std::string subAtom(size_t start, size_t end) const {
-        if (start < 0 || end >= data.size() || start >= end) return "";
+        if (start < 0 || end > data.size() || start >= end) return "";
         auto st = data[start]->st;
         auto et = data[end - 1]->et;
         return to_utf8(str.substr(st, et - st));
