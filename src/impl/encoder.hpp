@@ -30,6 +30,7 @@
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
 #include "../utils/pinyin.hpp"
+#include "../utils/str_utils.hpp"
 
 struct symbol_pair {
     int left;      // left index of this pair
@@ -391,10 +392,22 @@ class LabelEncoder : public TypeEncoder {
         while (std::getline(fin, line)) {
             darts::trim(line);
             if (line.empty()) continue;
-            // TODO: set data
+            s = line.find('#');
+            if (s == std::string::npos) continue;
+
+            std::string key(line.substr(0, s));
+            darts::trim(key);
+            std::string value(line.substr(s + 1));
+            darts::trim(value);
+            float val = std::stof(value);
+            // set data
+            kind_codes[key] = std::make_pair(kind_codes.size(), val);
         }
         fin.close();
-        // init data
+        labels.resize(kind_codes.size());
+        for (auto& p : kind_codes) {
+            labels[p.second.first] = p.first;
+        }
         return EXIT_SUCCESS;
     }
 
@@ -489,7 +502,7 @@ class PinyinEncoder : public TypeEncoder {
     }
 
     int encode(const std::shared_ptr<darts::Word> word) const {
-        if(word->feat>=0)return word->feat;
+        if (word->feat >= 0) return word->feat;
         // encode word
         return encode(word->maxHXlabel(nullptr));
     }

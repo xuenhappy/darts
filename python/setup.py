@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 '''
 File: setup.py
 Project: python
@@ -48,18 +47,17 @@ setarg = setup(
     license='Apache',
     platforms=['Unix', 'MacOS'],
     classifiers=[
-        'Development Status :: 5 - Production/Stable', 'Environment :: Console',
-        'Intended Audience :: Developers',
-        'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: Apache Software License',
-        'Operating System :: Unix', 'Programming Language :: Python',
-        'Topic :: Text Processing :: Linguistic',
-        'Topic :: Software Development :: Libraries :: Python Modules'
+    'Development Status :: 5 - Production/Stable', 'Environment :: Console', 'Intended Audience :: Developers',
+    'Intended Audience :: Science/Research', 'License :: OSI Approved :: Apache Software License',
+    'Operating System :: Unix', 'Programming Language :: Python', 'Topic :: Text Processing :: Linguistic',
+    'Topic :: Software Development :: Libraries :: Python Modules'
     ],
     cmdclass={
-        'build_py': build_py,
+    'build_py': build_py,
     },
-    package_data={'': ['*.*'], },
+    package_data={
+    '': ['*.*'],
+    },
     include_package_data=True,
     python_requires='>=3.8, <=3.10',
 )
