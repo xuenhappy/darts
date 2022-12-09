@@ -40,24 +40,36 @@ class SegmentPlugin {
                           std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) = 0;
     virtual ~SegmentPlugin() {}
 };
+class Indicator : public SegmentPlugin {
+   public:
+    /**
+     * @brief set all word embeding
+     *
+     * @param dstSrc
+     * @param cmap
+     */
+    virtual void embed(const AtomList& dstSrc, SegPath& cmap) const = 0;
+    virtual ~Indicator() {}
+};
+class Quantizer : public SegmentPlugin {
+   public:
+    /**
+     * @brief claulate two word distance
+     *
+     * @param pre
+     * @param next
+     * @return double
+     */
+    virtual double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const = 0;
+    virtual ~Quantizer() {}
+};
+
 /**
  * @brief embeding atomlist for segment
  *
  */
-class Decider : public SegmentPlugin {
+class Decider : public Quantizer, public Indicator {
    public:
-    /***
-     * 对每个Word进行向量表示
-     **/
-    virtual void embed(const AtomList& dstSrc, SegPath& cmap) const = 0;
-    /**
-     * @brief
-     *
-     * @param pre
-     * @param next
-     * @return double must >=0
-     */
-    virtual double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const = 0;
     virtual ~Decider() {}
 };
 /**
@@ -85,7 +97,7 @@ REGISTER_REGISTERER(Decider);
 typedef struct _GraphEdge {
     int et;
     double weight;
-} * GraphEdge;
+}* GraphEdge;
 
 class SegGraph {
    private:
