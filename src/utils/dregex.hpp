@@ -20,10 +20,15 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "str_utils.hpp"
 #include "zipfile.hpp"
 
-namespace darts {
+namespace dregex {
+
+class StringIter {
+   public:
+    virtual void iter(std::function<bool(const std::string&, size_t)> hit) const = 0;
+    virtual ~StringIter() {}
+};
 
 class Trie {
    public:
@@ -252,5 +257,5 @@ class Trie {
     }
 };
 
-}  // namespace darts
+}  // namespace dregex
 #endif  // SRC_UTILS_DREGEX_HPP_

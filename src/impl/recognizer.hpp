@@ -30,7 +30,7 @@
 #include "./encoder.hpp"
 
 namespace darts {
-class AtomListIterator : public StringIter {
+class AtomListIterator : public dregex::StringIter {
    private:
     const AtomList* m_list;
     std::set<std::string> skiptypes;
@@ -41,7 +41,7 @@ class AtomListIterator : public StringIter {
         this->skiptypes.insert("EMPTY");
     }
 
-    void iter(std::function<bool(const std::string&, size_t)> hit) {
+    void iter(std::function<bool(const std::string&, size_t)> hit) const {
         std::string tmp;
         for (auto i = 0; i < m_list->size(); i++) {
             auto a = m_list->at(i);
@@ -61,7 +61,7 @@ class AtomListIterator : public StringIter {
  */
 class DictWordRecongnizer : public CellRecognizer {
    private:
-    Trie trie;
+    dregex::Trie trie;
     static const char* PB_FILE_KEY;
 
    public:

@@ -154,14 +154,19 @@ static inline size_t wordLen(const char* str) {
     }
     return nums;
 }
+class U32StrIter {
+   public:
+    virtual void iter(std::function<void(int64_t code, const char* str, size_t idx)> hit) const = 0;
+    virtual ~U32StrIter() {}
+};
 
-class _UTF8StringIter : public darts::U32Iter {
+class _UTF8StringIter : public U32StrIter {
    private:
     const std::string* str;
 
    public:
     explicit _UTF8StringIter(const std::string& str) { this->str = &str; }
-    void iter(std::function<void(int64_t, const char*, size_t)> hit) {
+    void iter(std::function<void(int64_t, const char*, size_t)> hit) const {
         utf8_iter ITER;
         int position = -1;
         utf8_initEx(&ITER, str->c_str(), str->length());
@@ -172,13 +177,13 @@ class _UTF8StringIter : public darts::U32Iter {
     }
 };
 
-class _U32StringIter : public darts::U32Iter {
+class _U32StringIter : public U32StrIter {
    private:
     const std::u32string* str;
 
    public:
     explicit _U32StringIter(const std::u32string& str) { this->str = &str; }
-    void iter(std::function<void(int64_t, const char*, size_t)> hit) {
+    void iter(std::function<void(int64_t, const char*, size_t)> hit) const {
         for (size_t position = 0; position < str->length(); position++) {
             int64_t code = (*str)[position];
             hit(code, unicode_to_utf8(code), position);
@@ -186,7 +191,7 @@ class _U32StringIter : public darts::U32Iter {
     }
 };
 
-inline void atomSplit(darts::U32Iter& str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
+inline void atomSplit(const U32StrIter& str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
     std::string chr_buffer;
     size_t bufstart      = 0;
     std::string buf_type = "";

@@ -27,41 +27,6 @@
 #include <vector>
 
 namespace darts {
-class StringIter {
-   public:
-    /**
-     * @brief iter this string is success
-     *
-     *
-     * @param hit
-     * @return int 0 if successful else 1
-     */
-    virtual void iter(std::function<bool(const std::string&, size_t)> hit) = 0;
-    virtual ~StringIter() {}
-};
-
-class StringIterPairs {
-   public:
-    /**
-     * @brief iter kv pairs
-     *
-     * @param hit
-     * @return int 0 if successful, otherwise 1
-     */
-    virtual int iter(std::function<void(StringIter&, const int64_t*, size_t)> hit) = 0;
-    virtual ~StringIterPairs() {}
-};
-
-class U32Iter {
-   public:
-    /**
-     * @brief iter string
-     *
-     * @param hit
-     */
-    virtual void iter(std::function<void(int64_t, const char*, size_t)> hit) = 0;
-    virtual ~U32Iter() {}
-};
 
 /**
  * @brief 字符串连接

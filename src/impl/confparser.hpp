@@ -281,7 +281,7 @@ inline int loadSegment(const char* json_conf_file, darts::Segment** segment, con
         std::cerr << "ERROR: no key [modes/" << mode << "/decider] found!" << std::endl;
         return EXIT_FAILURE;
     }
-    auto used_decider         = use_node["decider"].asString();
+    auto used_decider           = use_node["decider"].asString();
     auto used_recognizers_nodes = use_node["recognizers"];
 
     std::vector<std::string> used_recognizers;
