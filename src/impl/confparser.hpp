@@ -20,6 +20,7 @@
 #include "../utils/file_utils.hpp"
 #include "../utils/str_utils.hpp"
 #include "./encoder.hpp"
+#include "./neuroplug.hpp"
 #include "./quantizer.hpp"
 #include "./recognizer.hpp"
 
