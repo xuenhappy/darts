@@ -13,12 +13,13 @@
 #ifndef SRC_MAIN_DARTS4PY_HPP_
 #define SRC_MAIN_DARTS4PY_HPP_
 #include "./darts.h"
+#include <string.h>
 #include "../core/segment.hpp"
 #include "../impl/confparser.hpp"
 #include "../utils/dregex.hpp"
 #include "../utils/utill.hpp"
 
-struct _dreg {
+struct _dregex {
     dregex::Trie* dat;
 };
 struct _segment {
@@ -29,29 +30,27 @@ void init_darts() { initUtils(); }
 
 void destroy_darts() { google::protobuf::ShutdownProtobufLibrary(); }
 
-int normalize_str(const char* str, char** ret) {
-    if (!str) return 0;
+char* normalize_str(const char* str, size_t len, size_t* ret) {
+    if (!str) return NULL;
     std::string normals = normalize(str);
-    char* c             = (char*)malloc(sizeof(char) * (normals.size() + 1));
-    std::copy(normals.begin(), normals.end(), c);
-    c[normals.size()] = '\0';
-    *ret              = c;
-    return normals.size();
+
+    *ret = normals.size();
+    return strdup(normals.c_str());
 }
 
-int load_drgex(const char* path, dregex* regex) {
-    if (!path) return EXIT_FAILURE;
-    darts::Trie* trie = new darts::Trie();
+dreg load_drgex(const char* path) {
+    if (!path) return NULL;
+    dregex::Trie* trie = new dregex::Trie();
     if (trie->loadPb(path)) {
         delete trie;
-        return EXIT_FAILURE;
+        return NULL;
     }
-    *regex        = new struct _dregex();
-    (*regex)->dat = trie;
-    return EXIT_SUCCESS;
+    auto reg = new struct _dregex();
+    reg->dat = trie;
+    return reg;
 }
 
-void free_dregex(dregex regex) {
+void free_dregex(dreg regex) {
     if (regex) {
         if (regex->dat) {
             delete regex->dat;
@@ -61,7 +60,7 @@ void free_dregex(dregex regex) {
     }
 }
 
-class _C_AtomListIter : public darts::StringIter {
+class _C_AtomListIter : public dregex::StringIter {
    private:
     ext_data user_data;
     atom_iter iter_func;
@@ -71,7 +70,7 @@ class _C_AtomListIter : public darts::StringIter {
         this->user_data = user_data;
         this->iter_func = iter_func;
     }
-    void iter(std::function<bool(const std::string&, size_t)> hit) {
+    void iter(std::function<bool(const std::string&, size_t)> hit) const {
         const char* chars = NULL;
         size_t postion    = 0;
         while (iter_func(&chars, &postion, user_data)) {
@@ -82,7 +81,7 @@ class _C_AtomListIter : public darts::StringIter {
     }
 };
 
-void parse(dregex regex, atom_iter atomlist, dregex_hit hit, ext_data user_data) {
+void parse(dreg regex, atom_iter atomlist, dregex_hit hit, ext_data user_data) {
     if (!regex || !regex->dat) return;
     auto dat = regex->dat;
     _C_AtomListIter alist(user_data, atomlist);
