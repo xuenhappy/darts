@@ -16,10 +16,10 @@
 #include "../core/segment.hpp"
 #include "../impl/confparser.hpp"
 #include "../utils/dregex.hpp"
-#include "../utils/utils_base.hpp"
+#include "../utils/utill.hpp"
 
-struct _dregex {
-    darts::Trie* dat;
+struct _dreg {
+    dregex::Trie* dat;
 };
 struct _segment {
     darts::Segment* segment;
@@ -31,7 +31,7 @@ void destroy_darts() { google::protobuf::ShutdownProtobufLibrary(); }
 
 int normalize_str(const char* str, char** ret) {
     if (!str) return 0;
-    std::string normals = normalizeStr(str);
+    std::string normals = normalize(str);
     char* c             = (char*)malloc(sizeof(char) * (normals.size() + 1));
     std::copy(normals.begin(), normals.end(), c);
     c[normals.size()] = '\0';

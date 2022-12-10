@@ -19,7 +19,7 @@ extern "C" {
 #include <stdlib.h>
 
 typedef void* ext_data;
-typedef struct _dregex* dregex;
+typedef struct _dregex* dreg;
 
 typedef struct _atom* atom;
 typedef struct _decider* decider;
@@ -62,8 +62,8 @@ const char* word_type(const char* word, size_t len);
  * @param regex
  * @return int
  */
-dregex load_dregex(const char* path);
-void free_dregex(dregex regex);
+dreg load_dreg(const char* path);
+void free_dregex(dreg regex);
 
 /**
  * @brief  正则匹配
@@ -88,7 +88,7 @@ typedef bool (*dregex_hit)(size_t s, size_t e, const char** labels, size_t label
  * @param user_data
  * @return int
  */
-void parse(dregex regex, atom_iter atomlist, dregex_hit hit, ext_data user_data);
+void parse(dreg regex, atom_iter atomlist, dregex_hit hit, ext_data user_data);
 /**
  * @brief compile regex
  *
