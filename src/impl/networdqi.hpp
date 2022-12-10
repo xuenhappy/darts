@@ -13,6 +13,7 @@
 #define SRC_IMPL_NETWORDQI_HPP_
 
 #include <onnxruntime_cxx_api.h>
+#include <cassert>
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
@@ -40,7 +41,7 @@ inline Ort::Session* loadmodel(const char* model_path) {
  * @brief a network onnx
  *
  */
-class OnnxIndicator : public Indicator {
+class OnnxIndicator {
    private:
     static const char* MODEL_PATH_KEY;
     static const char* WORDPIECE_PARAM;
@@ -153,7 +154,7 @@ class OnnxIndicator : public Indicator {
     }
 };
 
-class OnnxQuantizer : public Quantizer {
+class OnnxQuantizer {
    private:
     static const char* MODEL_PATH_KEY;
     size_t emdim;
@@ -225,11 +226,8 @@ class OnnxQuantizer : public Quantizer {
  */
 class OnnxDecider : public Decider {
    private:
-    static const char* PMODEL_PARAM;
-    static const char* QMODEL_PARAM;
-
-    std::shared_ptr<Quantizer> quantizer;
-    std::shared_ptr<Indicator> indicator;
+    OnnxQuantizer quantizer;
+    OnnxIndicator indicator;
 
    public:
     /**
@@ -240,28 +238,12 @@ class OnnxDecider : public Decider {
      */
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        // load model
-        auto it = plugins.find(PMODEL_PARAM);
-        if (it == plugins.end()) {
-            std::cerr << "no key find" << PMODEL_PARAM << std::endl;
+        if (quantizer.initalize(params, plugins)) {
             return EXIT_FAILURE;
         }
-        this->quantizer = std::dynamic_pointer_cast<Quantizer>(it->second);
-        if (this->quantizer == nullptr) {
-            std::cerr << "plugin init failed " << PMODEL_PARAM << std::endl;
+        if (indicator.initalize(params, plugins)) {
             return EXIT_FAILURE;
         }
-        it = plugins.find(QMODEL_PARAM);
-        if (it == plugins.end()) {
-            std::cerr << "no key find" << QMODEL_PARAM << std::endl;
-            return EXIT_FAILURE;
-        }
-        this->indicator = std::dynamic_pointer_cast<Indicator>(it->second);
-        if (this->indicator == nullptr) {
-            std::cerr << "plugin init failed " << QMODEL_PARAM << std::endl;
-            return EXIT_FAILURE;
-        }
-
         return EXIT_SUCCESS;
     }
     /**
@@ -270,7 +252,7 @@ class OnnxDecider : public Decider {
      * @param dstSrc
      * @param cmap
      */
-    void embed(const AtomList& dstSrc, SegPath& cmap) const { indicator->embed(dstSrc, cmap); }
+    void embed(const AtomList& dstSrc, SegPath& cmap) const { indicator.embed(dstSrc, cmap); }
     /**
      * @brief
      *
@@ -279,17 +261,11 @@ class OnnxDecider : public Decider {
      * @return double must >=0
      */
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
-        return quantizer->ranging(pre, next);
+        return quantizer.ranging(pre, next);
     }
 
-    ~OnnxDecider() {
-        quantizer = nullptr;
-        indicator = nullptr;
-    }
+    ~OnnxDecider() {}
 };
-
-const char* OnnxDecider::PMODEL_PARAM = "encoder.model";
-const char* OnnxDecider::QMODEL_PARAM = "quantizer.model";
 
 REGISTER_Persenter(OnnxDecider);
 

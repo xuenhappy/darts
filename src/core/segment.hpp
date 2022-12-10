@@ -13,6 +13,7 @@
 #ifndef SRC_CORE_SEGMENT_HPP_
 #define SRC_CORE_SEGMENT_HPP_
 #include <float.h>
+#include <cassert>
 #include <map>
 #include <memory>
 #include <queue>
@@ -40,37 +41,18 @@ class SegmentPlugin {
                           std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) = 0;
     virtual ~SegmentPlugin() {}
 };
-class Indicator : public SegmentPlugin {
-   public:
-    /**
-     * @brief set all word embeding
-     *
-     * @param dstSrc
-     * @param cmap
-     */
-    virtual void embed(const AtomList& dstSrc, SegPath& cmap) const = 0;
-    virtual ~Indicator() {}
-};
-class Quantizer : public SegmentPlugin {
-   public:
-    /**
-     * @brief claulate two word distance
-     *
-     * @param pre
-     * @param next
-     * @return double
-     */
-    virtual double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const = 0;
-    virtual ~Quantizer() {}
-};
 
 /**
  * @brief embeding atomlist for segment
  *
  */
-class Decider : public Quantizer, public Indicator {
+class Decider : public SegmentPlugin {
    public:
     virtual ~Decider() {}
+    // embeding the words
+    virtual void embed(const AtomList& dstSrc, SegPath& cmap) const = 0;
+    // calculate the two word distance
+    virtual double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const = 0;
 };
 /**
  * @brief recongnize tokens
@@ -97,7 +79,7 @@ REGISTER_REGISTERER(Decider);
 typedef struct _GraphEdge {
     int et;
     double weight;
-}* GraphEdge;
+} * GraphEdge;
 
 class SegGraph {
    private:
@@ -200,6 +182,7 @@ class Segment {
         std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
         cmap.iterRow(NULL, 0, [&](Cursor pre) {
             auto dist = decider->ranging(cmap.SrcNode(), pre->val);
+            assert(dist >= 0);
             head_tmp->push_back(new _GraphEdge{pre->idx, dist});
         });
         graph.putEdges(-1, head_tmp);
@@ -208,12 +191,14 @@ class Segment {
             std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
             cmap.iterRow(pre, pre->val->et, [&](Cursor next) {
                 auto dist = decider->ranging(pre->val, next->val);
+                assert(dist >= 0);
                 tmp->push_back(new _GraphEdge{next->idx, dist});
             });
             // add tail
             if (tmp->empty()) {
                 auto dist = decider->ranging(pre->val, cmap.EndNode());
-                int cidx  = cmap.Size();
+                assert(dist >= 0);
+                int cidx = cmap.Size();
                 tmp->push_back(new _GraphEdge{cidx, dist});
             }
             graph.putEdges(pre->idx, tmp);

@@ -154,11 +154,11 @@ static inline std::string& toupper(std::string& data) {
 static inline void split(const std::string& s, const std::string& delimiter, std::vector<std::string>& res) {
     size_t pos_start = 0, pos_end, delim_len = delimiter.length();
     while ((pos_end = s.find(delimiter, pos_start)) != std::string::npos) {
-        res.push_back(s.substr(pos_start, pos_end - pos_start));
+        res.emplace_back(s.substr(pos_start, pos_end - pos_start));
         pos_start = pos_end + delim_len;
     }
     if (pos_start < s.length()) {
-        res.push_back(s.substr(pos_start));
+        res.emplace_back(s.substr(pos_start));
     }
 }
 /**
