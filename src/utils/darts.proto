@@ -29,13 +29,3 @@ message BigramDat{
     int64 max_single_freq = 4;
     int64 avg_union_freq = 5;
 }
-
-message HmmParam{
-    int64 tagnum=1;
-    repeated string labels=2;
-    message vec{
-        repeated double arr=1;
-    }
-    repeated vec trans=3;
-    map<string,vec> features=4;
-}

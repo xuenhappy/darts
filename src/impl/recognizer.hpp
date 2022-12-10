@@ -12,8 +12,8 @@
 
 #ifndef SRC_IMPL_RECOGNIZER_HPP_
 #define SRC_IMPL_RECOGNIZER_HPP_
+
 #include <assert.h>
-#include <darts.pb.h>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
@@ -100,15 +100,6 @@ const char* DictWordRecongnizer::PB_FILE_KEY = "pbfile.path";
 REGISTER_Recognizer(DictWordRecongnizer);
 
 /**
- * @brief time and date recongnizer
- *
- */
-class DateRecongnizer : public CellRecognizer {
-   public:
-    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {}
-};
-
-/**
  * pinyin标注,该插件不可以❌和其他插件混用
  */
 class PinyinRecongnizer : public CellRecognizer {
@@ -161,186 +152,13 @@ const char* PinyinRecongnizer::ENCODER_PARAM = "pyin.encoder";
 REGISTER_Recognizer(PinyinRecongnizer);
 
 /**
- * @brief a cell recongnizer that use hmm
+ * @brief time and date recongnizer
  *
  */
-class HmmRecongnizer : public CellRecognizer {
-   private:
-    static const char* DATA_PATH_KEY;
-    size_t tagnum;
-    std::vector<std::vector<double>> trans;
-    std::unordered_map<std::string, std::vector<double>> feature_prop;
-    std::vector<std::string> labels;
-
-   private:
-    int loadParam(std::istream* input) {
-        darts::HmmParam param_dat;
-        if (!param_dat.ParseFromIstream(input)) {
-            std::cerr << "ERROR: Failed to read Trie" << std::endl;
-            return EXIT_FAILURE;
-        }
-        this->tagnum = param_dat.tagnum();
-        // set label
-        auto& glabels = param_dat.labels();
-        labels.reserve(glabels.size());
-        this->labels.insert(labels.end(), glabels.begin(), glabels.end());
-        // set trans
-        auto& gtrans = param_dat.trans();
-        trans.resize(gtrans.size());
-        for (size_t i = 0; i < gtrans.size(); ++i) {
-            auto& vec = gtrans[i].arr();
-            trans[i].insert(trans[i].end(), vec.begin(), vec.end());
-        }
-        // set feature
-        auto& gfeature = param_dat.features();
-        feature_prop.reserve(gfeature.size());
-        for (auto& it : gfeature) {
-            auto& key = it.first;
-            auto& val = it.second.arr();
-            std::vector<double> tmp(val.begin(), val.end());
-            feature_prop[key] = tmp;
-        }
-        // check basic token
-        assert(feature_prop.find("<ST>") != feature_prop.end());
-        assert(feature_prop.find("<ET>") != feature_prop.end());
-        assert(feature_prop.find("<UNK>") != feature_prop.end());
-        return EXIT_SUCCESS;
-    }
-
-    /**
-     * @brief Get the feateure embeding object
-     *
-     * @param dstSrc
-     * @param props
-     */
-    void getfeateure_embeding(const AtomList& dstSrc, std::vector<double*>& props) const {
-        props.reserve(dstSrc.size() + 2);
-        std::unordered_map<std::string, std::vector<double>>::const_iterator it;
-        it = feature_prop.find("<ST>");
-        props.emplace_back(&(it->second[0]));
-        // add head
-
-        for (auto atom : dstSrc) {
-            it = feature_prop.find(atom->image);
-            if (it == feature_prop.end()) {
-                it = feature_prop.find("<UNK>");
-            }
-            props.emplace_back(&(it->second[0]));
-        }
-        // add end
-        it = feature_prop.find("<ET>");
-        props.emplace_back(&(it->second[0]));
-    }
-
-    /**
-     * @brief decode data
-     *
-     * @param props
-     * @param seq
-     */
-    void viterbi_decode(const std::vector<double*>& props, std::vector<size_t>& seq) const {
-        seq.resize(props.size(), 0);
-        size_t length = props.size();
-
-        double prob[length][tagnum];
-        size_t prevs[length][tagnum];
-        for (int i = 0; i < tagnum; i++) {
-            prob[0][i] = props[i][1];
-        }
-
-        for (int i = 1; i < length; i++) {
-            for (int j = 0; j < tagnum; j++) {
-                double pmax = 0, p;
-                int dmax;
-                for (int k = 0; k < tagnum; k++) {
-                    p = prob[i - 1][k] * trans[k][j];
-                    if (p > pmax) {
-                        pmax = p;
-                        dmax = k;
-                    }
-                }
-                prob[i][j]      = props[j][1] * pmax;
-                prevs[i - 1][j] = dmax;
-            }
-        }
-
-        double pmax = 0;
-        int dmax;
-        for (int i = 0; i < tagnum; i++) {
-            if (prob[length - 1][i] > pmax) {
-                pmax = prob[length - 1][i];
-                dmax = i;
-            }
-        }
-        seq[length - 1] = dmax;
-
-        for (int i = length - 2; i >= 0; i--) {
-            seq[i] = prevs[i][seq[i + 1]];
-        }
-    }
-
+class DateRecongnizer : public CellRecognizer {
    public:
-    HmmRecongnizer() : tagnum(0) {}
-
-    int initalize(const std::map<std::string, std::string>& params,
-                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        auto iter = params.find(DATA_PATH_KEY);
-        if (iter == params.end()) {
-            std::cerr << DATA_PATH_KEY << " key not found in dictionary!" << std::endl;
-            return EXIT_FAILURE;
-        }
-        std::ifstream in(iter->second);
-        if (!in.is_open()) {
-            std::cerr << "ERROR: open data " << iter->second << " file failed " << std::endl;
-            return EXIT_FAILURE;
-        }
-        if (loadParam(&in)) {
-            in.close();
-            return EXIT_FAILURE;
-        }
-        in.close();
-        return EXIT_SUCCESS;
-    }
-
-    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {
-        // get feature props
-        std::vector<double*> feature;
-        getfeateure_embeding(dstSrc, feature);
-        // get label
-        std::vector<size_t> label_idx;
-        viterbi_decode(feature, label_idx);
-
-        Cursor cur = cmap.Head();
-        size_t pos = 1;
-        for (size_t i = 1; i < label_idx.size() - 1; ++i) {
-            const std::string& nlabel  = labels[label_idx[i]];
-            const std::string& nxlabel = labels[label_idx[i + 1]];
-            if (nlabel == nxlabel) continue;
-            if (nlabel[0] == 'I') {
-                auto w = std::make_shared<Word>(dstSrc, pos, i + 1);
-                if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
-                cur = cmap.addNext(cur, w);
-                pos = i + 1;
-                continue;
-            }
-            if (nlabel.size() > 2 && nlabel.substr(1) == nxlabel.substr(1)) continue;
-            auto w = std::make_shared<Word>(dstSrc, pos, i + 1);
-            if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
-            cur = cmap.addNext(cur, w);
-            pos = i + 1;
-        }
-        if (pos < label_idx.size() - 1) {
-            auto w = std::make_shared<Word>(dstSrc, pos, label_idx.size());
-
-            const std::string& nlabel = labels[label_idx[pos]];
-            if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
-            cmap.addNext(cur, w);
-        }
-    }
+    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {}
 };
-
-const char* HmmRecongnizer::DATA_PATH_KEY = "data.path";
-REGISTER_Recognizer(HmmRecongnizer);
 
 }  // namespace darts
 
