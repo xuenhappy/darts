@@ -15,10 +15,12 @@
 #include <onnxruntime_cxx_api.h>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,7 +28,6 @@
 #include "../core/segment.hpp"
 #include "../utils/str_utils.hpp"
 #include "./encoder.hpp"
-
 namespace darts {
 
 inline Ort::Session* loadmodel(const char* model_path) {
@@ -48,34 +49,73 @@ class OnnxIndicator {
     static const char* TYPEENCODER_PARAM;
 
     size_t emdim;
-    std::vector<const char*> input_node_names;
-    std::vector<const char*> output_node_names;
-
     Ort::Session* session;
+    std::vector<const char*> input_name_;
+    std::vector<const char*> output_name_;
+
     std::shared_ptr<WordPice> wordpiece;
     std::shared_ptr<TypeEncoder> lencoder;
 
-    int set_encode_dim(Ort::Session* session) {
-        // print model input layer (node names, types, shape etc.)
-        Ort::AllocatorWithDefaultOptions allocator;
-        size_t num_input_nodes = session->GetInputCount();
-        if (num_input_nodes != 2) {
-            std::cerr << "this model input is not 1" << std::endl;
+    int validator(Ort::Session* session) {
+        // check input tensor nums
+        size_t input_count = session->GetInputCount();
+        if (input_count != 2) {
+            std::cerr << "This model is not supported by onnx indicator.  input nums must 2" << std::endl;
             return EXIT_FAILURE;
         }
+        // check atomlist input tensor
+        auto alist_tensor_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        size_t alist_dim_count = alist_tensor_info.GetDimensionsCount();
+        if (alist_dim_count != 1) {  // timestep
+            std::cerr << "This model is not supported by onnx indicator. alist dim is not 1!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        // check word input tensor
+        auto word_tensor_info = session->GetInputTypeInfo(1).GetTensorTypeAndShapeInfo();
+        size_t word_dim_count = word_tensor_info.GetDimensionsCount();
+        if (word_dim_count != 2) {  // nums*idx
+            std::cerr << "This model is not supported by onnx indicator. word dim is not 2!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::vector<int64_t> word_dims = word_tensor_info.GetShape();
+        if (word_dims[1] != 3) {
+            std::cerr << "This model is not supported by onnx indicator. word need be in NC format" << std::endl;
+            return EXIT_FAILURE;
+        }
+        // check output tensor nums
+        size_t out_count = session->GetOutputCount();
+        if (out_count != 1) {
+            std::cerr << "This model is not supported by onnx indicator. output nums must 1" << std::endl;
+            return EXIT_FAILURE;
+        }
+        // check output tensor
+        auto emb_tensor_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        size_t emb_dim_count = emb_tensor_info.GetDimensionsCount();
+        if (emb_dim_count != 2) {  // nums*dim
+            std::cerr << "This model is not supported by onnx indicator. output dim is not 2!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        auto emb_dims = emb_tensor_info.GetShape();
+        this->emdim   = emb_dims[1];
+
+        Ort::AllocatorWithDefaultOptions ort_alloc;
+        input_name_.emplace_back(session->GetInputNameAllocated(0, ort_alloc).get());
+        input_name_.emplace_back(session->GetInputNameAllocated(1, ort_alloc).get());
+        output_name_.emplace_back(session->GetOutputNameAllocated(0, ort_alloc).get());
 
         return EXIT_SUCCESS;
     }
 
    public:
+    size_t getEmbSize() { return emdim; }
     /**
      * @brief init this
      *
      * @param param
      * @return int
      */
-    int initalize(const std::map<std::string, std::string>& params,
-                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
+    int load(const std::map<std::string, std::string>& params,
+             std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
         auto it = plugins.find(WORDPIECE_PARAM);
         if (it == plugins.end()) {
             std::cerr << "no key find" << WORDPIECE_PARAM << std::endl;
@@ -106,6 +146,9 @@ class OnnxIndicator {
             std::cerr << "load model " << MODEL_PATH_KEY << " from path " << it->second << " failed!" << std::endl;
             return EXIT_FAILURE;
         }
+        if (validator(this->session)) {
+            return EXIT_FAILURE;
+        }
         return EXIT_SUCCESS;
     }
     /**
@@ -115,31 +158,65 @@ class OnnxIndicator {
      * @param cmap
      */
     void embed(const AtomList& dstSrc, SegPath& cmap) const {
-        std::vector<const char*> input_node_names  = {"input"};
-        std::vector<const char*> output_node_names = {"output"};
-
-        std::vector<int64_t> input_node_dims = {1, 10, 2};
-        size_t input_tensor_size             = 1 * 10 * 2;
-
-        std::vector<float> input_tensor_values(input_tensor_size);
-        for (unsigned int i = 0; i < input_tensor_size; i++)
-            input_tensor_values[i] = (float)i / (input_tensor_size + 1);
-        // create input tensor object from data values
-        auto memory_info        = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-        Ort::Value input_tensor = Ort::Value::CreateTensor<float>(memory_info, input_tensor_values.data(),
-                                                                  input_tensor_size, input_node_dims.data(), 3);
-        assert(input_tensor.IsTensor());
-
+        // create inputs
         std::vector<Ort::Value> ort_inputs;
-        ort_inputs.push_back(std::move(input_tensor));
-        // score model & input tensor, get back output tensor
-        std::vector<Ort::Value> output_tensors;
-        session->Run(Ort::RunOptions{nullptr}, input_node_names.data(), ort_inputs.data(), ort_inputs.size(),
-                     output_node_names.data(), output_tensors.data(), 2);
+        auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        // create alist tensor
+        int64_t alist_size              = dstSrc.size() + 2;
+        std::vector<int64_t> alist_dims = {alist_size};
+        std::vector<int64_t> alist_tensor_values(alist_size);
+        // set alist data
+        wordpiece->encode(dstSrc, [alist_size, &alist_tensor_values](int code, int atom_postion) {
+            size_t idx = atom_postion != -2 ? atom_postion + 1 : alist_size - 1;
+            // set data
+            alist_tensor_values[idx] = code;
+        });
+        Ort::Value alist_input_tensor = Ort::Value::CreateTensor<int64_t>(
+            memory_info, alist_tensor_values.data(), alist_size, alist_dims.data(), alist_dims.size());
+        assert(alist_input_tensor.IsTensor());
+        ort_inputs.push_back(std::move(alist_input_tensor));
+        // create words tensor
+        int64_t words_size              = cmap.Size() + 2;
+        size_t words_tensor_size        = words_size * 3;
+        std::vector<int64_t> words_dims = {words_size, 3};
+        std::vector<int64_t> words_tensor_values(words_tensor_size);
+        // set words
+        // set head
+        words_tensor_values[0] = 0;
+        words_tensor_values[1] = 1;
+        words_tensor_values[2] = codemap::sep_code;
+        // set tail
+        words_tensor_values[words_tensor_size - 3] = alist_size - 1;
+        words_tensor_values[words_tensor_size - 2] = alist_size;
+        words_tensor_values[words_tensor_size - 1] = codemap::cls_code;
+        // set common
+        cmap.indexIt();
+        cmap.iterRow(NULL, -1, [this, &words_tensor_values](Cursor cur) {
+            auto w     = cur->val;
+            size_t idx = (cur->idx + 1) * 3;
 
-        // Get pointer to output tensor float values
-        float* floatarr = output_tensors[0].GetTensorMutableData<float>();
-        // set cmap att
+            words_tensor_values[idx]     = w->st + 1;
+            words_tensor_values[idx + 1] = w->et + 1;
+            words_tensor_values[idx + 2] = this->lencoder == nullptr ? codemap::unk_code : this->lencoder->encode(w);
+        });
+        Ort::Value words_input_tensor = Ort::Value::CreateTensor<int64_t>(
+            memory_info, words_tensor_values.data(), words_tensor_size, words_dims.data(), words_dims.size());
+        assert(words_input_tensor.IsTensor());
+        ort_inputs.push_back(std::move(words_input_tensor));
+        // run model
+        Ort::Value output_tensor{nullptr};
+        session->Run(Ort::RunOptions{nullptr}, input_name_.data(), ort_inputs.data(), ort_inputs.size(),
+                     output_name_.data(), &output_tensor, output_name_.size());
+
+        // set cmap data
+        const float* floatarr = output_tensor.GetTensorMutableData<float>();
+        cmap.SrcNode()->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(floatarr, floatarr + emdim)));
+        cmap.iterRow(NULL, -1, [this, floatarr, &words_tensor_values](Cursor cur) {
+            const float* arr = floatarr + (cur->idx + 1) * emdim;
+            cur->val->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(arr, arr + emdim)));
+        });
+        const float* endarr = floatarr + (words_size - 1) * emdim;
+        cmap.EndNode()->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(endarr, endarr + emdim)));
     }
 
     ~OnnxIndicator() {
@@ -147,29 +224,80 @@ class OnnxIndicator {
             delete this->session;
             this->session = NULL;
         }
-        input_node_names.clear();
-        output_node_names.clear();
+        input_name_.clear();
+        output_name_.clear();
         wordpiece = nullptr;
         lencoder  = nullptr;
     }
 };
+const char* OnnxIndicator::MODEL_PATH_KEY    = "model.path";
+const char* OnnxIndicator::WORDPIECE_PARAM   = "wordpiece.name";
+const char* OnnxIndicator::TYPEENCODER_PARAM = "tencode.name";
 
 class OnnxQuantizer {
    private:
     static const char* MODEL_PATH_KEY;
-    size_t emdim;
-    std::vector<const char*> input_node_names;
-    std::vector<const char*> output_node_names;
-    Ort::Session* seesion;
 
-    int set_encode_dim(Ort::Session* session) {
-        // print model input layer (node names, types, shape etc.)
-        Ort::AllocatorWithDefaultOptions allocator;
-        size_t num_input_nodes = session->GetInputCount();
-        if (num_input_nodes != 2) {
-            std::cerr << "this model input is not 1" << std::endl;
+    size_t emdim;
+    Ort::Session* session;
+    std::vector<const char*> input_name_;
+    std::vector<const char*> output_name_;
+
+    int validator(Ort::Session* session) {
+        // check input tensor nums
+        size_t input_count = session->GetInputCount();
+        if (input_count != 2) {
+            std::cerr << "This model is not supported by onnx quantizer.  input nums must 2" << std::endl;
             return EXIT_FAILURE;
         }
+        // check a1 input tensor
+        auto a1_tensor_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        size_t a1_dim_count = a1_tensor_info.GetDimensionsCount();
+        if (a1_dim_count != 1) {  // channel
+            std::cerr << "This model is not supported by onnx quantizer. a1 dim is not 1!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::vector<int64_t> alist_dims = a1_tensor_info.GetShape();
+        if (alist_dims[0] != emdim) {
+            std::cerr << "This model is not supported by onnx quantizer. a1 need be in C format" << std::endl;
+            return EXIT_FAILURE;
+        }
+        // check a2 input tensor
+        auto a2_tensor_info = session->GetInputTypeInfo(1).GetTensorTypeAndShapeInfo();
+        size_t a2_dim_count = a2_tensor_info.GetDimensionsCount();
+        if (a2_dim_count != 1) {  // channel
+            std::cerr << "This model is not supported by onnx quantizer. a2 dim is not 1!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::vector<int64_t> a2_dims = a2_tensor_info.GetShape();
+        if (a2_dims[0] != emdim) {
+            std::cerr << "This model is not supported by onnx quantizer. a2 need be in C format" << std::endl;
+            return EXIT_FAILURE;
+        }
+        // check output tensor nums
+        size_t out_count = session->GetOutputCount();
+        if (out_count != 1) {
+            std::cerr << "This model is not supported by onnx quantizer. output nums must 1" << std::endl;
+            return EXIT_FAILURE;
+        }
+        // check output tensor
+        auto out_tensor_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        size_t out_dim_count = out_tensor_info.GetDimensionsCount();
+        if (out_dim_count != 1) {  // nums*dim
+            std::cerr << "This model is not supported by onnx quantizer. output dim is not 2!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        auto out_dims = out_tensor_info.GetShape();
+        if (out_dims[0] != 1) {
+            std::cerr << "This model is not supported by onnx quantizer. output dim is not 2!" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        Ort::AllocatorWithDefaultOptions ort_alloc;
+        input_name_.emplace_back(session->GetInputNameAllocated(0, ort_alloc).get());
+        input_name_.emplace_back(session->GetInputNameAllocated(1, ort_alloc).get());
+        output_name_.emplace_back(session->GetOutputNameAllocated(0, ort_alloc).get());
+
         return EXIT_SUCCESS;
     }
 
@@ -180,16 +308,19 @@ class OnnxQuantizer {
      * @param param
      * @return int
      */
-    int initalize(const std::map<std::string, std::string>& params,
-                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        auto pit = params.find(MODEL_PATH_KEY);
+    int load(const std::map<std::string, std::string>& params, size_t edim) {
+        this->emdim = edim;
+        auto pit    = params.find(MODEL_PATH_KEY);
         if (pit == params.end()) {
             std::cerr << "no param key find" << MODEL_PATH_KEY << std::endl;
             return EXIT_FAILURE;
         }
-        this->seesion = loadmodel(pit->second.c_str());
-        if (!this->seesion) {
+        this->session = loadmodel(pit->second.c_str());
+        if (!this->session) {
             std::cerr << "load model " << MODEL_PATH_KEY << " from path " << pit->second << " failed!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (validator(this->session)) {
             return EXIT_FAILURE;
         }
         return EXIT_SUCCESS;
@@ -207,18 +338,39 @@ class OnnxQuantizer {
         if (pre->getAtt() == nullptr || next->getAtt() == nullptr) {
             return 0.0;
         }
-        // TODO
+        // create inputs
+        std::vector<Ort::Value> ort_inputs;
+        auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        int64_t adim     = static_cast<int64_t>(this->emdim);
 
-        return 0.0;
+        // set data
+        auto x1              = std::dynamic_pointer_cast<std::vector<float>>(pre->getAtt());
+        Ort::Value a1_tensor = Ort::Value::CreateTensor<float>(memory_info, x1->data(), this->emdim, &adim, 1);
+        assert(a1_tensor.IsTensor());
+        ort_inputs.push_back(std::move(a1_tensor));
+
+        auto x2              = std::dynamic_pointer_cast<std::vector<float>>(next->getAtt());
+        Ort::Value a2_tensor = Ort::Value::CreateTensor<float>(memory_info, x2->data(), this->emdim, &adim, 1);
+        assert(a2_tensor.IsTensor());
+        ort_inputs.push_back(std::move(a2_tensor));
+        // run model
+        Ort::Value output_tensor{nullptr};
+        session->Run(Ort::RunOptions{nullptr}, input_name_.data(), ort_inputs.data(), ort_inputs.size(),
+                     output_name_.data(), &output_tensor, output_name_.size());
+        // Get pointer to output tensor float values
+        return output_tensor.GetTensorMutableData<float>()[0];
     }
 
     ~OnnxQuantizer() {
-        if (this->seesion) {
-            delete this->seesion;
-            this->seesion = NULL;
+        if (this->session) {
+            delete this->session;
+            this->session = NULL;
         }
+        input_name_.clear();
+        output_name_.clear();
     }
 };
+const char* OnnxQuantizer::MODEL_PATH_KEY = "model.path";
 
 /**
  * @brief
@@ -238,12 +390,13 @@ class OnnxDecider : public Decider {
      */
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        if (quantizer.initalize(params, plugins)) {
+        if (indicator.load(params, plugins)) {
             return EXIT_FAILURE;
         }
-        if (indicator.initalize(params, plugins)) {
+        if (quantizer.load(params, indicator.getEmbSize())) {
             return EXIT_FAILURE;
         }
+
         return EXIT_SUCCESS;
     }
     /**
@@ -275,18 +428,50 @@ REGISTER_Persenter(OnnxDecider);
  */
 class OnnxRecongnizer : public CellRecognizer {
    private:
-    static const char* DATA_PATH_KEY;
-    std::vector<std::string> labels;
-    Ort::Session* seesion;
+    static const char* MODEL_PATH_KEY;
+    static const char* WORDPIECE_PARAM;
+    static const char* LABELS_KEY;
 
-    int set_encode_dim(Ort::Session* session) {
-        // print model input layer (node names, types, shape etc.)
-        Ort::AllocatorWithDefaultOptions allocator;
-        size_t num_input_nodes = session->GetInputCount();
-        if (num_input_nodes != 2) {
-            std::cerr << "this model input is not 1" << std::endl;
+    std::vector<std::string> labels;
+    std::shared_ptr<WordPice> wordpiece;
+
+    Ort::Session* session;
+    std::vector<const char*> input_name_;
+    std::vector<const char*> output_name_;
+
+    int validator(Ort::Session* session) {
+        // check input tensor nums
+        size_t input_count = session->GetInputCount();
+        if (input_count != 1) {
+            std::cerr << "This model is not supported by onnx recongnizer.  input nums must 1" << std::endl;
             return EXIT_FAILURE;
         }
+        // check a1 input tensor
+        auto a1_tensor_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        size_t a1_dim_count = a1_tensor_info.GetDimensionsCount();
+        if (a1_dim_count != 1) {  // channel
+            std::cerr << "This model is not supported by onnx recongnizer. a1 dim is not 1!" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        // check output tensor nums
+        size_t out_count = session->GetOutputCount();
+        if (out_count != 1) {
+            std::cerr << "This model is not supported by onnx recongnizer. output nums must 1" << std::endl;
+            return EXIT_FAILURE;
+        }
+        // check output tensor
+        auto out_tensor_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        size_t out_dim_count = out_tensor_info.GetDimensionsCount();
+        if (out_dim_count != 1) {  // timestep
+            std::cerr << "This model is not supported by onnx recongnizer. output dim is not 1!" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        Ort::AllocatorWithDefaultOptions ort_alloc;
+        input_name_.emplace_back(session->GetInputNameAllocated(0, ort_alloc).get());
+        output_name_.emplace_back(session->GetOutputNameAllocated(0, ort_alloc).get());
+
         return EXIT_SUCCESS;
     }
 
@@ -297,18 +482,68 @@ class OnnxRecongnizer : public CellRecognizer {
      * @param dstSrc
      * @param props
      */
-    void decode(const AtomList& dstSrc, std::vector<size_t>& seq) const {}
+    void decode(const AtomList& dstSrc, std::vector<size_t>& seq) const {
+        // create inputs
+        auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        // create alist tensor
+        int64_t alist_size = dstSrc.size() + 2;
+        std::vector<int64_t> alist_tensor_values(alist_size);
+        // set alist data
+        wordpiece->encode(dstSrc, [alist_size, &alist_tensor_values](int code, int atom_postion) {
+            size_t idx = atom_postion != -2 ? atom_postion + 1 : alist_size - 1;
+            // set data
+            alist_tensor_values[idx] = code;
+        });
+
+        Ort::Value alist_input_tensor =
+            Ort::Value::CreateTensor<int64_t>(memory_info, alist_tensor_values.data(), alist_size, &alist_size, 1);
+        assert(alist_input_tensor.IsTensor());
+        // score model & input tensor, get back output tensor
+        Ort::Value output_tensor{nullptr};
+        session->Run(Ort::RunOptions{nullptr}, input_name_.data(), &alist_input_tensor, 1, output_name_.data(),
+                     &output_tensor, output_name_.size());
+
+        // Get pointer to output tensor float values
+        int64_t* arr = output_tensor.GetTensorMutableData<int64_t>();
+        seq.insert(seq.end(), arr, arr + alist_size);
+    }
 
    public:
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        auto iter = params.find(DATA_PATH_KEY);
+        auto iter = params.find(LABELS_KEY);
         if (iter == params.end()) {
-            std::cerr << DATA_PATH_KEY << " key not found in dictionary!" << std::endl;
+            std::cerr << LABELS_KEY << " key not found in dictionary!" << std::endl;
             return EXIT_FAILURE;
         }
         split(iter->second, ",", labels);
-        // check labels_size and dim size
+        // load wordpice
+        auto it = plugins.find(WORDPIECE_PARAM);
+        if (it == plugins.end()) {
+            std::cerr << "no key find" << WORDPIECE_PARAM << std::endl;
+            return EXIT_FAILURE;
+        }
+        this->wordpiece = std::dynamic_pointer_cast<WordPice>(it->second);
+        if (this->wordpiece == nullptr) {
+            std::cerr << "plugin init failed " << WORDPIECE_PARAM << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        // load model
+        auto pit = params.find(MODEL_PATH_KEY);
+        if (pit == params.end()) {
+            std::cerr << "no param key find" << MODEL_PATH_KEY << std::endl;
+            return EXIT_FAILURE;
+        }
+        this->session = loadmodel(pit->second.c_str());
+        if (!this->session) {
+            std::cerr << "load model " << MODEL_PATH_KEY << " from path " << it->second << " failed!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (validator(this->session)) {
+            return EXIT_FAILURE;
+        }
+
         return EXIT_SUCCESS;
     }
 
@@ -342,9 +577,21 @@ class OnnxRecongnizer : public CellRecognizer {
             cmap.addNext(cur, w);
         }
     }
+    ~OnnxRecongnizer() {
+        if (session) {
+            delete session;
+            session = NULL;
+        }
+        input_name_.clear();
+        output_name_.clear();
+        labels.clear();
+    }
 };
 
-const char* OnnxRecongnizer::DATA_PATH_KEY = "data.path";
+const char* OnnxRecongnizer::LABELS_KEY      = "label.list";
+const char* OnnxRecongnizer::MODEL_PATH_KEY  = "model.path";
+const char* OnnxRecongnizer::WORDPIECE_PARAM = "wordpice.name";
+
 REGISTER_Recognizer(OnnxRecongnizer);
 
 }  // namespace darts

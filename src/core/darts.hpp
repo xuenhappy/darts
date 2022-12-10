@@ -65,10 +65,11 @@ class AtomList {
      *
      * @param str
      */
-    explicit AtomList(const std::string& str) {
+    explicit AtomList(const std::string& str, bool skip_space = true) {
         this->str = to_utf32(str);
         data.reserve(str.length());
         atomSplit(this->str, [&](const char* astr, std::string& ttype, size_t s, size_t e) {
+            if (skip_space && ttype == "EMPTY") return;
             auto atom       = std::make_shared<Atom>(astr, s, e);
             atom->char_type = ttype;
             this->data.push_back(atom);

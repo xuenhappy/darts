@@ -157,6 +157,12 @@ REGISTER_Recognizer(PinyinRecongnizer);
  */
 class DateRecongnizer : public CellRecognizer {
    public:
+    /**
+     * @brief
+     * TODO: date and time reg
+     * @param dstSrc
+     * @param cmap
+     */
     void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {}
 };
 

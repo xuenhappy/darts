@@ -15,6 +15,7 @@
 
 #include <fmt/core.h>
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <limits>
 #include <list>
@@ -306,17 +307,17 @@ class WordPice : public SegmentPlugin {
     }
 
     /**
-     * @brief 对给定的字符串句子进行分解
+     * @brief encode a given atom list
      *
+     * @param input
+     * @param hit
      */
-    void encode(const darts::AtomList& input, std::function<void(int code, int atom_postion)> hit,
-                bool skip_empty_token = true) const {
+    void encode(const darts::AtomList& input, std::function<void(int code, int atom_postion)> hit) const {
         std::vector<std::string> _cache;
         hit(codemap::sep_code, -1);
         int postion = -1;
         for (std::shared_ptr<darts::Atom> atom : input) {
             postion += 1;
-            if (skip_empty_token && !atom->char_type.compare("EMPTY")) continue;
             if (atom->masked) {  // mask atom
                 hit(codemap::mask_code, postion);
                 continue;
@@ -339,8 +340,14 @@ class WordPice : public SegmentPlugin {
             }
             hit(getImageCode(atom->image, atom->char_type), postion);
         }
-        hit(codemap::cls_code, -1);
+        hit(codemap::cls_code, -2);
     }
+    /**
+     * @brief Get the Label Size object
+     *
+     * @return size_t
+     */
+    size_t getLabelSize() const { return chars_list.size() + codemap::special_code_nums; }
 
     /**
      * @brief 输出原始的code对应的字符串
@@ -371,6 +378,8 @@ class TypeEncoder : public SegmentPlugin {
      * explain a type code
      */
     virtual const std::string decode(int code) const = 0;
+
+    virtual size_t getLabelSize() const = 0;
 };
 
 class LabelEncoder : public TypeEncoder {
@@ -424,6 +433,8 @@ class LabelEncoder : public TypeEncoder {
         }
         return EXIT_SUCCESS;
     }
+
+    size_t getLabelSize() const { return labels.size() + codemap::special_code_nums; }
 
     int encode(const std::shared_ptr<darts::Word> word) const {
         auto labelHx = [this](const std::string& label) -> float {
@@ -506,6 +517,8 @@ class PinyinEncoder : public TypeEncoder {
         // encode word
         return encode(word->maxHXlabel(nullptr));
     }
+
+    size_t getLabelSize() const { return plist.size() + 4; }
 
     const std::string decode(int code) const {
         code -= 4;
