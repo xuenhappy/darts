@@ -547,7 +547,7 @@ class OnnxRecongnizer : public CellRecognizer {
         return EXIT_SUCCESS;
     }
 
-    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {
+    void addWords(const AtomList& dstSrc, SegPath& cmap) const {
         std::vector<size_t> label_idx;
         decode(dstSrc, label_idx);
         Cursor cur = cmap.Head();

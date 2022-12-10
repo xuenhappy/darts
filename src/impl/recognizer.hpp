@@ -78,7 +78,7 @@ class DictWordRecongnizer : public CellRecognizer {
         return this->trie.loadPb(iter->second);
     }
 
-    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {
+    void addWords(const AtomList& dstSrc, SegPath& cmap) const {
         auto cur = cmap.Head();
         AtomListIterator iter(dstSrc);
         this->trie.parse(iter, [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
@@ -123,7 +123,7 @@ class PinyinRecongnizer : public CellRecognizer {
         return EXIT_SUCCESS;
     }
 
-    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {
+    void addWords(const AtomList& dstSrc, SegPath& cmap) const {
         std::vector<std::shared_ptr<Word>> adds;
         cmap.iterRow(NULL, -1, [this, &adds](Cursor cur) {
             auto pw   = cur->val;
@@ -163,7 +163,7 @@ class DateRecongnizer : public CellRecognizer {
      * @param dstSrc
      * @param cmap
      */
-    void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const {}
+    void addWords(const AtomList& dstSrc, SegPath& cmap) const {}
 };
 
 }  // namespace darts

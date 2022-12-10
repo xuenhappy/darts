@@ -43,7 +43,7 @@ class SegmentPlugin {
 };
 
 /**
- * @brief embeding atomlist for segment
+ * @brief decide which seg path for use
  *
  */
 class Decider : public SegmentPlugin {
@@ -54,14 +54,15 @@ class Decider : public SegmentPlugin {
     // calculate the two word distance
     virtual double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const = 0;
 };
+
 /**
- * @brief recongnize tokens
+ * @brief recongnize all posssable tokens
  *
  */
 class CellRecognizer : public SegmentPlugin {
    public:
-    // recognizer all Wcell possable in the atomlist
-    virtual void addSomeCells(const AtomList& dstSrc, SegPath& cmap) const = 0;
+    // recognizer all possable word in the atomlist
+    virtual void addWords(const AtomList& dstSrc, SegPath& cmap) const = 0;
     // is this plugin exclusive other plugin
     bool exclusive() { return false; }
     virtual ~CellRecognizer() {}
@@ -240,7 +241,7 @@ class Segment {
         }
         // add cell regnize
         for (auto recognizer : cellRecognizers) {
-            recognizer->addSomeCells(atomList, cmap);
+            recognizer->addWords(atomList, cmap);
         }
     }
 
