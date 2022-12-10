@@ -18,12 +18,11 @@
 #include "impl/confparser.hpp"
 #include "impl/quantizer.hpp"
 #include "impl/recognizer.hpp"
-#include "utils/argparse.hpp"
 #include "utils/codecvt.hpp"
 #include "utils/dcompile.hpp"
 #include "utils/dregex.hpp"
-#include "utils/file_utils.hpp"
-#include "utils/utils_base.hpp"
+#include "utils/filetool.hpp"
+#include "utils/utill.hpp"
 
 void testGetResource() {
     printf("----- test function %s-----------------\n", "testGetResource");
@@ -35,7 +34,7 @@ void testGetResource() {
 void testNormalization() {
     printf("----- test function %s-----------------\n", "testNormalization");
     std::string ori("这是一段123 ss中文测试；看】🅿Ａ,Ｂ,Ｃ,Ｄ,Ｅ,Ｆ,Ｇ,Ｈ,Ｉ,   Ｊ,Ｋ,Ｌ,Ｍ,Ｎ,Ｏ,看？ ss");
-    std::string normals = normalizeStr(ori);
+    std::string normals = normalize(ori);
     std::cout << "ori: " << ori << std::endl;
     std::cout << "normal: " << normals << std::endl;
 }
@@ -49,34 +48,12 @@ void testAtomListSplit() {
 
 void testDregexRW() {
     printf("----- test function %s-----------------\n", "testDregexRW");
-    darts::Trie dat;
+    dregex::Trie dat;
     std::cout << "write pb file ..." << std::endl;
     dat.writePb("test.pb.gz");
     std::cout << "load pb file ..." << std::endl;
-    darts::Trie newdat;
+    dregex::Trie newdat;
     newdat.loadPb("test.pb.gz");
-}
-
-void testDregexParse() {
-    printf("----- test function %s-----------------\n", "testDregexParse");
-    darts::Trie newTrie;
-    newTrie.loadPb(getResource("data/model-dict/mini_dict.pb.gz"));
-    std::string teststr = "dd清华大学的学在北京大学的中国人民解放军海军广州舰艇学院k安徽大学里面有个北大II";
-    std::cout << "ori str: " << teststr << std::endl;
-    std::u32string text = to_utf32(teststr);
-    dregex::U32StrIterator testStr(&text[0], text.size());
-    std::vector<std::string> labels;
-    newTrie.parse(testStr, [&](size_t s, size_t e, const std::set<int64_t>* label) -> bool {
-        labels.clear();
-        if (label) {
-            for (auto lidx : *label) {
-                labels.push_back(newTrie.getLabel(lidx));
-            }
-        }
-        std::cout << to_utf8(text.substr(s, e - s)) << ",s:" << s << ",e:" << e << "," << darts::join(labels, "|")
-                  << std::endl;
-        return false;
-    });
 }
 
 void testDictWordRecongnizer() {
@@ -109,7 +86,6 @@ int main(int argc, char* argv[]) {
     testNormalization();
     testAtomListSplit();
     testDregexRW();
-    testDregexParse();
     testDictWordRecongnizer();
     testBigramPersenterDictMake();
     testJsonConfLoad();

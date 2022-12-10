@@ -20,8 +20,8 @@
 #include <string>
 #include <vector>
 #include "./cedar.h"
-#include "./file_utils.hpp"
-#include "./str_utils.hpp"
+#include "./filetool.hpp"
+#include "./strtool.hpp"
 #include "./zipfile.hpp"
 
 namespace darts {

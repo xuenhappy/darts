@@ -19,7 +19,7 @@
 #include <vector>
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
-#include "../utils/file_utils.hpp"
+#include "../utils/filetool.hpp"
 
 namespace darts {
 class MinCoverPersenter : public Decider {

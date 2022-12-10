@@ -13,8 +13,8 @@
 #define SRC_UTILS_UTILS_BASE_HPP_
 
 #include <mutex>
+#include "chrtool.hpp"
 #include "chspliter.hpp"
-#include "norm_chr.hpp"
 #include "pinyin.hpp"
 
 static std::mutex lmtx;

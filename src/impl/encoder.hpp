@@ -31,7 +31,7 @@
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
 #include "../utils/pinyin.hpp"
-#include "../utils/str_utils.hpp"
+#include "../utils/strtool.hpp"
 
 struct symbol_pair {
     int left;      // left index of this pair

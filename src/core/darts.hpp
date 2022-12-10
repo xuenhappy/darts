@@ -23,7 +23,7 @@
 #include <vector>
 #include "../utils/chspliter.hpp"
 #include "../utils/codecvt.hpp"
-#include "../utils/str_utils.hpp"
+#include "../utils/strtool.hpp"
 
 namespace darts {
 class Atom {

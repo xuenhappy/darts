@@ -17,8 +17,8 @@
 #include <string>
 #include <vector>
 #include "../core/segment.hpp"
-#include "../utils/file_utils.hpp"
-#include "../utils/str_utils.hpp"
+#include "../utils/filetool.hpp"
+#include "../utils/strtool.hpp"
 #include "./encoder.hpp"
 #include "./neuroplug.hpp"
 #include "./quantizer.hpp"

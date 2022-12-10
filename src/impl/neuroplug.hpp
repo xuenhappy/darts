@@ -26,7 +26,7 @@
 #include <vector>
 #include "../core/darts.hpp"
 #include "../core/segment.hpp"
-#include "../utils/str_utils.hpp"
+#include "../utils/strtool.hpp"
 #include "./encoder.hpp"
 namespace darts {
 

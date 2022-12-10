@@ -26,7 +26,7 @@
 #include "../core/segment.hpp"
 #include "../utils/dregex.hpp"
 #include "../utils/pinyin.hpp"
-#include "../utils/str_utils.hpp"
+#include "../utils/strtool.hpp"
 #include "./encoder.hpp"
 
 namespace darts {

@@ -19,8 +19,8 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
-#include "./file_utils.hpp"
-#include "./str_utils.hpp"
+#include "./filetool.hpp"
+#include "./strtool.hpp"
 #include "./utf8.hpp"
 
 /**

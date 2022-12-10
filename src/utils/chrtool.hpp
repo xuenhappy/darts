@@ -21,8 +21,8 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
-#include "./file_utils.hpp"
-#include "./str_utils.hpp"
+#include "./filetool.hpp"
+#include "./strtool.hpp"
 #include "./utf8.hpp"
 
 /**
@@ -136,7 +136,7 @@ inline int initializeMap() {
  * @param str
  * @return std::string
  */
-inline std::string normalizeStr(const std::string& str) {
+inline std::string normalize(const std::string& str) {
     std::stringstream output;
     utf8_iter ITER;
     utf8_initEx(&ITER, str.c_str(), str.length());
