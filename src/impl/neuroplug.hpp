@@ -213,7 +213,7 @@ class OnnxIndicator {
         // set cmap data
         const float* floatarr = output_tensor.GetTensorMutableData<float>();
         cmap.SrcNode()->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(floatarr, floatarr + emdim)));
-        cmap.iterRow(NULL, -1, [this, floatarr, &words_tensor_values](Cursor cur) {
+        cmap.iterRow(NULL, -1, [this, floatarr](Cursor cur) {
             const float* arr = floatarr + (cur->idx + 1) * emdim;
             cur->val->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(arr, arr + emdim)));
         });

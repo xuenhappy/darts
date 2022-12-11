@@ -76,9 +76,9 @@ typedef struct {
 
 typedef bool (*dhit)(void* user_data, dhit_ret* ret);
 typedef struct {
-    const char** key;
+    char** key;
     size_t keylen;
-    const char** labels;
+    char** labels;
     size_t label_nums;
 } kviter_ret;
 typedef bool (*kviter)(void* user_data, kviter_ret* ret);

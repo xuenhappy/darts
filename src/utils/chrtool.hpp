@@ -151,7 +151,7 @@ inline std::string normalize(const std::string& str) {
             output << tmps;
         }
     }
-    return std::move(output.str());
+    return output.str();
 }
 
 #endif  // SRC_UTILS_NORM_CHR_HPP_

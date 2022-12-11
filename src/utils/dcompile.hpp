@@ -320,7 +320,7 @@ class Builder {
     }
 
    public:
-    Builder(Trie& trie) : size(0), allocSize(0), nextCheckPos(0) {
+    Builder(Trie& trie) : allocSize(0), nextCheckPos(0), size(0) {
         rootState  = newState(0, false);
         this->trie = &trie;
     }

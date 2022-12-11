@@ -82,7 +82,7 @@ class BigramPersenter : public Decider {
      * @param cmap
      */
     void embed(const AtomList& dstSrc, SegPath& cmap) const {
-        auto dfunc = [this, &cmap](Cursor cur) {
+        auto dfunc = [this](Cursor cur) {
             auto w     = cur->val;
             float pidx = this->ngdict.getWordKey(w->text());
             if (pidx < 0) pidx = this->ngdict.getWordKey(w->maxHlabel(nullptr));

@@ -177,8 +177,8 @@ class C_KvIter_ : public dregex::KvPairsIter {
     int iter(std::function<void(const dregex::StringIter&, const char** lables, size_t label_size)> hit) const {
         kviter_ret ret;
         while (iter_func(user_data, &ret)) {
-            CStr_AtomIter_ iter(ret.key, ret.keylen);
-            hit(iter, ret.labels, ret.label_nums);
+            CStr_AtomIter_ iter(const_cast<const char**>(ret.key), ret.keylen);
+            hit(iter, const_cast<const char**>(ret.labels), ret.label_nums);
         }
         return EXIT_SUCCESS;
     }

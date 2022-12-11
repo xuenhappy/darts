@@ -105,7 +105,7 @@ struct GZipFileHeader {
     uint16_t crc16;          // crc check
     uint32_t crc32;
 
-    GZipFileHeader() : cm(0), magic0(0), magic1(0), flags(0), modtime(0), flags2(0), os(0), crc16(0), crc32(0) {}
+    GZipFileHeader() : magic0(0), magic1(0), cm(0), flags(0), modtime(0), flags2(0), os(0), crc16(0), crc32(0) {}
 
     bool Read(std::istream& istream) {
         Read_Primitive(istream, magic0);
@@ -292,8 +292,8 @@ class ZipStreambufDecompress : public std::streambuf {
           total_read(0),
           total_uncompressed(0),
           part_of_zip_file(part_of_zip_file_input),
-          valid(true),
-          own_istream(false) {
+          own_istream(false),
+          valid(true) {
         strm.zalloc   = Z_NULL;
         strm.zfree    = Z_NULL;
         strm.opaque   = Z_NULL;
