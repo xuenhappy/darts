@@ -9,7 +9,7 @@ enable_static=get_option('link-static')
 if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
 endif
-extra_args = []
+extra_args = ['-Wno-sign-compare']
 if meson.get_compiler('c').get_id() == 'clang'
     if build_machine.system()=='darwin'
         extra_args += ['-mmacosx-version-min=11.0','-std=c++17','-stdlib=libc++']

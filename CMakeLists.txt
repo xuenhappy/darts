@@ -8,6 +8,8 @@ project(
 set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-fPIC -c -O2)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".so" ".dylib")
 if(MSVC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")

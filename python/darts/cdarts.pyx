@@ -5,12 +5,12 @@ from typing import Iterator,Callable,List,Iterable,Sequence,Tuple
 
 
 cdef extern from 'darts.h':
-    struct _dregex 
-    struct _decider
-    struct _atomlist
-    struct _wordlist
-    struct _segment
-    struct _encoder
+    ctypedef struct _dregex 
+    ctypedef struct _decider
+    ctypedef struct _atomlist
+    ctypedef struct _wordlist
+    ctypedef struct _segment
+    ctypedef struct _encoder
 
     ctypedef _dregex* dreg
     ctypedef _decider* decider
@@ -27,7 +27,7 @@ cdef extern from 'darts.h':
     char* normalize_str(const char* str, size_t len, size_t* ret)
     const char* chtype(const char* word)
 
-    struct atom_:
+    ctypedef struct atom_:
         const char* image
         size_t st
         size_t et
@@ -45,21 +45,21 @@ cdef extern from 'darts.h':
     dreg load_dregex(const char* path)
     void free_dregex(dreg regex)
 
-    struct atomiter_ret:
+    ctypedef struct atomiter_ret:
         const char* word
         size_t len
         size_t postion
     
     ctypedef bool (*atomiter)(void*, atomiter_ret*)
 
-    struct dhit_ret:
+    ctypedef struct dhit_ret:
         size_t s
         size_t e
         const char** labels
         size_t labels_size
     
     ctypedef bool (*dhit)(void*, dhit_ret*)
-    struct kviter_ret:
+    ctypedef struct kviter_ret:
         char** key
         size_t keylen
         char** labels
