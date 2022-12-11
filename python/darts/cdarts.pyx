@@ -110,10 +110,11 @@ def charDtype(unichr:str)->str:
 cdef bool atomiter_func(void* user_data,atomiter_ret *ret):
     str_iter:Iterator[tuple[str,int]]= (<tuple>user_data)[0]
     try:
-        atom_info=next(str_iter)
-        py_byte_string= atom_info[0].encode('utf-8','replace')
+        atom_info=<tuple>next(str_iter)
+        chrs=<str>atom_info[0]
+        py_byte_string= chrs.encode('utf-8','replace')
         ret.word=<char*>py_byte_string
-        ret.len=len(atom_info[0])
+        ret.len=len(py_byte_string)
         ret.postion=<size_t>atom_info[1]
     except StopIteration:
         return False
@@ -134,19 +135,20 @@ cdef bool dregex_hit_callback(void* user_data, dhit_ret* ret):
 
 
 ctypedef char* cstr
-cdef void copy_str_data(cstr** rets,size_t* lens,strs:List[str]):
+cdef void copy_str_data(cstr** rets,size_t* lens,list strs):
     if len(strs)>lens[0]:
         if rets[0]:free(rets[0])
         rets[0] = <char **>malloc(len(strs) * sizeof(cstr))
 
     lens[0]=len(strs)
     for i in range(len(strs)):
-        py_byte_string= strs[i].encode("utf-8",'ignore')
+        item=<str>strs[i]
+        py_byte_string= item.encode("utf-8",'ignore')
         rets[0][i] = py_byte_string
     
 
 cdef bool kviter_func(void* user_data, kviter_ret* ret):
-    kviters:Iterator[Tuple[Sequence[str],Sequence[str]]]= (<tuple>user_data)[0]
+    kviters:Iterator[Tuple[List[str],List[str]]]= (<tuple>user_data)[0]
     try:
         kv_info=next(kviters)
         key_list,label_list= kv_info
@@ -178,7 +180,7 @@ cdef class Dregex:
         parse(self.reg, atomiter_func, dregex_hit_callback , user_data)
 
     @staticmethod
-    def compile(outpath:str,kv_pairs:Iterator[Tuple[Sequence[str],Sequence[str]]]):
+    def compile(outpath:str,kv_pairs:Iterator[Tuple[List[str],List[str]]]):
         if outpath is None or kv_pairs is None:
             return 
         py_byte_string= outpath.encode("utf-8",'ignore')
