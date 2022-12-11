@@ -195,5 +195,46 @@ cdef class Dregex:
         self.reg=NULL
 
 
+cdef class PyAtom:
+    cdef str image
+    cdef size_t st
+    cdef size_t et
+    cdef char_type
+    cdef bool masked
 
+    
+
+
+
+
+cdef bool alist_hit_func(void* user_data, atom_* a):
+    ret=<list>user_data
+    atm=PyAtom();
+    atm.image=a.image[:].decode("utf-8","ignore")
+    atm.st=a.st
+    atm.et=a.et
+    atm.masked=a.masked
+    atm.char_type=a.char_type[:].decode("utf-8","ignore")
+    ret.append(atm)
+
+cdef class PyAtomList:
+    cdef atomlist alist 
+    __slots__=()
+
+    def __cinit__(self, str text,bool skip_space=True, bool normal_before=True):
+        assert text is not None
+        py_byte_string= text.encode("utf-8",'ignore')
+        self.alist=asplit(py_byte_string,len(py_byte_string),skip_space,normal_before)
+
+    def tolist(self):
+        user_data=[]
+        walk_alist(self.alist,alist_hit_func, <void*> user_data)
+        return user_data
+
+    def size(self)->size_t:
+        return alist_len(self.alist)
+
+    def __dealloc__(self):
+        free_alist(self.alist)
+        self.alist=NULL
 
