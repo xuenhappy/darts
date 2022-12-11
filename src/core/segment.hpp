@@ -181,14 +181,16 @@ class Segment {
         this->decider->embed(context, cmap);
         // add head
         std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
-        cmap.iterRow(NULL, 0, [&](Cursor pre) {
+
+        auto dfunc_head = [&](Cursor pre) {
             auto dist = decider->ranging(cmap.SrcNode(), pre->val);
             assert(dist >= 0);
             head_tmp->push_back(new _GraphEdge{pre->idx, dist});
-        });
+        };
+        cmap.iterRow(NULL, 0, dfunc_head);
         graph.putEdges(-1, head_tmp);
 
-        cmap.iterRow(NULL, -1, [&](Cursor pre) {
+        auto dfunc = [&](Cursor pre) {
             std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
             cmap.iterRow(pre, pre->val->et, [&](Cursor next) {
                 auto dist = decider->ranging(pre->val, next->val);
@@ -203,7 +205,8 @@ class Segment {
                 tmp->push_back(new _GraphEdge{cidx, dist});
             }
             graph.putEdges(pre->idx, tmp);
-        });
+        };
+        cmap.iterRow(NULL, -1, dfunc);
     }
 
     /**
@@ -222,14 +225,15 @@ class Segment {
         graph.selectPath(bestPaths);
 
         // output result
-        cmap.iterRow(NULL, -1, [&](Cursor cur) {
+        auto dfunc = [&](Cursor cur) {
             if (std::binary_search(bestPaths.begin(), bestPaths.end(), cur->idx)) {
                 auto word = cur->val;
                 word->st += atom_start_pos;
                 word->et += atom_start_pos;
                 ret.push_back(word);
             }
-        });
+        };
+        cmap.iterRow(NULL, -1, dfunc);
     }
 
     void buildSegPath(const AtomList& atomList, SegPath& cmap) {
@@ -274,12 +278,13 @@ class Segment {
         auto cmap = new SegPath();
         buildSegPath(atomList, *cmap);
         if (decider == nullptr || maxMode) {
-            cmap->iterRow(NULL, -1, [&](Cursor cur) {
+            auto dfunc = [&](Cursor cur) {
                 auto word = cur->val;
                 word->st += atom_start_pos;
                 word->et += atom_start_pos;
                 ret.push_back(word);
-            });
+            };
+            cmap->iterRow(NULL, -1, dfunc);
         } else {
             splitContent(atomList, *cmap, ret, atom_start_pos);
         }

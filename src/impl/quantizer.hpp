@@ -20,22 +20,17 @@
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
 #include "../utils/filetool.hpp"
+#include "core/core.hpp"
 
 namespace darts {
 class MinCoverPersenter : public Decider {
    public:
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        // pass
+        // do nothing
         return EXIT_SUCCESS;
     }
 
-    /**
-     * @brief do nothing
-     *
-     * @param dstSrc
-     * @param cmap
-     */
     void embed(const AtomList& dstSrc, SegPath& cmap) const {}
 
     /**
@@ -46,9 +41,14 @@ class MinCoverPersenter : public Decider {
      * @return double must >=0
      */
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
-        double len_a = (pre == nullptr || pre->isStSpecial()) ? 0.0 : 100.0 / (1.0 + pre->text().length());
-        double len_b = (next == nullptr || next->isEtSpecial()) ? 0.0 : 100.0 / (1.0 + next->text().length());
-        return len_a + len_b;
+        double lena = 0.0, lenb = 0.0;
+        if (pre != nullptr && !pre->isStSpecial()) {
+            lena = 100.0 / (1.0 + pre->et - pre->st);
+        }
+        if (next != nullptr && !next->isEtSpecial()) {
+            lenb = 100.0 / (1.0 + next->et - next->st);
+        }
+        return lena + lenb;
     }
     ~MinCoverPersenter() {}
 };
@@ -76,12 +76,20 @@ class BigramPersenter : public Decider {
         return ngdict.loadDict(path);
     }
     /**
-     * @brief do nothing
+     * @brief set word idx
      *
      * @param dstSrc
      * @param cmap
      */
-    void embed(const AtomList& dstSrc, SegPath& cmap) const {}
+    void embed(const AtomList& dstSrc, SegPath& cmap) const {
+        auto dfunc = [this, &cmap](Cursor cur) {
+            auto w   = cur->val;
+            int pidx = this->ngdict.getWordKey(w->text());
+            if (pidx < 0) pidx = this->ngdict.getWordKey(w->maxHXlabel(nullptr));
+            w->setAtt(std::make_shared<int>(pidx));
+        };
+        cmap.iterRow(NULL, -1, dfunc);
+    }
 
     /**
      * @brief
@@ -91,8 +99,15 @@ class BigramPersenter : public Decider {
      * @return double must >=0
      */
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
-        return ngdict.wordDist(pre == nullptr || pre->isStSpecial() ? NULL : pre->text().c_str(),
-                               next == nullptr || next->isEtSpecial() ? NULL : next->text().c_str());
+        int pidx = -1;
+        if (pre != nullptr && !pre->isStSpecial() && pre->getAtt() != nullptr) {
+            pidx = *std::dynamic_pointer_cast<int>(pre->getAtt());
+        }
+        int nidx = -1;
+        if (next != nullptr && !next->isEtSpecial() && next->getAtt() != nullptr) {
+            nidx = *std::dynamic_pointer_cast<int>(next->getAtt());
+        }
+        return ngdict.wordDist(pidx, nidx);
     }
 
     ~BigramPersenter() {}

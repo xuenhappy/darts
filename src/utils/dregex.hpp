@@ -26,7 +26,7 @@ namespace dregex {
 
 class StringIter {
    public:
-    virtual void iter(std::function<bool(const std::string&, size_t)> hit) const = 0;
+    virtual void walks(std::function<bool(const std::string& iterm, size_t postion)> hit) const = 0;
     virtual ~StringIter() {}
 };
 
@@ -206,7 +206,7 @@ class Trie {
         auto currentState = 0, indexBufferPos = 0;
         std::vector<int64_t> indexBufer;
         indexBufer.assign(this->MaxLen, 0);
-        text.iter([&](const std::string& seq, size_t position) -> bool {
+        text.walks([&](const std::string& seq, size_t position) -> bool {
             indexBufer[indexBufferPos % this->MaxLen] = position;
             indexBufferPos++;
             currentState = this->getstate(currentState, this->getCode(seq));

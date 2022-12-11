@@ -104,7 +104,7 @@ class KvPairsIter {
      * @param hit
      * @return int if sucess 0 else 1
      */
-    virtual int iter(std::function<void(const StringIter&, const std::vector<std::string>& lables)> hit) const = 0;
+    virtual int iter(std::function<void(const StringIter&, const char** lables, size_t label_size)> hit) const = 0;
     virtual ~KvPairsIter() {}
 };
 
@@ -181,7 +181,7 @@ class Builder {
         int64_t index  = -1;
 
         auto t = this->trie;
-        *ret   = kvs.iter([&](const StringIter& k, const std::vector<std::string>& lables) {
+        *ret   = kvs.iter([&](const StringIter& k, const char** lables, size_t label_size) {
             index++;
             size_t lens       = 0;
             auto currentState = this->rootState;
@@ -199,12 +199,12 @@ class Builder {
             }
             maxCode += lens;
             auto lables_idx = new std::set<int64_t>();
-            for (auto& label : lables) {
-                auto vit = this->labels.find(label);
+            for (size_t i = 0; i < label_size; ++i) {
+                auto vit = this->labels.find(lables[i]);
                 if (vit == this->labels.end()) {
-                    auto idx            = this->labels.size();
-                    this->labels[label] = idx;
+                    auto idx = this->labels.size();
                     lables_idx->insert(idx);
+                    this->labels[lables[i]] = idx;
                 } else {
                     lables_idx->insert(vit->second);
                 }

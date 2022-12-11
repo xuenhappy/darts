@@ -14,6 +14,7 @@
 #define SRC_IMPL_RECOGNIZER_HPP_
 
 #include <assert.h>
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
@@ -28,27 +29,19 @@
 #include "../utils/pinyin.hpp"
 #include "../utils/strtool.hpp"
 #include "./encoder.hpp"
+#include "core/core.hpp"
 
 namespace darts {
 class AtomListIterator : public dregex::StringIter {
    private:
     const AtomList* m_list;
-    std::set<std::string> skiptypes;
 
    public:
-    explicit AtomListIterator(const AtomList& m_list) {
-        this->m_list = &m_list;
-        this->skiptypes.insert("EMPTY");
-    }
-
-    void iter(std::function<bool(const std::string&, size_t)> hit) const {
+    explicit AtomListIterator(const AtomList& m_list) { this->m_list = &m_list; }
+    void walks(std::function<bool(const std::string&, size_t)> hit) const {
         std::string tmp;
         for (auto i = 0; i < m_list->size(); i++) {
-            auto a = m_list->at(i);
-            if (skiptypes.find(a->char_type) != skiptypes.end()) {
-                continue;
-            }
-            tmp = a->image;
+            tmp = m_list->at(i)->image;
             if (hit(tolower(tmp), i)) {
                 break;
             }
@@ -61,8 +54,11 @@ class AtomListIterator : public dregex::StringIter {
  */
 class DictWordRecongnizer : public CellRecognizer {
    private:
-    dregex::Trie trie;
     static const char* PB_FILE_KEY;
+    static const char* ATOM_MODE_KEY;
+
+    dregex::Trie trie;
+    bool atom_mode;
 
    public:
     DictWordRecongnizer() {}
@@ -70,6 +66,10 @@ class DictWordRecongnizer : public CellRecognizer {
 
     int initalize(const std::map<std::string, std::string>& param,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& dicts) {
+        auto it = param.find(ATOM_MODE_KEY);
+        if (it != param.end() && "true" == it->second) {
+            atom_mode = true;
+        }
         auto iter = param.find(PB_FILE_KEY);
         if (iter == param.end()) {
             std::cerr << PB_FILE_KEY << " key not found in dictionary!" << std::endl;
@@ -79,24 +79,42 @@ class DictWordRecongnizer : public CellRecognizer {
     }
 
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
-        auto cur = cmap.Head();
         AtomListIterator iter(dstSrc);
-        this->trie.parse(iter, [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
-            auto word = std::make_shared<Word>(dstSrc, s, e);
-            if (labels) {
+        auto cur = cmap.Head();
+        if (atom_mode) {
+            auto hit = [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
+                if (!labels) return false;
+                int feat = -1;
                 for (auto tidx : *labels) {
                     auto tag = this->trie.getLabel(tidx);
                     if (tag) {
+                        auto word = std::make_shared<Word>(dstSrc, s, e);
                         word->addLabel(tag);
+                        word->feat = feat;
+                        feat--;
+                        cur = cmap.addCell(word, cur);
                     }
                 }
-            }
-            cur = cmap.addCell(word, cur);
-            return false;
-        });
+                return false;
+            };
+            this->trie.parse(iter, hit);
+        } else {
+            auto hit = [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
+                auto word = std::make_shared<Word>(dstSrc, s, e);
+                if (labels)
+                    for (auto tidx : *labels) {
+                        auto tag = this->trie.getLabel(tidx);
+                        if (tag) word->addLabel(tag);
+                    }
+                cur = cmap.addCell(word, cur);
+                return false;
+            };
+            this->trie.parse(iter, hit);
+        }
     }
 };
-const char* DictWordRecongnizer::PB_FILE_KEY = "pbfile.path";
+const char* DictWordRecongnizer::PB_FILE_KEY   = "pbfile.path";
+const char* DictWordRecongnizer::ATOM_MODE_KEY = "atom.mode";
 REGISTER_Recognizer(DictWordRecongnizer);
 
 /**
@@ -125,7 +143,7 @@ class PinyinRecongnizer : public CellRecognizer {
 
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
         std::vector<std::shared_ptr<Word>> adds;
-        cmap.iterRow(NULL, -1, [this, &adds](Cursor cur) {
+        auto dfunc = [this, &adds](Cursor cur) {
             auto pw   = cur->val;
             auto pyin = pinyin(pw->text());
             if (pyin == nullptr) return;
@@ -137,12 +155,14 @@ class PinyinRecongnizer : public CellRecognizer {
                 w->feat = encoder->encode(pyin->piyins[i]);
                 adds.push_back(w);
             }
-        });
+        };
+        cmap.iterRow(NULL, -1, dfunc);
         if (!adds.empty()) {
             auto cur = cmap.Head();
             for (auto w : adds) {
                 cur = cmap.addNext(cur, w);
             }
+            adds.clear();
         }
     }
     bool exclusive() { return true; }
@@ -151,19 +171,27 @@ class PinyinRecongnizer : public CellRecognizer {
 const char* PinyinRecongnizer::ENCODER_PARAM = "pyin.encoder";
 REGISTER_Recognizer(PinyinRecongnizer);
 
-/**
- * @brief time and date recongnizer
- *
- */
-class DateRecongnizer : public CellRecognizer {
+class RuleRecongnizer : public CellRecognizer {
    public:
     /**
-     * @brief
-     * TODO: date and time reg
+     * @brief use rule find all possable word in alist and add into buffer
+     *
      * @param dstSrc
-     * @param cmap
+     * @param buffer
      */
-    void addWords(const AtomList& dstSrc, SegPath& cmap) const {}
+    virtual void seek(const AtomList& dstSrc, std::vector<std::shared_ptr<Word>>& buffer) const = 0;
+    void addWords(const AtomList& dstSrc, SegPath& cmap) const {
+        std::vector<std::shared_ptr<Word>> buffer;
+        buffer.reserve(dstSrc.size() / 2 + 1);
+        seek(dstSrc, buffer);
+        auto comp = [](std::shared_ptr<Word> i1, std::shared_ptr<Word> i2) -> bool { return (i1->st < i2->st); };
+        std::sort(buffer.begin(), buffer.end(), comp);
+        Cursor cur = cmap.Head();
+        for (auto x : buffer) {
+            cur = cmap.addNext(cur, x);
+        }
+        buffer.clear();
+    }
 };
 
 }  // namespace darts

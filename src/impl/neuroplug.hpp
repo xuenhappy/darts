@@ -193,7 +193,6 @@ class OnnxIndicator {
         words_tensor_values[words_tensor_size - 2] = adim - 1;
         words_tensor_values[words_tensor_size - 1] = codemap::cls_code;
         // set common
-        cmap.indexIt();
         cmap.iterRow(NULL, -1, [this, &words_tensor_values, &start_, &ends_](Cursor cur) {
             auto w     = cur->val;
             size_t idx = (cur->idx + 1) * 3;
