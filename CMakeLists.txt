@@ -144,12 +144,7 @@ target_link_libraries(cdarts PRIVATE ${darts_libs})
 set_target_properties(cdarts PROPERTIES PUBLIC_HEADER "src/main/darts.h")
 set_property(TARGET cdarts PROPERTY CXX_STANDARD 17)
 
-# build darts
-add_executable(darts ${darts_src} src/main/main.cpp)
-target_link_libraries(darts PRIVATE ${darts_libs})
-set_property(TARGET darts PROPERTY CXX_STANDARD 17)
-
-install(TARGETS cdarts darts)
+install(TARGETS cdarts)
 install(DIRECTORY data DESTINATION .)
 # build test
 add_executable(test_darts ${darts_src} test/test_func.cc)

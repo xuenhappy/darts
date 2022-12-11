@@ -28,6 +28,14 @@
  *
  */
 static std::unordered_map<uint32_t, std::string> _charType;
+namespace char_type {
+static const std::string ENG("ENG");
+static const std::string EMPTY("EMPTY");
+static const std::string POS("POS");
+static const std::string NUM("NUM");
+static const std::string CJK("CJK");
+static const std::string WUNK("WUNK");
+}  // namespace char_type
 
 inline int loadCharMap() {
     std::string dat = getResource("data/kernel/chars.tmap");
@@ -69,14 +77,10 @@ inline int loadCharMap() {
  * @param code
  * @return WordType
  */
-inline std::string charType(uint32_t code) {
+inline const std::string& charType(uint32_t code) {
     if (std::isspace(code)) {
-        return "EMPTY";
+        return char_type::EMPTY;
     }
-
-    // if (!std::iswprint(code)) {
-    //     return WordType::POS;
-    // }
     auto it = _charType.find(code);
     if (it != _charType.end()) {
         return it->second;
@@ -84,38 +88,38 @@ inline std::string charType(uint32_t code) {
 
     if (code < 255) {
         if ('A' <= code && code <= 'Z') {
-            return "ENG";
+            return char_type::ENG;
         }
         if ('a' <= code && code <= 'z') {
-            return "ENG";
+            return char_type::ENG;
         }
         if ('0' <= code && code <= '9') {
-            return "NUM";
+            return char_type::NUM;
         }
-        return "POS";
+        return char_type::POS;
     }
     if (65296 <= code && code <= 65305) {
-        return "NUM";
+        return char_type::NUM;
     }
     if (65313 <= code && code <= 65338) {
-        return "ENG";
+        return char_type::ENG;
     }
     if (0x4e00 <= code && code <= 0x9fa5) {
-        return "CJK";
+        return char_type::CJK;
     }
     if (0x3130 <= code && code <= 0x318F) {
-        return "CJK";
+        return char_type::CJK;
     }
     if (0xAC00 <= code && code <= 0xD7A3) {
-        return "CJK";
+        return char_type::CJK;
     }
     if (0x0800 <= code && code <= 0x4e00) {
-        return "CJK";
+        return char_type::CJK;
     }
     if (0x3400 <= code && code <= 0x4DB5) {
-        return "CJK";
+        return char_type::CJK;
     }
-    return "WUNK";
+    return char_type::WUNK;
 }
 
 /**
@@ -124,34 +128,34 @@ inline std::string charType(uint32_t code) {
  * @param str
  * @return size_t
  */
-static inline size_t wordLen(const char* str) {
-    if (!str) return 0;
-    size_t nums          = 0;
-    std::string buf_type = "";
+static inline size_t wordLen(const std::string& str) {
+    if (str.empty()) return 0;
+    size_t nums = 0;
+    std::string btype("");
     utf8_iter ITER;
-    utf8_init(&ITER, str);
+    utf8_initEx(&ITER, str.c_str(), str.size());
     while (utf8_next(&ITER)) {
-        auto ctype = charType(ITER.codepoint);
-        if (ctype != buf_type) {
-            if ((ctype == "EMPTY" && buf_type == "POS") || (buf_type == "EMPTY" && ctype == "POS")) {
-                buf_type = "POS";
+        auto& ctype = charType(ITER.codepoint);
+        if (ctype != btype) {
+            if ((ctype == char_type::EMPTY && btype == char_type::POS) ||
+                (btype == char_type::EMPTY && ctype == char_type::POS)) {
+                btype = char_type::POS;
                 continue;
             }
-            if (buf_type != "") {
+            if (!btype.empty()) {
                 nums += 1;
-                buf_type = "";
+                btype = "";
             }
         }
-        buf_type = ctype;
-        if (buf_type == "CJK") {
+        btype = ctype;
+        if (btype == char_type::CJK) {
             nums += 1;
-            buf_type = "";
+            btype = "";
             continue;
         }
     }
-    if (buf_type != "") {
-        nums += 1;
-    }
+    if (!btype.empty()) nums += 1;
+
     return nums;
 }
 class U32StrIter {
@@ -160,12 +164,12 @@ class U32StrIter {
     virtual ~U32StrIter() {}
 };
 
-class _UTF8StringIter : public U32StrIter {
+class U8T32Iter_ : public U32StrIter {
    private:
     const std::string* str;
 
    public:
-    explicit _UTF8StringIter(const std::string& str) { this->str = &str; }
+    explicit U8T32Iter_(const std::string& str) { this->str = &str; }
     void iter(std::function<void(int64_t, const char*, size_t)> hit) const {
         utf8_iter ITER;
         int position = -1;
@@ -177,12 +181,12 @@ class _UTF8StringIter : public U32StrIter {
     }
 };
 
-class _U32StringIter : public U32StrIter {
+class U32T32Iter_ : public U32StrIter {
    private:
     const std::u32string* str;
 
    public:
-    explicit _U32StringIter(const std::u32string& str) { this->str = &str; }
+    explicit U32T32Iter_(const std::u32string& str) { this->str = &str; }
     void iter(std::function<void(int64_t, const char*, size_t)> hit) const {
         for (size_t position = 0; position < str->length(); position++) {
             int64_t code = (*str)[position];
@@ -191,44 +195,47 @@ class _U32StringIter : public U32StrIter {
     }
 };
 
-inline void atomSplit(const U32StrIter& str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
-    std::string chr_buffer;
-    size_t bufstart      = 0;
-    std::string buf_type = "";
-    size_t last_pos      = 0;
-    str.iter([&](int64_t code, const char* ct, size_t position) {
-        last_pos   = position;
-        auto ctype = charType(code);
-        if (ctype != buf_type) {
-            if (ctype == "EMPTY" && buf_type == "POS") {
-                buf_type = "POS";
-                chr_buffer.append(ct);
+typedef std::function<void(const std::string&, const std::string&, size_t, size_t)> asplit_hit_func;
+
+inline void atomSplit(const U32StrIter& str, asplit_hit_func accept) {
+    size_t bufstart = 0, pos = 0;
+    std::string btype("");
+    std::string cbuffer;
+
+    auto hit = [&](int64_t code, const char* ct, size_t position) {
+        pos         = position;
+        auto& ctype = charType(code);
+        if (ctype != btype) {
+            if (ctype == char_type::EMPTY && btype == char_type::POS) {
+                btype = char_type::POS;
+                cbuffer.append(ct);
                 return;
             }
-            if (buf_type == "EMPTY" && ctype == "POS") {
-                buf_type = "POS";
-                chr_buffer.append(ct);
+            if (btype == char_type::EMPTY && ctype == char_type::POS) {
+                btype = char_type::POS;
+                cbuffer.append(ct);
                 return;
             }
 
-            if (!chr_buffer.empty()) {
-                accept(chr_buffer.c_str(), buf_type, bufstart, position);
+            if (!cbuffer.empty()) {
+                accept(cbuffer, btype, bufstart, position);
             }
             bufstart = position;
-            chr_buffer.clear();
+            cbuffer.clear();
         }
 
-        buf_type = ctype;
+        btype = ctype;
 
-        if (buf_type == "CJK") {
-            accept(ct, buf_type, position, position + 1);
-            chr_buffer.clear();
+        if (btype == char_type::CJK) {
+            accept(ct, btype, position, position + 1);
+            cbuffer.clear();
             return;
         }
-        chr_buffer.append(ct);
-    });
-    if (!chr_buffer.empty()) {
-        accept(chr_buffer.c_str(), buf_type, bufstart, last_pos + 1);
+        cbuffer.append(ct);
+    };
+    str.iter(hit);
+    if (!cbuffer.empty()) {
+        accept(cbuffer, btype, bufstart, pos + 1);
     }
 }
 /**
@@ -237,14 +244,13 @@ inline void atomSplit(const U32StrIter& str, std::function<void(const char*, std
  * @param str 原始字符串
  * @param accept hook函数
  */
-inline void atomSplit(const std::string& str, std::function<void(const char*, std::string&, size_t, size_t)> accept) {
-    _UTF8StringIter iter(str);
+inline void atomSplit(const std::string& str, asplit_hit_func accept) {
+    U8T32Iter_ iter(str);
     atomSplit(iter, accept);
 }
 
-inline void atomSplit(const std::u32string& str,
-                      std::function<void(const char*, std::string&, size_t, size_t)> accept) {
-    _U32StringIter iter(str);
+inline void atomSplit(const std::u32string& str, asplit_hit_func accept) {
+    U32T32Iter_ iter(str);
     atomSplit(iter, accept);
 }
 

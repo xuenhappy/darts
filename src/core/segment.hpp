@@ -241,7 +241,9 @@ class Segment {
         // add basic cells
         for (size_t i = 0; i < atomList.size(); i++) {
             auto a = atomList.at(i);
-            cur    = cmap.addNext(cur, std::make_shared<Word>(a->image, i, i + 1));
+            auto w = std::make_shared<Word>(a->image, i, i + 1);
+            w->addLabel(a->char_type);
+            cur = cmap.addNext(cur, w);
         }
         // add cell regnize
         for (auto recognizer : cellRecognizers) {

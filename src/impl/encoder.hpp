@@ -154,8 +154,8 @@ inline bool is_digits(const std::string& str) {
 
 namespace codemap {
 static const int special_code_nums = 5;
-
-static const char* special_image[special_code_nums] = {
+static const std::string emptylabel;
+static const std::string special_image[special_code_nums] = {
     "[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]",
 };
 // const code
@@ -354,7 +354,7 @@ class WordPice : public SegmentPlugin {
      * @param code
      * @return const char32_t*
      */
-    const std::string decode(int code) const {
+    const std::string& decode(int code) const {
         if (code < codemap::special_code_nums) {
             return codemap::special_image[code];
         }
@@ -362,7 +362,7 @@ class WordPice : public SegmentPlugin {
         if (code >= 0 && code < chars_list.size()) {
             return chars_list[code];
         }
-        return "";
+        return codemap::emptylabel;
     }
 };
 
@@ -376,7 +376,7 @@ class TypeEncoder : public SegmentPlugin {
     /**
      * explain a type code
      */
-    virtual const std::string decode(int code) const = 0;
+    virtual const std::string& decode(int code) const = 0;
 
     virtual size_t getLabelSize() const = 0;
 };
@@ -444,7 +444,7 @@ class LabelEncoder : public TypeEncoder {
             }
             return _it->second.second;
         };
-        std::string label(word->maxHXlabel(labelHx));
+        std::string label(word->maxHlabel(labelHx));
         std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
         _it = kind_codes.find(label);
         if (_it == kind_codes.end()) {
@@ -459,7 +459,7 @@ class LabelEncoder : public TypeEncoder {
      * @param code
      * @return const char32_t*
      */
-    const std::string decode(int code) const {
+    const std::string& decode(int code) const {
         if (code < codemap::special_code_nums) {
             return codemap::special_image[code];
         }
@@ -467,7 +467,7 @@ class LabelEncoder : public TypeEncoder {
         if (code >= 0 && code < labels.size()) {
             return labels[code];
         }
-        return "";
+        return codemap::emptylabel;
     }
 };
 
@@ -514,17 +514,17 @@ class PinyinEncoder : public TypeEncoder {
     int encode(const std::shared_ptr<darts::Word> word) const {
         if (word->feat >= 0) return word->feat;
         // encode word
-        return encode(word->maxHXlabel(nullptr));
+        return encode(word->maxHlabel(nullptr));
     }
 
     size_t getLabelSize() const { return plist.size() + 4; }
 
-    const std::string decode(int code) const {
+    const std::string& decode(int code) const {
         code -= 4;
         if (code >= 0 && code < plist.size()) {
             return plist[code];
         }
-        return "";
+        return codemap::emptylabel;
     }
 };
 

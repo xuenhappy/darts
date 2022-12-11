@@ -21,6 +21,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include "../utils/chrtool.hpp"
 #include "../utils/chspliter.hpp"
 #include "../utils/codecvt.hpp"
 #include "../utils/strtool.hpp"
@@ -34,7 +35,7 @@ class Atom {
     std::string char_type;
     bool masked;  // this is for training
 
-    Atom(const char* image, uint32_t start, uint32_t end) : masked(false) {
+    Atom(const std::string& image, uint32_t start, uint32_t end) : masked(false) {
         this->image = image;
         this->st    = start;
         this->et    = end;
@@ -65,15 +66,21 @@ class AtomList {
      *
      * @param str
      */
-    explicit AtomList(const std::string& str, bool skip_space = true) {
-        this->str = to_utf32(str);
+    explicit AtomList(const std::string& str, bool skip_space = true, bool norm = false) {
+        if (norm) {
+            std::string nstr = normalize(str);
+            this->str        = to_utf32(nstr);
+        } else {
+            this->str = to_utf32(str);
+        }
         data.reserve(str.length());
-        atomSplit(this->str, [&](const char* astr, std::string& ttype, size_t s, size_t e) {
-            if (skip_space && ttype == "EMPTY") return;
+        auto accept = [&](const std::string& astr, const std::string& ttype, size_t s, size_t e) {
+            if (skip_space && ttype == char_type::EMPTY) return;
             auto atom       = std::make_shared<Atom>(astr, s, e);
             atom->char_type = ttype;
             this->data.push_back(atom);
-        });
+        };
+        atomSplit(this->str, accept);
     }
 
     /**
@@ -136,7 +143,8 @@ class AtomList {
 
 class Word {
    private:
-    std::shared_ptr<void> att;  // att data
+    const static std::string emptylabel;
+    std::shared_ptr<std::vector<float>> att;  // att data
     std::set<std::string> labels;
     std::string image;
 
@@ -194,92 +202,48 @@ class Word {
         return output;
     }
 
-    void setAtt(std::shared_ptr<void> att) { this->att = att; }
-
-    std::shared_ptr<void> getAtt() { return this->att; }
-
-    void addLabels(const std::set<std::string>* tags) {
-        if (tags != NULL) {
-            labels.insert(tags->begin(), tags->end());
-        }
-    }
-    void addLabels(const std::shared_ptr<Word> other) {
-        if (other != nullptr) {
-            labels.insert(other->labels.begin(), other->labels.end());
-        }
-    }
-    size_t labels_nums() { return labels.size(); }
+    void setAtt(std::shared_ptr<std::vector<float>> att) { this->att = att; }
+    std::shared_ptr<std::vector<float>> getAtt() { return this->att; }
 
     void addLabel(const std::string& tag) { labels.insert(tag); }
-
-    /**
-     * @brief add tags into words
-     *
-     * @param tags
-     */
-    void addLabels(std::vector<std::string>* tags) {
-        if (tags != NULL) {
-            labels.insert(tags->begin(), tags->end());
-        }
+    void addLabels(const std::set<std::string>* tags) {
+        if (tags != NULL) labels.insert(tags->begin(), tags->end());
     }
+    void addLabels(std::vector<std::string>* tags) {
+        if (tags != NULL) labels.insert(tags->begin(), tags->end());
+    }
+    void addLabels(const std::shared_ptr<Word> other) {
+        if (other != nullptr) labels.insert(other->labels.begin(), other->labels.end());
+    }
+
+    size_t labels_nums() const { return labels.size(); }
+    const std::set<std::string>& getLabels() const { return this->labels; }
+
     /**
      * @brief get HX(label) max value label
      *
      * @param hx_func
      * @return const std::string
      */
-    const std::string maxHXlabel(std::function<float(const std::string&)> hx_func) const {
+    const std::string& maxHlabel(std::function<float(const std::string&)> hx_func) const {
         if (labels.empty()) {
-            return "";
+            return emptylabel;
         }
-        if (hx_func == nullptr) {
-            for (std::string l : labels) {
-                return l;
-            }
-        } else {
-            float oreder = -10;
-            std::string ret;
-            for (std::string l : labels) {
-                float xorder = hx_func(l);
-                if (xorder > oreder) {
-                    oreder = xorder;
-                    ret    = l;
-                }
-            }
-            return ret;
-        }
-        return "";
-    }
+        if (hx_func == nullptr) return *labels.begin();
 
-    bool hasLabel(const std::string& label) const { return labels.find(label) != labels.end(); }
-
-    bool hasLabel(const std::set<std::string>* labels) const {
-        if (labels == NULL || this->labels.empty()) {
-            return false;
-        }
-        for (auto& t : *labels) {
-            if (this->labels.find(t) != this->labels.end()) {
-                return true;
+        float oreder     = -1e10;
+        std::string& ret = const_cast<std::string&>(emptylabel);
+        for (auto it = labels.begin(); it != labels.end(); ++it) {
+            float xorder = hx_func(*it);
+            if (xorder > oreder) {
+                oreder = xorder;
+                ret    = *it;
             }
         }
-        return false;
-    }
-    void joinLabel(const std::set<std::string>* otags) {
-        if (!otags || otags->empty()) return;
-
-        if (labels.empty()) {
-            addLabels(otags);
-            return;
-        }
-        for (auto it = labels.begin(); it != labels.end();) {
-            if (otags->find(*it) == otags->end()) {
-                it = labels.erase(it);
-                continue;
-            }
-            ++it;
-        }
+        return ret;
     }
 };
+const std::string Word::emptylabel = "";
 
 typedef struct _Cursor {
     struct _Cursor* prev;

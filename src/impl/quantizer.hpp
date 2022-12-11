@@ -83,10 +83,10 @@ class BigramPersenter : public Decider {
      */
     void embed(const AtomList& dstSrc, SegPath& cmap) const {
         auto dfunc = [this, &cmap](Cursor cur) {
-            auto w   = cur->val;
-            int pidx = this->ngdict.getWordKey(w->text());
-            if (pidx < 0) pidx = this->ngdict.getWordKey(w->maxHXlabel(nullptr));
-            w->setAtt(std::make_shared<int>(pidx));
+            auto w     = cur->val;
+            float pidx = this->ngdict.getWordKey(w->text());
+            if (pidx < 0) pidx = this->ngdict.getWordKey(w->maxHlabel(nullptr));
+            w->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>{pidx}));
         };
         cmap.iterRow(NULL, -1, dfunc);
     }
@@ -101,11 +101,11 @@ class BigramPersenter : public Decider {
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
         int pidx = -1;
         if (pre != nullptr && !pre->isStSpecial() && pre->getAtt() != nullptr) {
-            pidx = *std::dynamic_pointer_cast<int>(pre->getAtt());
+            pidx = (int)(*(pre->getAtt()))[0];
         }
         int nidx = -1;
         if (next != nullptr && !next->isEtSpecial() && next->getAtt() != nullptr) {
-            nidx = *std::dynamic_pointer_cast<int>(next->getAtt());
+            nidx = (int)(*(next->getAtt()))[0];
         }
         return ngdict.wordDist(pidx, nidx);
     }

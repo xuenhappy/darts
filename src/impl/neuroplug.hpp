@@ -346,12 +346,12 @@ class OnnxQuantizer {
         int64_t adim     = static_cast<int64_t>(this->emdim);
 
         // set data
-        auto x1              = std::dynamic_pointer_cast<std::vector<float>>(pre->getAtt());
+        auto x1              = pre->getAtt();
         Ort::Value a1_tensor = Ort::Value::CreateTensor<float>(memory_info, x1->data(), this->emdim, &adim, 1);
         assert(a1_tensor.IsTensor());
         ort_inputs.push_back(std::move(a1_tensor));
 
-        auto x2              = std::dynamic_pointer_cast<std::vector<float>>(next->getAtt());
+        auto x2              = next->getAtt();
         Ort::Value a2_tensor = Ort::Value::CreateTensor<float>(memory_info, x2->data(), this->emdim, &adim, 1);
         assert(a2_tensor.IsTensor());
         ort_inputs.push_back(std::move(a2_tensor));

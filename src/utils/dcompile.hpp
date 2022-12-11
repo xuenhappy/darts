@@ -185,7 +185,7 @@ class Builder {
             index++;
             size_t lens       = 0;
             auto currentState = this->rootState;
-            k.iter([&](const std::string& s, size_t) {
+            k.walks([&](const std::string& s, size_t) {
                 lens++;
                 auto code     = t->getCode(s);
                 t->CodeMap[s] = code;

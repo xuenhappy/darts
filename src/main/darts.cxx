@@ -14,10 +14,13 @@
 #define SRC_MAIN_DARTS4PY_HPP_
 #include "./darts.h"
 #include <string.h>
+#include <cstddef>
+#include <cstdlib>
 #include "../core/segment.hpp"
 #include "../impl/confparser.hpp"
-#include "../utils/dregex.hpp"
+#include "../utils/dcompile.hpp"
 #include "../utils/utill.hpp"
+#include "core/core.hpp"
 
 struct _dregex {
     dregex::Trie* dat;
@@ -25,11 +28,20 @@ struct _dregex {
 struct _segment {
     darts::Segment* segment;
 };
+struct _atomlist {
+    darts::AtomList* alist;
+};
 
-void init_darts() { initUtils(); }
+struct _wordlist {
+    std::vector<std::shared_ptr<darts::Word>> wlist;
+};
 
-void destroy_darts() { google::protobuf::ShutdownProtobufLibrary(); }
+// first do
+void init_darts_env() { initUtils(); }
+// last do
+void destroy_darts_env() { google::protobuf::ShutdownProtobufLibrary(); }
 
+// normalize a str
 char* normalize_str(const char* str, size_t len, size_t* ret) {
     if (!str) return NULL;
     std::string normals = normalize(str);
@@ -37,8 +49,47 @@ char* normalize_str(const char* str, size_t len, size_t* ret) {
     *ret = normals.size();
     return strdup(normals.c_str());
 }
+// a string word type
+const char* chtype(const char* word) {
+    if (!word) return NULL;
+    auto& tname = charType(utf8_to_unicode(word));
+    return tname.c_str();
+}
 
-dreg load_drgex(const char* path) {
+// convert a text to a alist
+atomlist asplit(const char* txt, size_t textlen, bool skip_space, bool normal_before) {
+    if (!txt || textlen < 0) return NULL;
+    atomlist alist = new struct _atomlist;
+    alist->alist   = new darts::AtomList(txt, skip_space, normal_before);
+    return alist;
+}
+// free the atomlist
+void free_alist(atomlist alist) {
+    if (alist) {
+        if (alist->alist) {
+            delete alist->alist;
+            alist->alist = NULL;
+        }
+        delete alist;
+    }
+}
+// give the alist len
+size_t alist_len(atomlist alist) { return alist == NULL ? 0 : alist->alist->size(); }
+void walk_alist(atomlist alist, walk_alist_hit hit, void* user_data) {
+    if (!alist || !alist->alist) return;
+    atom_ atm;
+    size_t len = alist->alist->size();
+    for (size_t i = 0; i < len; ++i) {
+        auto x        = alist->alist->at(i);
+        atm.image     = x->image.c_str();
+        atm.char_type = x->char_type.c_str();
+        atm.masked    = x->masked;
+        atm.st = x->st, atm.et = x->et;
+        if (hit(user_data, &atm)) break;
+    }
+}
+// load the dregex from file
+dreg load_dregex(const char* path) {
     if (!path) return NULL;
     dregex::Trie* trie = new dregex::Trie();
     if (trie->loadPb(path)) {
@@ -49,7 +100,7 @@ dreg load_drgex(const char* path) {
     reg->dat = trie;
     return reg;
 }
-
+// free the dregex
 void free_dregex(dreg regex) {
     if (regex) {
         if (regex->dat) {
@@ -59,57 +110,100 @@ void free_dregex(dreg regex) {
         delete regex;
     }
 }
-
-class _C_AtomListIter : public dregex::StringIter {
+class C_AtomIter_ : public dregex::StringIter {
    private:
-    ext_data user_data;
-    atom_iter iter_func;
+    void* user_data;
+    atomiter iter_func;
 
    public:
-    _C_AtomListIter(ext_data user_data, atom_iter iter_func) {
+    C_AtomIter_(void* user_data, atomiter iter_func) {
         this->user_data = user_data;
         this->iter_func = iter_func;
     }
-    void iter(std::function<bool(const std::string&, size_t)> hit) const {
-        const char* chars = NULL;
-        size_t postion    = 0;
-        while (iter_func(&chars, &postion, user_data)) {
-            if (hit(chars, postion)) {
-                break;
-            }
+    void walks(std::function<bool(const std::string&, size_t)> hit) const {
+        atomiter_ret ret;
+        while (iter_func(user_data, &ret)) {
+            if (hit(ret.word, ret.postion)) break;
         }
     }
 };
 
-void parse(dreg regex, atom_iter atomlist, dregex_hit hit, ext_data user_data) {
+// parse a atom list
+void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data) {
     if (!regex || !regex->dat) return;
     auto dat = regex->dat;
-    _C_AtomListIter alist(user_data, atomlist);
+    C_AtomIter_ alist(user_data, atomlist);
     std::vector<const char*> tmpl;
-    dat->parse(alist, [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
+    dhit_ret ret;
+    auto hitfunc = [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
         tmpl.clear();
-        if (labels && (!labels->empty())) {
+        if (labels != NULL && (!labels->empty())) {
             for (auto idx : *labels) {
                 tmpl.push_back(dat->getLabel(idx));
             }
         }
-        return hit(s, e, tmpl.empty() ? NULL : &tmpl[0], tmpl.size(), user_data);
-    });
+        ret.s = s, ret.e = e;
+        ret.labels_size = tmpl.size();
+        ret.labels      = &tmpl[0];
+        return hit(user_data, &ret);
+    };
+    dat->parse(alist, hitfunc);
 }
+class CStr_AtomIter_ : public dregex::StringIter {
+   private:
+    const char** words;
+    size_t len;
 
-int load_segment(const char* json_conf_file, segment* sg, const char* mode) {
-    if (!json_conf_file) return EXIT_FAILURE;
-    darts::Segment* sgemnet = NULL;
-    if (loadSegment(json_conf_file, &sgemnet, mode)) {
-        if (!sgemnet) delete sgemnet;
-        return EXIT_FAILURE;
+   public:
+    CStr_AtomIter_(const char** words, size_t len) {
+        this->words = words;
+        this->len   = len;
     }
-    if (!sgemnet) return EXIT_FAILURE;
-    *sg            = new struct _segment();
-    (*sg)->segment = sgemnet;
+    void walks(std::function<bool(const std::string&, size_t)> hit) const {
+        for (size_t i = 0; i < len; ++i) hit(words[i], i);
+    }
+};
+
+class C_KvIter_ : public dregex::KvPairsIter {
+   private:
+    void* user_data;
+    kviter iter_func;
+
+   public:
+    C_KvIter_(void* user_data, kviter iter_func) {
+        this->user_data = user_data;
+        this->iter_func = iter_func;
+    }
+    int iter(std::function<void(const dregex::StringIter&, const char** lables, size_t label_size)> hit) const {
+        kviter_ret ret;
+        while (iter_func(user_data, &ret)) {
+            CStr_AtomIter_ iter(ret.key, ret.keylen);
+            hit(iter, ret.labels, ret.label_nums);
+        }
+        return EXIT_SUCCESS;
+    }
+};
+// compile regex
+int compile_regex(const char* outpath, kviter kvs, void* user_data) {
+    if (!outpath) outpath = "dregex.pb";
+    C_KvIter_ pairs(user_data, kvs);
+    return compile(pairs, outpath);
+}
+// load segment
+segment load_segment(const char* conffile, const char* mode, bool isdevel) {
+    if (!conffile) return NULL;
+    darts::Segment* sgemnet = NULL;
+    if (loadSegment(conffile, &sgemnet, mode, isdevel)) {
+        if (!sgemnet) delete sgemnet;
+        return NULL;
+    }
+    if (!sgemnet) return NULL;
+    segment sg = new struct _segment;
+
+    sg->segment = sgemnet;
     return EXIT_SUCCESS;
 }
-
+// free segment
 void free_segment(segment sg) {
     if (sg) {
         if (sg->segment) delete sg->segment;
@@ -117,34 +211,20 @@ void free_segment(segment sg) {
         delete sg;
     }
 }
-
-void token_str(segment sg, const char* txt, word_hit hit, bool max_mode, ext_data user_data) {
-    if (!sg || !sg->segment || !txt) return;
-    auto sgment = sg->segment;
-    std::vector<std::shared_ptr<darts::Word>> ret;
-    darts::tokenize(*sgment, txt, ret, max_mode);
-    for (auto w : ret) {
-        hit(w->text().c_str(), NULL, a->st, a->et, w->st, w->et, user_data);
+// token str
+wordlist token_str(segment sg, atomlist alist, bool max_mode) {
+    if (!sg || !sg->segment || !alist || !alist->alist) return NULL;
+    auto sgment  = sg->segment;
+    wordlist ret = new struct _wordlist;
+    darts::tokenize(*sgment, *(alist->alist), ret->wlist, max_mode);
+    return ret;
+}
+// free list
+void free_wordlist(wordlist wlist) {
+    if (wlist) {
+        wlist->wlist.clear();
+        delete wlist;
     }
 }
 
-int word_type(const char* word, char** ret) {
-    if (!word) return 0;
-    std::string tname = charType(utf8_to_unicode(word));
-    char* c           = (char*)malloc(sizeof(char) * (tname.size() + 1));
-    std::copy(tname.begin(), tname.end(), c);
-    c[tname.size()] = '\0';
-    *ret            = c;
-    return tname.size();
-}
-
-void word_split(const char* str, token_hit hit, ext_data user_data) {
-    if (!str) return;
-    atomSplit(str, [&](const char* atom, std::string& type, size_t s, size_t e) {
-        hit(atom, type.c_str(), s, e, user_data);
-    });
-}
-void word_bpe(const char* str, token_hit hit, ext_data user_data) {
-    if (!str) return;
-}
 #endif  // SRC_MAIN_DARTS4PY_HPP_

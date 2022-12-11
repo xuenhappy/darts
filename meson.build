@@ -89,11 +89,7 @@ darts_lib=both_libraries('darts', 'src/main/darts.cxx',
     dependencies:base_deps,include_directories : incdir,
     cpp_args : extra_args,c_args : extra_args
 )
-darts_exe = executable('darts.bin', 'src/main/main.cpp', 
-    dependencies:base_deps, include_directories : incdir,
-    install : true, install_dir : cur_dir/'python/darts/bin',
-    cpp_args : extra_args,c_args : extra_args
-)
+
 darts_test_exe = executable('darts_test','test/test_func.cc',
     dependencies:base_deps,include_directories : incdir,
     cpp_args : extra_args,c_args : extra_args
