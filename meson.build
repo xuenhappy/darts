@@ -31,7 +31,7 @@ onnxrt_dep=dependency('onnxruntime',version:'1.12.1',required:false)
 if not onnxrt_dep.found()
     onnx_dir='/opt/onnxruntime'
     onnxrt_dep = declare_dependency(
-        link_args : [f'-L@onnx_dir@/lib -lonnxruntime' ],
+        link_args : [f'-L@onnx_dir@/lib', '-lonnxruntime' ],
         include_directories : [f'@onnx_dir@/include'],
         version:'1.12.1'
     )
