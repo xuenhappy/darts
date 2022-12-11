@@ -226,7 +226,8 @@ inline int checkDep(Json::Value& root, Json::Value& node, std::string& fname,
  * @param segment point val pointer
  * @return int 1 error ,0 success
  */
-inline int loadSegment(const char* json_conf_file, darts::Segment** segment, const char* start_mode = NULL) {
+inline int loadSegment(const char* json_conf_file, darts::Segment** segment, const char* start_mode = NULL,
+                       bool devel_mode = false) {
     *segment = NULL;
     std::string data;
     if (getFileText(json_conf_file, data)) {
@@ -296,10 +297,13 @@ inline int loadSegment(const char* json_conf_file, darts::Segment** segment, con
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> _cache;
 
     // load the deciders
-    std::shared_ptr<darts::Decider> decider = loaddecider(root, deciders_node, used_decider, _cache);
-    if (!decider) {
-        _cache.clear();
-        return EXIT_FAILURE;
+    std::shared_ptr<darts::Decider> decider = nullptr;
+    if (!devel_mode) {
+        decider = loaddecider(root, deciders_node, used_decider, _cache);
+        if (!decider) {
+            _cache.clear();
+            return EXIT_FAILURE;
+        }
     }
     // load used_recognizers_objs
     std::vector<std::shared_ptr<darts::CellRecognizer>> used_recognizers_objs;
@@ -314,7 +318,6 @@ inline int loadSegment(const char* json_conf_file, darts::Segment** segment, con
         }
         used_recognizers_objs.push_back(recognizer);
     }
-
     *segment = new darts::Segment(decider);
     for (auto r : used_recognizers_objs) {
         (*segment)->addRecognizer(r);

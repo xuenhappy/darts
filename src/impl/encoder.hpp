@@ -27,7 +27,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include "../core/darts.hpp"
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
 #include "../utils/pinyin.hpp"

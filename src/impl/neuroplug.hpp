@@ -13,6 +13,7 @@
 #define SRC_IMPL_NETWORDQI_HPP_
 
 #include <onnxruntime_cxx_api.h>
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -24,7 +25,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "../core/darts.hpp"
 #include "../core/segment.hpp"
 #include "../utils/strtool.hpp"
 #include "./encoder.hpp"
@@ -162,17 +162,21 @@ class OnnxIndicator {
         std::vector<Ort::Value> ort_inputs;
         auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
         // create alist tensor
-        int64_t alist_size              = dstSrc.size() + 2;
-        std::vector<int64_t> alist_dims = {alist_size};
-        std::vector<int64_t> alist_tensor_values(alist_size);
+        std::vector<int64_t> alist_tensor_values;
+        alist_tensor_values.reserve(dstSrc.size() * 2 + 2);
+        std::vector<size_t> start_(dstSrc.size(), 1);
+        std::vector<size_t> ends_(dstSrc.size(), 1);
         // set alist data
-        wordpiece->encode(dstSrc, [alist_size, &alist_tensor_values](int code, int atom_postion) {
-            size_t idx = atom_postion != -2 ? atom_postion + 1 : alist_size - 1;
-            // set data
-            alist_tensor_values[idx] = code;
+        wordpiece->encode(dstSrc, [&](int code, int atom_postion) {
+            if (atom_postion >= 0) {
+                start_[atom_postion] = std::min(start_[atom_postion], alist_tensor_values.size());
+                ends_[atom_postion]  = std::max(ends_[atom_postion], alist_tensor_values.size());
+            }
+            alist_tensor_values.push_back(code);
         });
-        Ort::Value alist_input_tensor = Ort::Value::CreateTensor<int64_t>(
-            memory_info, alist_tensor_values.data(), alist_size, alist_dims.data(), alist_dims.size());
+        int64_t adim = alist_tensor_values.size();
+        Ort::Value alist_input_tensor =
+            Ort::Value::CreateTensor<int64_t>(memory_info, alist_tensor_values.data(), adim, &adim, 1);
         assert(alist_input_tensor.IsTensor());
         ort_inputs.push_back(std::move(alist_input_tensor));
         // create words tensor
@@ -180,23 +184,22 @@ class OnnxIndicator {
         size_t words_tensor_size        = words_size * 3;
         std::vector<int64_t> words_dims = {words_size, 3};
         std::vector<int64_t> words_tensor_values(words_tensor_size);
-        // set words
         // set head
         words_tensor_values[0] = 0;
-        words_tensor_values[1] = 1;
+        words_tensor_values[1] = 0;
         words_tensor_values[2] = codemap::sep_code;
         // set tail
-        words_tensor_values[words_tensor_size - 3] = alist_size - 1;
-        words_tensor_values[words_tensor_size - 2] = alist_size;
+        words_tensor_values[words_tensor_size - 3] = adim - 1;
+        words_tensor_values[words_tensor_size - 2] = adim - 1;
         words_tensor_values[words_tensor_size - 1] = codemap::cls_code;
         // set common
         cmap.indexIt();
-        cmap.iterRow(NULL, -1, [this, &words_tensor_values](Cursor cur) {
+        cmap.iterRow(NULL, -1, [this, &words_tensor_values, &start_, &ends_](Cursor cur) {
             auto w     = cur->val;
             size_t idx = (cur->idx + 1) * 3;
 
-            words_tensor_values[idx]     = w->st + 1;
-            words_tensor_values[idx + 1] = w->et + 1;
+            words_tensor_values[idx]     = start_[w->st];
+            words_tensor_values[idx + 1] = ends_[w->et - 1];
             words_tensor_values[idx + 2] = this->lencoder == nullptr ? codemap::unk_code : this->lencoder->encode(w);
         });
         Ort::Value words_input_tensor = Ort::Value::CreateTensor<int64_t>(
@@ -442,8 +445,8 @@ class OnnxRecongnizer : public CellRecognizer {
     int validator(Ort::Session* session) {
         // check input tensor nums
         size_t input_count = session->GetInputCount();
-        if (input_count != 1) {
-            std::cerr << "This model is not supported by onnx recongnizer.  input nums must 1" << std::endl;
+        if (input_count != 2) {
+            std::cerr << "This model is not supported by onnx recongnizer.  input nums must 2" << std::endl;
             return EXIT_FAILURE;
         }
         // check a1 input tensor
@@ -451,6 +454,17 @@ class OnnxRecongnizer : public CellRecognizer {
         size_t a1_dim_count = a1_tensor_info.GetDimensionsCount();
         if (a1_dim_count != 1) {  // channel
             std::cerr << "This model is not supported by onnx recongnizer. a1 dim is not 1!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        auto word_tensor_info = session->GetInputTypeInfo(1).GetTensorTypeAndShapeInfo();
+        size_t word_dim_count = word_tensor_info.GetDimensionsCount();
+        if (word_dim_count != 2) {  // nums*idx
+            std::cerr << "This model is not supported by onnx recongnizer. word dim is not 2!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::vector<int64_t> word_dims = word_tensor_info.GetShape();
+        if (word_dims[1] != 2) {
+            std::cerr << "This model is not supported by onnx recongnizer. word need be in NC format" << std::endl;
             return EXIT_FAILURE;
         }
 
@@ -470,6 +484,7 @@ class OnnxRecongnizer : public CellRecognizer {
 
         Ort::AllocatorWithDefaultOptions ort_alloc;
         input_name_.emplace_back(session->GetInputNameAllocated(0, ort_alloc).get());
+        input_name_.emplace_back(session->GetInputNameAllocated(1, ort_alloc).get());
         output_name_.emplace_back(session->GetOutputNameAllocated(0, ort_alloc).get());
 
         return EXIT_SUCCESS;
@@ -485,27 +500,47 @@ class OnnxRecongnizer : public CellRecognizer {
     void decode(const AtomList& dstSrc, std::vector<size_t>& seq) const {
         // create inputs
         auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-        // create alist tensor
-        int64_t alist_size = dstSrc.size() + 2;
-        std::vector<int64_t> alist_tensor_values(alist_size);
+        std::vector<Ort::Value> ort_inputs;
+        // create tensor data
+        std::vector<int64_t> alist_tensor_values;
+        alist_tensor_values.reserve(dstSrc.size() * 2 + 2);
+        int64_t words_size              = dstSrc.size() + 2;
+        size_t words_tensor_size        = words_size * 2;
+        std::vector<int64_t> words_dims = {words_size, 2};
+        std::vector<int64_t> words_tensor_values(words_tensor_size);
         // set alist data
-        wordpiece->encode(dstSrc, [alist_size, &alist_tensor_values](int code, int atom_postion) {
-            size_t idx = atom_postion != -2 ? atom_postion + 1 : alist_size - 1;
-            // set data
-            alist_tensor_values[idx] = code;
-        });
+        wordpiece->encode(dstSrc, [&words_tensor_values, &alist_tensor_values](int code, int atom_postion) {
+            if (atom_postion >= 0) {
+                size_t idx   = atom_postion * 2 + 2;
+                int64_t aidx = alist_tensor_values.size();
 
+                words_tensor_values[idx]     = std::min(words_tensor_values[idx], aidx);
+                words_tensor_values[idx + 1] = std::max(words_tensor_values[idx + 1], aidx);
+            }
+            alist_tensor_values.push_back(code);
+        });
+        int64_t adim = alist_tensor_values.size();
+        // set head and tail
+        words_tensor_values[0] = words_tensor_values[1] = 0;
+        words_tensor_values[words_tensor_size - 2] = words_tensor_values[words_tensor_size - 1] = adim - 1;
+        // push data
         Ort::Value alist_input_tensor =
-            Ort::Value::CreateTensor<int64_t>(memory_info, alist_tensor_values.data(), alist_size, &alist_size, 1);
+            Ort::Value::CreateTensor<int64_t>(memory_info, alist_tensor_values.data(), adim, &adim, 1);
         assert(alist_input_tensor.IsTensor());
+        ort_inputs.push_back(std::move(alist_input_tensor));
+
+        Ort::Value words_input_tensor = Ort::Value::CreateTensor<int64_t>(
+            memory_info, words_tensor_values.data(), words_tensor_size, words_dims.data(), words_dims.size());
+        assert(words_input_tensor.IsTensor());
+        ort_inputs.push_back(std::move(words_input_tensor));
         // score model & input tensor, get back output tensor
         Ort::Value output_tensor{nullptr};
-        session->Run(Ort::RunOptions{nullptr}, input_name_.data(), &alist_input_tensor, 1, output_name_.data(),
-                     &output_tensor, output_name_.size());
+        session->Run(Ort::RunOptions{nullptr}, input_name_.data(), ort_inputs.data(), ort_inputs.size(),
+                     output_name_.data(), &output_tensor, output_name_.size());
 
         // Get pointer to output tensor float values
         int64_t* arr = output_tensor.GetTensorMutableData<int64_t>();
-        seq.insert(seq.end(), arr, arr + alist_size);
+        seq.insert(seq.end(), arr, arr + dstSrc.size());
     }
 
    public:

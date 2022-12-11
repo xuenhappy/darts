@@ -21,7 +21,7 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "../core/darts.hpp"
+#include "../core/core.hpp"
 #include "../utils/registerer.hpp"
 namespace darts {
 
@@ -246,17 +246,10 @@ class Segment {
     }
 
    public:
-    explicit Segment(std::shared_ptr<Decider> quantizer) {
-        assert(!quantizer);  // quantizer must be not null
-        this->decider = quantizer;
-    }
+    explicit Segment(std::shared_ptr<Decider> quantizer) { this->decider = quantizer; }
     ~Segment() {
         if (this->decider) {
             this->decider = nullptr;
-        }
-        auto iter = cellRecognizers.begin();
-        while (iter != cellRecognizers.end()) {
-            iter = cellRecognizers.erase(iter);
         }
         cellRecognizers.clear();
     }
@@ -280,7 +273,7 @@ class Segment {
         }
         auto cmap = new SegPath();
         buildSegPath(atomList, *cmap);
-        if (maxMode) {
+        if (decider == nullptr || maxMode) {
             cmap->iterRow(NULL, -1, [&](Cursor cur) {
                 auto word = cur->val;
                 word->st += atom_start_pos;
