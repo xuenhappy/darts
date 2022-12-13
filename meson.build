@@ -9,10 +9,12 @@ enable_static=get_option('link-static')
 if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
 endif
-extra_args = ['-Wno-sign-compare','-Wno-deprecated-declarations']
+extra_compile_args = ['-Wno-sign-compare','-Wno-deprecated-declarations']
+extra_link_args=[]
 if meson.get_compiler('c').get_id() == 'clang'
     if build_machine.system()=='darwin'
-        extra_args += ['-mmacosx-version-min=11.0','-std=c++17','-stdlib=libc++']
+        extra_compile_args += ['-mmacosx-version-min=11.0','-std=c++17','-stdlib=libc++']
+        extra_link_args+=['-Wl','-w']
     endif
 endif
 
@@ -74,7 +76,7 @@ endforeach
 
 
 my_proto_deb=declare_dependency(
-    link_with : [static_library('proto',proto_sources,dependencies:proto_dep,cpp_args : extra_args,c_args : extra_args)],
+    link_with : [static_library('proto',proto_sources,dependencies:proto_dep,cpp_args : extra_compile_args,c_args : extra_compile_args)],
     link_args : ['-ldl' ],
     sources:[proto_headers]
 )
@@ -87,12 +89,12 @@ incdir = include_directories('src')
 darts_lib=both_libraries('darts', 'src/main/darts.cxx', 
     version : '1.2.3', soversion : '0',
     dependencies:base_deps,include_directories : incdir,
-    cpp_args : extra_args,c_args : extra_args
+    cpp_args : extra_compile_args,c_args : extra_compile_args
 )
 
 darts_test_exe = executable('darts_test','test/test_func.cc',
     dependencies:base_deps,include_directories : incdir,
-    cpp_args : extra_args,c_args : extra_args
+    cpp_args : extra_compile_args,c_args : extra_compile_args
 )
 if get_option('build-python')
     message('gen cython so...')
@@ -106,7 +108,7 @@ if get_option('build-python')
         include_directories : [include_directories('src/main/')],
         link_with : darts_lib.get_static_lib(),
         install : true, install_dir : cur_dir/'python/darts',
-        cpp_args : extra_args,c_args : extra_args,
-        link_args:['-Wl','-w']
+        cpp_args : extra_compile_args,c_args : extra_compile_args,
+        link_args: extra_link_args
     )
 endif
