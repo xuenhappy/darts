@@ -76,10 +76,8 @@ typedef struct {
 
 typedef bool (*dhit)(void* user_data, dhit_ret* ret);
 typedef struct {
-    char** key;
-    size_t keylen;
-    char** labels;
-    size_t label_nums;
+    void* key_cache;
+    void* label_cache;
 } kviter_ret;
 typedef bool (*kviter)(void* user_data, kviter_ret* ret);
 
@@ -87,6 +85,18 @@ typedef bool (*kviter)(void* user_data, kviter_ret* ret);
 void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data);
 // compile regex
 int compile_regex(const char* outpath, kviter kvs, void* user_data);
+
+typedef struct {
+    size_t atom_s, atom_e;
+    size_t code_s, code_e;
+    const char** labels;
+    size_t label_nums;
+    const char* image;
+} wordlist_ret;
+
+typedef bool (*walk_wlist_hit)(void* user_data, wordlist_ret* ret);
+void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data);
+
 // load segment
 segment load_segment(const char* conffile, const char* mode, bool isdevel);
 // free segment

@@ -16,6 +16,7 @@
 #include <string.h>
 #include <cstddef>
 #include <cstdlib>
+#include <vector>
 #include "../core/segment.hpp"
 #include "../impl/confparser.hpp"
 #include "../utils/dcompile.hpp"
@@ -151,16 +152,12 @@ void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data) {
 }
 class CStr_AtomIter_ : public dregex::StringIter {
    private:
-    const char** words;
-    size_t len;
+    std::vector<const char*>* cache;
 
    public:
-    CStr_AtomIter_(const char** words, size_t len) {
-        this->words = words;
-        this->len   = len;
-    }
+    CStr_AtomIter_(std::vector<const char*>* cache) { this->cache = cache; }
     void walks(std::function<bool(const std::string&, size_t)> hit) const {
-        for (size_t i = 0; i < len; ++i) hit(words[i], i);
+        for (size_t i = 0; i < cache->size(); ++i) hit((*cache)[i], i);
     }
 };
 
@@ -175,11 +172,20 @@ class C_KvIter_ : public dregex::KvPairsIter {
         this->iter_func = iter_func;
     }
     int iter(std::function<void(const dregex::StringIter&, const char** lables, size_t label_size)> hit) const {
+        // init cache
+        std::vector<const char*> keycache;
+        std::vector<const char*> labelcache;
         kviter_ret ret;
+        ret.key_cache   = &keycache;
+        ret.label_cache = &labelcache;
+        // set data and hit
         while (iter_func(user_data, &ret)) {
-            CStr_AtomIter_ iter(const_cast<const char**>(ret.key), ret.keylen);
-            hit(iter, const_cast<const char**>(ret.labels), ret.label_nums);
+            CStr_AtomIter_ iter(&keycache);
+            hit(iter, &labelcache[0], labelcache.size());
+            keycache.clear();
+            labelcache.clear();
         }
+
         return EXIT_SUCCESS;
     }
 };
@@ -210,6 +216,27 @@ void free_segment(segment sg) {
         sg->segment = NULL;
         delete sg;
     }
+}
+
+void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data) {
+    wordlist_ret ret;
+    std::vector<const char*> ptrs;
+    for (size_t i = 0; i < wlist->wlist.size(); ++i) {
+        auto w         = wlist->wlist[i];
+        ret.image      = w->text().c_str();
+        ret.atom_s     = w->st;
+        ret.atom_e     = w->et;
+        ret.label_nums = w->labels_nums();
+        ptrs.clear();
+        if (w->labels_nums() > 0) {
+            for (auto& s : w->getLabels()) {
+                ptrs.emplace_back(s.c_str());
+            }
+        }
+        ret.labels = &ptrs[0];
+        if (hit(user_data, &ret)) break;
+    }
+    ptrs.clear();
 }
 // token str
 wordlist token_str(segment sg, atomlist alist, bool max_mode) {

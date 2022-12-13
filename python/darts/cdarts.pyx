@@ -1,7 +1,8 @@
 from libc.stdlib cimport malloc, free
 from libcpp cimport bool
+from libcpp.vector cimport vector
 import atexit
-from typing import Iterator,Callable,List,Iterable,Sequence,Tuple
+from typing import Iterator,Callable,List,Iterable,Tuple
 
 
 cdef extern from 'darts.h':
@@ -32,8 +33,7 @@ cdef extern from 'darts.h':
         size_t st
         size_t et
         const char* char_type
-        bool masked
-    
+        bool masked    
     
     ctypedef bool (*walk_alist_hit)(void* , atom_* )
     atomlist asplit(const char* txt, size_t textlen, bool skip_space, bool normal_before)
@@ -60,15 +60,25 @@ cdef extern from 'darts.h':
     
     ctypedef bool (*dhit)(void*, dhit_ret*)
     ctypedef struct kviter_ret:
-        char** key
-        size_t keylen
-        char** labels
-        size_t label_nums
+        void* key_cache
+        void* label_cache
+       
 
     ctypedef bool (*kviter)(void*, kviter_ret*)
     void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data)
     int compile_regex(const char* outpath, kviter kvs, void* user_data)
 
+
+    ctypedef struct wordlist_ret:
+        size_t atom_s, atom_e
+        size_t code_s, code_e
+        const char** labels
+        size_t label_nums
+        const char* image
+    
+
+    ctypedef bool (*walk_wlist_hit)(void* , wordlist_ret* )
+    void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data)
     segment load_segment(const char* conffile, const char* mode, bool isdevel)
     void free_segment(segment sg)
     wordlist token_str(segment sg, atomlist alist, bool max_mode)
@@ -134,31 +144,27 @@ cdef bool dregex_hit_callback(void* user_data, dhit_ret* ret):
     return False
 
 
-ctypedef char* cstr
-cdef void copy_str_data(cstr** rets,size_t* lens,list strs):
-    if len(strs)>lens[0]:
-        if rets[0]:free(rets[0])
-        rets[0] = <char **>malloc(len(strs) * sizeof(cstr))
-
-    lens[0]=len(strs)
+ctypedef const char* cstr
+ctypedef vector[cstr]* ctsr_list
+cdef void copy_str_data(ctsr_list clist,list strs):
     for i in range(len(strs)):
         item=<str>strs[i]
         py_byte_string= item.encode("utf-8",'ignore')
-        rets[0][i] = py_byte_string
+        clist.push_back(py_byte_string)
+       
     
-
 cdef bool kviter_func(void* user_data, kviter_ret* ret):
+    key_cache=<ctsr_list>(ret.key_cache)
+    label_cache=<ctsr_list>(ret.label_cache)
+
     kviters:Iterator[Tuple[List[str],List[str]]]= (<tuple>user_data)[0]
     try:
-        kv_info=next(kviters)
-        key_list,label_list= kv_info
-        copy_str_data(&ret.key,&ret.keylen,key_list)
-        copy_str_data(&ret.labels,&ret.label_nums,label_list)
+        kv_info=<tuple>next(kviters)
+        copy_str_data(key_cache,<list>(kv_info[0]))
+        copy_str_data(label_cache,<list>(kv_info[1]))
     except StopIteration:
-        if ret.key:free(ret.key)
-        if ret.labels:free(ret.labels)
         return False
-    
+
     return True
     
 
@@ -171,7 +177,7 @@ cdef class Dregex:
         assert path is not None,"path must be give"
         py_byte_string= path.encode("utf-8",'ignore')
         self.reg=load_dregex(py_byte_string)
-        if not self.reg:
+        if self.reg==NULL:
             raise IOError("load %s regex file failed!"%path)
 
     def parse(self, atoms:Iterable[str],hit:Callable[[int,int,List[str]]]):
@@ -202,6 +208,11 @@ cdef class PyAtom:
     cdef char_type
     cdef bool masked
 
+    def __repr__(self) -> str:
+        if self.masked:
+            return "[MASK]"
+        return self.image
+
     
 
 
@@ -216,6 +227,7 @@ cdef bool alist_hit_func(void* user_data, atom_* a):
     atm.masked=a.masked
     atm.char_type=a.char_type[:].decode("utf-8","ignore")
     ret.append(atm)
+    return False
 
 cdef class PyAtomList:
     cdef atomlist alist 
@@ -238,3 +250,65 @@ cdef class PyAtomList:
         free_alist(self.alist)
         self.alist=NULL
 
+
+
+cdef class PyWord:
+    cdef str image
+    cdef size_t atom_s,atom_e
+    cdef size_t code_s,code_e
+    cdef set labels
+
+    def __repr__(self) -> str:
+        return self.image
+   
+cdef bool wlist_hit_func(void* user_data, wordlist_ret* w):
+    ret=<list>user_data
+    word=PyWord();
+    word.image=w.image[:].decode("utf-8","ignore") if w.image!=NULL else ""
+    word.atom_s=w.atom_s
+    word.atom_e=w.atom_e
+    word.code_s=w.code_s
+    word.code_e=w.code_e
+    if w.label_nums>0 and w.labels!=NULL:
+        for i in range(w.label_nums):
+            label=w.labels[i]
+            if label==NULL:
+                continue
+            pylabel=label[:].decode("utf-8","ignore")
+            word.labels.add(pylabel)
+    ret.append(word)
+    return False
+
+cdef class DSegment:
+    cdef segment segt 
+
+    def __cinit__(self,conffile:str,mode:str,isdev:bool):
+        if conffile is None or len(conffile)<2:
+            raise IOError("conf file must given!")
+        py_bytes=conffile.encode("utf-8","ignore")
+        cdef const char* confpath=py_bytes
+        cdef const char* modstr=NULL
+        if mode:
+            py_bytes=mode.encode("utf-8","ignore")
+            modstr=py_bytes
+        self.segt=load_segment(confpath, modstr, isdev)
+        if self.segt==NULL:
+            raise IOError(f"load {conffile} segment failed!")
+
+    def cut(self,strs:str,max_mode:bool =False):
+        if not strs or len(strs)<3:
+            return strs
+        alist=PyAtomList(strs)
+        cdef wordlist wlist=token_str(self.segt,alist.alist,max_mode)
+        try:
+            ret_list=[]
+            walk_wlist(wlist, wlist_hit_func, <void*> ret_list)
+            return ret_list
+        finally:
+            free_wordlist(wlist)
+
+
+
+    def __dealloc__(self):
+        free_segment(self.segt)
+        self.segt=NULL
