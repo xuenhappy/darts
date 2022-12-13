@@ -1,4 +1,4 @@
-from libc.stdlib cimport malloc, free
+from libc.stdlib cimport free
 from libcpp cimport bool
 from libcpp.vector cimport vector
 import atexit
