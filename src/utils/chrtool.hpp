@@ -130,16 +130,10 @@ inline int initializeMap() {
     return EXIT_SUCCESS;
 }
 
-/**
- * @brief 对原始字符串进行字符归一化
- *
- * @param str
- * @return std::string
- */
-inline std::string& normalize(const std::string& str, std::string& ret) {
-    ret.reserve(str.size() + 2);
+inline std::string& normalize(const char* str, size_t lens, std::string& ret) {
+    ret.reserve(lens + 2);
     utf8_iter ITER;
-    utf8_initEx(&ITER, str.c_str(), str.length());
+    utf8_initEx(&ITER, str, lens);
     const char* tmps;
     std::unordered_map<std::string, std::string>::const_iterator it;
     while (utf8_next(&ITER)) {
@@ -152,6 +146,15 @@ inline std::string& normalize(const std::string& str, std::string& ret) {
         ret.append(tmps);
     }
     return ret;
+}
+/**
+ * @brief 对原始字符串进行字符归一化
+ *
+ * @param str
+ * @return std::string
+ */
+inline std::string& normalize(const std::string& str, std::string& ret) {
+    return normalize(str.c_str(), str.length(), ret);
 }
 
 #endif  // SRC_UTILS_NORM_CHR_HPP_

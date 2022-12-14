@@ -43,12 +43,9 @@ void init_darts_env() { initUtils(); }
 void destroy_darts_env() { google::protobuf::ShutdownProtobufLibrary(); }
 
 // normalize a str
-char* normalize_str(const char* str, size_t len, size_t* ret) {
-    if (!str) return NULL;
-    std::string normals;
-    normalize(str, normals);
-    *ret = normals.size();
-    return strdup(normals.c_str());
+void normalize_str(const char* str, size_t len, void* cpp_string_cache) {
+    if (!str || len < 1) return;
+    normalize(str, len, *static_cast<std::string*>(cpp_string_cache));
 }
 // a string word type
 const char* chtype(const char* word) {

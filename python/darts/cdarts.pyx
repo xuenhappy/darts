@@ -1,6 +1,7 @@
 from libc.stdlib cimport free
 from libcpp cimport bool
 from libcpp.vector cimport vector
+from libcpp.string cimport string
 import atexit
 from typing import Iterator,Callable,List,Iterable,Tuple
 
@@ -25,7 +26,7 @@ cdef extern from 'darts.h':
     void destroy_darts_env()
 
   
-    char* normalize_str(const char* str, size_t len, size_t* ret)
+    void normalize_str(const char* str, size_t len, void* cpp_string_cache) nogil
     const char* chtype(const char* word)
 
     ctypedef struct atom_buffer:
@@ -36,7 +37,7 @@ cdef extern from 'darts.h':
         bool masked    
     
     ctypedef bool (*walk_alist_hit)(void* , atom_buffer* )
-    atomlist asplit(const char* txt, size_t textlen, bool skip_space, bool normal_before)
+    atomlist asplit(const char* txt, size_t textlen, bool skip_space, bool normal_before) nogil
     void free_alist(atomlist alist)
     void walk_alist(atomlist alist, walk_alist_hit hit, void* user_data)
     int get_npos_atom(atomlist alist, size_t idx, atom_buffer* buffer)
@@ -85,7 +86,7 @@ cdef extern from 'darts.h':
 
     size_t wlist_len(wordlist wlist)
     int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer)
-    wordlist token_str(segment sg, atomlist alist, bool max_mode)
+    wordlist token_str(segment sg, atomlist alist, bool max_mode) nogil
     void free_wordlist(wordlist wlist)
 
 #init some thing
@@ -98,23 +99,17 @@ def normalize(content:str)->str:
         return None
     py_byte_string= content.encode('utf-8','replace')
     cdef char* data = py_byte_string
-    cdef size_t ret_size = 0
-    cdef char* point=normalize_str(data,len(py_byte_string),&ret_size)
-    if not point:
-        return ""
-    try:
-        return point[:ret_size].decode('utf-8','replace')
-    finally:
-        free(point)
-
+    cdef size_t byteslen=len(py_byte_string)
+    cdef string cache
+    with nogil:
+        normalize_str(data,byteslen,&cache)
+    return cache.c_str().decode('utf-8','replace')
 
 def charDtype(unichr:str)->str:
     py_byte_string= unichr.encode('utf-8','ignore')
     cdef char* data= py_byte_string
     cdef const char* ret=chtype(data)
-    if not ret:
-        return ""
-    return ret[:].decode('utf-8','ignore')
+    return ret[:].decode('utf-8','ignore') if ret else ""
     
    
 
@@ -206,11 +201,11 @@ cdef class Dregex:
 
 
 cdef class PyAtom:
-    cdef str image
-    cdef size_t st
-    cdef size_t et
-    cdef char_type
-    cdef bool masked
+    cdef readonly str image
+    cdef readonly size_t st
+    cdef readonly size_t et
+    cdef readonly str chtype
+    cdef public bool masked
 
     def __cinit__(self,image:str,size_t st,size_t et):
         self.image=image
@@ -228,8 +223,8 @@ cdef bool alist_hit_func(void* user_data, atom_buffer* buf):
     ret=<list>user_data
     py_str=buf.image[:].decode("utf-8","ignore")
     atm=PyAtom(py_str,buf.st,buf.et);
+    atm.chtype=buf.char_type[:].decode("utf-8","ignore")
     atm.masked=buf.masked
-    atm.char_type=buf.char_type[:].decode("utf-8","ignore")
     ret.append(atm)
     return False
 
@@ -240,7 +235,10 @@ cdef class PyAtomList:
     def __cinit__(self, str text,bool skip_space=True, bool normal_before=True):
         assert text is not None
         py_byte_string= text.encode("utf-8",'ignore')
-        self.alist=asplit(py_byte_string,len(py_byte_string),skip_space,normal_before)
+        cdef const char* txt=py_byte_string
+        cdef size_t byteslen=len(py_byte_string)
+        with nogil:
+            self.alist=asplit(txt,byteslen,skip_space,normal_before)
 
     def tolist(self)->List[PyAtom]:
         user_data=[]
@@ -269,9 +267,9 @@ cdef class PyAtomList:
 
 
 cdef class PyWord:
-    cdef str image
-    cdef size_t atom_s,atom_e
-    cdef set labels
+    cdef readonly str image
+    cdef readonly size_t atom_s,atom_e
+    cdef readonly set labels
 
     def __cinit__(self,image:str,size_t a_s,size_t a_e):
         self.image=image
@@ -349,12 +347,13 @@ cdef class DSegment:
         if self.segt==NULL:
             raise IOError(f"load {conffile} segment failed!")
 
-    def cut(self,strs:str,max_mode:bool =False):
+    def cut(self,strs:str,max_mode:bool=False):
         if not strs or len(strs)<1:
             return (None,None)
         alist=PyAtomList(strs)
         wlist=PyWordList()
-        wlist.wlist=token_str(self.segt,alist.alist,max_mode)
+        with nogil:
+            wlist.wlist=token_str(self.segt,alist.alist,max_mode)
         return (alist,wlist)
        
 

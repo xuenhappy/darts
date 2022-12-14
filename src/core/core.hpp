@@ -143,7 +143,6 @@ class AtomList {
 
 class Word {
    private:
-    const static std::string emptylabel;
     std::shared_ptr<std::vector<float>> att;  // att data
     std::set<std::string> labels;
     std::string image;
@@ -227,30 +226,29 @@ class Word {
      */
     const std::string& maxHlabel(std::function<float(const std::string&)> hx_func) const {
         if (labels.empty()) {
-            return emptylabel;
+            static std::string empty("");
+            return empty;
         }
         if (hx_func == nullptr) return *labels.begin();
-
-        float oreder     = -1e10;
-        std::string& ret = const_cast<std::string&>(emptylabel);
+        const std::string* ret = &(*labels.begin());
+        float oreder           = -1e10;
         for (auto it = labels.begin(); it != labels.end(); ++it) {
             float xorder = hx_func(*it);
             if (xorder > oreder) {
                 oreder = xorder;
-                ret    = *it;
+                ret    = &(*it);
             }
         }
-        return ret;
+        return *ret;
     }
 };
-const std::string Word::emptylabel = "";
 
 typedef struct _Cursor {
     struct _Cursor* prev;
     struct _Cursor* lack;
     std::shared_ptr<Word> val;
     int idx;
-}* Cursor;
+} * Cursor;
 
 /**
  * @brief create a cursor

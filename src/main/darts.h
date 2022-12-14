@@ -32,7 +32,7 @@ void init_darts_env();
 void destroy_darts_env();
 
 // normalize a str
-char* normalize_str(const char* str, size_t len, size_t* ret);
+void normalize_str(const char* str, size_t len, void* cpp_string_cache);
 // a unicode char type
 const char* chtype(const char* word);
 
