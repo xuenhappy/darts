@@ -45,8 +45,8 @@ void destroy_darts_env() { google::protobuf::ShutdownProtobufLibrary(); }
 // normalize a str
 char* normalize_str(const char* str, size_t len, size_t* ret) {
     if (!str) return NULL;
-    std::string normals = normalize(str);
-
+    std::string normals;
+    normalize(str, normals);
     *ret = normals.size();
     return strdup(normals.c_str());
 }
@@ -78,16 +78,28 @@ void free_alist(atomlist alist) {
 size_t alist_len(atomlist alist) { return alist == NULL ? 0 : alist->alist->size(); }
 void walk_alist(atomlist alist, walk_alist_hit hit, void* user_data) {
     if (!alist || !alist->alist) return;
-    atom_ atm;
+    atom_buffer buf;
     size_t len = alist->alist->size();
     for (size_t i = 0; i < len; ++i) {
         auto x        = alist->alist->at(i);
-        atm.image     = x->image.c_str();
-        atm.char_type = x->char_type.c_str();
-        atm.masked    = x->masked;
-        atm.st = x->st, atm.et = x->et;
-        if (hit(user_data, &atm)) break;
+        buf.image     = x->image.c_str();
+        buf.char_type = x->char_type.c_str();
+        buf.masked    = x->masked;
+        buf.st = x->st, buf.et = x->et;
+        if (hit(user_data, &buf)) break;
     }
+}
+int get_npos_atom(atomlist alist, size_t idx, atom_buffer* buffer) {
+    if (alist == NULL || alist->alist == NULL) return EXIT_FAILURE;
+    auto al = alist->alist;
+    if (idx >= al->size()) return EXIT_FAILURE;
+    auto x = al->at(idx);
+
+    buffer->image     = x->image.c_str();
+    buffer->char_type = x->char_type.c_str();
+    buffer->masked    = x->masked;
+    buffer->st = x->st, buffer->et = x->et;
+    return EXIT_SUCCESS;
 }
 // load the dregex from file
 dreg load_dregex(const char* path) {
@@ -122,9 +134,9 @@ class C_AtomIter_ : public dregex::StringIter {
         this->iter_func = iter_func;
     }
     void walks(std::function<bool(const std::string&, size_t)> hit) const {
-        atomiter_ret ret;
-        while (iter_func(user_data, &ret)) {
-            if (hit(ret.word, ret.postion)) break;
+        atomiter_buffer buf;
+        while (iter_func(user_data, &buf)) {
+            if (hit(buf.word, buf.postion)) break;
         }
     }
 };
@@ -135,7 +147,7 @@ void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data) {
     auto dat = regex->dat;
     C_AtomIter_ alist(user_data, atomlist);
     std::vector<const char*> tmpl;
-    dhit_ret ret;
+    dhit_buffer buf;
     auto hitfunc = [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
         tmpl.clear();
         if (labels != NULL && (!labels->empty())) {
@@ -143,10 +155,10 @@ void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data) {
                 tmpl.push_back(dat->getLabel(idx));
             }
         }
-        ret.s = s, ret.e = e;
-        ret.labels_size = tmpl.size();
-        ret.labels      = &tmpl[0];
-        return hit(user_data, &ret);
+        buf.s = s, buf.e = e;
+        buf.labels_size = tmpl.size();
+        buf.labels      = &tmpl[0];
+        return hit(user_data, &buf);
     };
     dat->parse(alist, hitfunc);
 }
@@ -175,11 +187,11 @@ class C_KvIter_ : public dregex::KvPairsIter {
         // init cache
         std::vector<const char*> keycache;
         std::vector<const char*> labelcache;
-        kviter_ret ret;
-        ret.key_cache   = &keycache;
-        ret.label_cache = &labelcache;
+        kviter_buffer buf;
+        buf.key_cache   = &keycache;
+        buf.label_cache = &labelcache;
         // set data and hit
-        while (iter_func(user_data, &ret)) {
+        while (iter_func(user_data, &buf)) {
             CStr_AtomIter_ iter(&keycache);
             hit(iter, &labelcache[0], labelcache.size());
             keycache.clear();
@@ -219,25 +231,49 @@ void free_segment(segment sg) {
 }
 
 void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data) {
-    wordlist_ret ret;
+    word_buffer buf;
     std::vector<const char*> ptrs;
+    buf.label_cache = &ptrs;
     for (size_t i = 0; i < wlist->wlist.size(); ++i) {
         auto w         = wlist->wlist[i];
-        ret.image      = w->text().c_str();
-        ret.atom_s     = w->st;
-        ret.atom_e     = w->et;
-        ret.label_nums = w->labels_nums();
+        buf.image      = w->text().c_str();
+        buf.atom_s     = w->st;
+        buf.atom_e     = w->et;
+        buf.label_nums = w->labels_nums();
         ptrs.clear();
         if (w->labels_nums() > 0) {
             for (auto& s : w->getLabels()) {
                 ptrs.emplace_back(s.c_str());
             }
         }
-        ret.labels = &ptrs[0];
-        if (hit(user_data, &ret)) break;
+        buf.labels = &ptrs[0];
+        if (hit(user_data, &buf)) break;
     }
     ptrs.clear();
 }
+size_t wlist_len(wordlist wlist) { return wlist == NULL ? 0 : wlist->wlist.size(); }
+// get npos word
+int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer) {
+    if (wlist == NULL || index >= wlist->wlist.size()) return EXIT_FAILURE;
+    std::vector<const char*>* ptrs;
+    ptrs   = static_cast<std::vector<const char*>*>(buffer->label_cache);
+    auto w = wlist->wlist[index];
+
+    buffer->image      = w->text().c_str();
+    buffer->atom_s     = w->st;
+    buffer->atom_e     = w->et;
+    buffer->label_nums = w->labels_nums();
+    ptrs->clear();
+    if (w->labels_nums() > 0) {
+        for (auto& s : w->getLabels()) {
+            ptrs->emplace_back(s.c_str());
+        }
+    }
+    buffer->labels = &(*ptrs)[0];
+
+    return EXIT_SUCCESS;
+}
+
 // token str
 wordlist token_str(segment sg, atomlist alist, bool max_mode) {
     if (!sg || !sg->segment || !alist || !alist->alist) return NULL;

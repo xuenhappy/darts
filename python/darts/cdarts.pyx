@@ -28,59 +28,63 @@ cdef extern from 'darts.h':
     char* normalize_str(const char* str, size_t len, size_t* ret)
     const char* chtype(const char* word)
 
-    ctypedef struct atom_:
+    ctypedef struct atom_buffer:
         const char* image
         size_t st
         size_t et
         const char* char_type
         bool masked    
     
-    ctypedef bool (*walk_alist_hit)(void* , atom_* )
+    ctypedef bool (*walk_alist_hit)(void* , atom_buffer* )
     atomlist asplit(const char* txt, size_t textlen, bool skip_space, bool normal_before)
     void free_alist(atomlist alist)
     void walk_alist(atomlist alist, walk_alist_hit hit, void* user_data)
+    int get_npos_atom(atomlist alist, size_t idx, atom_buffer* buffer)
     size_t alist_len(atomlist alist)
 
     
     dreg load_dregex(const char* path)
     void free_dregex(dreg regex)
 
-    ctypedef struct atomiter_ret:
+    ctypedef struct atomiter_buffer:
         const char* word
         size_t len
         size_t postion
     
-    ctypedef bool (*atomiter)(void*, atomiter_ret*)
+    ctypedef bool (*atomiter)(void*, atomiter_buffer*)
 
-    ctypedef struct dhit_ret:
+    ctypedef struct dhit_buffer:
         size_t s
         size_t e
         const char** labels
         size_t labels_size
     
-    ctypedef bool (*dhit)(void*, dhit_ret*)
-    ctypedef struct kviter_ret:
+    ctypedef bool (*dhit)(void*, dhit_buffer*)
+    ctypedef struct kviter_buffer:
         void* key_cache
         void* label_cache
        
 
-    ctypedef bool (*kviter)(void*, kviter_ret*)
+    ctypedef bool (*kviter)(void*, kviter_buffer*)
     void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data)
     int compile_regex(const char* outpath, kviter kvs, void* user_data)
 
 
-    ctypedef struct wordlist_ret:
+    ctypedef struct word_buffer:
+        void* label_cache
         size_t atom_s, atom_e
-        size_t code_s, code_e
         const char** labels
         size_t label_nums
         const char* image
     
 
-    ctypedef bool (*walk_wlist_hit)(void* , wordlist_ret* )
+    ctypedef bool (*walk_wlist_hit)(void* , word_buffer* )
     void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data)
     segment load_segment(const char* conffile, const char* mode, bool isdevel)
     void free_segment(segment sg)
+
+    size_t wlist_len(wordlist wlist)
+    int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer)
     wordlist token_str(segment sg, atomlist alist, bool max_mode)
     void free_wordlist(wordlist wlist)
 
@@ -117,7 +121,7 @@ def charDtype(unichr:str)->str:
 
 
 #define some callback function
-cdef bool atomiter_func(void* user_data,atomiter_ret *ret):
+cdef bool atomiter_func(void* user_data,atomiter_buffer *ret):
     str_iter:Iterator[tuple[str,int]]= (<tuple>user_data)[0]
     try:
         atom_info=<tuple>next(str_iter)
@@ -132,15 +136,15 @@ cdef bool atomiter_func(void* user_data,atomiter_ret *ret):
     
     
 
-cdef bool dregex_hit_callback(void* user_data, dhit_ret* ret):
+cdef bool dregex_hit_callback(void* user_data, dhit_buffer* buf):
     py_hit:Callable[[int,int,List[str]]] =(<tuple>user_data)[1]
     ret_labels:List[str] =[]
-    if ret.labels_size>0 and ret.labels:
-        for i in range(ret.labels_size):
-            if not ret.labels[i]:
+    if buf.labels_size>0 and buf.labels:
+        for i in range(buf.labels_size):
+            if not buf.labels[i]:
                 continue
-            ret_labels.append(ret.labels[i][:].decode("utf-8","ignore"))
-    py_hit(ret.s,ret.e,ret_labels)
+            ret_labels.append(buf.labels[i][:].decode("utf-8","ignore"))
+    py_hit(buf.s,buf.e,ret_labels)
     return False
 
 
@@ -153,9 +157,9 @@ cdef void copy_str_data(ctsr_list clist,list strs):
         clist.push_back(py_byte_string)
        
     
-cdef bool kviter_func(void* user_data, kviter_ret* ret):
-    key_cache=<ctsr_list>(ret.key_cache)
-    label_cache=<ctsr_list>(ret.label_cache)
+cdef bool kviter_func(void* user_data, kviter_buffer* buf):
+    key_cache=<ctsr_list>(buf.key_cache)
+    label_cache=<ctsr_list>(buf.label_cache)
 
     kviters:Iterator[Tuple[List[str],List[str]]]= (<tuple>user_data)[0]
     try:
@@ -208,6 +212,11 @@ cdef class PyAtom:
     cdef char_type
     cdef bool masked
 
+    def __cinit__(self,image:str,size_t st,size_t et):
+        self.image=image
+        self.st=st
+        self.et=et
+
     def __repr__(self) -> str:
         if self.masked:
             return "[MASK]"
@@ -215,17 +224,12 @@ cdef class PyAtom:
 
     
 
-
-
-
-cdef bool alist_hit_func(void* user_data, atom_* a):
+cdef bool alist_hit_func(void* user_data, atom_buffer* buf):
     ret=<list>user_data
-    atm=PyAtom();
-    atm.image=a.image[:].decode("utf-8","ignore")
-    atm.st=a.st
-    atm.et=a.et
-    atm.masked=a.masked
-    atm.char_type=a.char_type[:].decode("utf-8","ignore")
+    py_str=buf.image[:].decode("utf-8","ignore")
+    atm=PyAtom(py_str,buf.st,buf.et);
+    atm.masked=buf.masked
+    atm.char_type=buf.char_type[:].decode("utf-8","ignore")
     ret.append(atm)
     return False
 
@@ -238,10 +242,22 @@ cdef class PyAtomList:
         py_byte_string= text.encode("utf-8",'ignore')
         self.alist=asplit(py_byte_string,len(py_byte_string),skip_space,normal_before)
 
-    def tolist(self):
+    def tolist(self)->List[PyAtom]:
         user_data=[]
         walk_alist(self.alist,alist_hit_func, <void*> user_data)
         return user_data
+
+    def __getiterm__(self,idx:size_t)->PyAtom:
+        cdef atom_buffer buf
+        if get_npos_atom(self.alist,idx,&buf):
+            raise IndexError("index err %d"%idx)
+        py_str=buf.image[:].decode("utf-8","ignore")
+        atm=PyAtom(py_str,buf.st,buf.et);
+        atm.masked=buf.masked
+        atm.char_type=""
+        if buf.char_type!=NULL:
+            atm.char_type=buf.char_type[:].decode("utf-8","ignore")
+        return atm
 
     def size(self)->size_t:
         return alist_len(self.alist)
@@ -255,29 +271,67 @@ cdef class PyAtomList:
 cdef class PyWord:
     cdef str image
     cdef size_t atom_s,atom_e
-    cdef size_t code_s,code_e
     cdef set labels
 
+    def __cinit__(self,image:str,size_t a_s,size_t a_e):
+        self.image=image
+        self.atom_s=a_s
+        self.atom_e=a_e
+
     def __repr__(self) -> str:
-        return self.image
+        return "%s[%d,%d]"%(self.image,self.atom_s,self.atom_e)
    
-cdef bool wlist_hit_func(void* user_data, wordlist_ret* w):
+cdef bool wlist_hit_func(void* user_data, word_buffer* buf):
     ret=<list>user_data
-    word=PyWord();
-    word.image=w.image[:].decode("utf-8","ignore") if w.image!=NULL else ""
-    word.atom_s=w.atom_s
-    word.atom_e=w.atom_e
-    word.code_s=w.code_s
-    word.code_e=w.code_e
-    if w.label_nums>0 and w.labels!=NULL:
-        for i in range(w.label_nums):
-            label=w.labels[i]
+    py_str=buf.image[:].decode("utf-8","ignore") if buf.image!=NULL else ""
+    word=PyWord(py_str,buf.atom_s,buf.atom_e);
+    if buf.label_nums>0 and buf.labels!=NULL:
+        for i in range(buf.label_nums):
+            label=buf.labels[i]
             if label==NULL:
                 continue
             pylabel=label[:].decode("utf-8","ignore")
             word.labels.add(pylabel)
     ret.append(word)
     return False
+
+
+cdef class PyWordList:
+    cdef wordlist wlist
+
+    def __cinit__(self):
+        self.wlist=NULL
+
+    def tolist(self)->List[PyWord]:
+        if self.wlist==NULL: return []
+        ret_list=[]
+        walk_wlist(self.wlist, wlist_hit_func, <void*> ret_list)
+        return ret_list
+
+    def __getiterm__(self,index:size_t)->PyWord:
+        cdef word_buffer buf
+        cdef ctsr_list ptrs
+        buf.label_cache=<void *>(&ptrs);
+        if get_npos_word(self.wlist,index,&buf):
+            raise IndexError("index err %d"%index)
+        py_str=buf.image[:].decode("utf-8","ignore") if buf.image!=NULL else ""
+        word=PyWord(py_str,buf.atom_s,buf.atom_e);
+        if buf.label_nums>0 and buf.labels!=NULL:
+            for i in range(buf.label_nums):
+                label=buf.labels[i]
+                if label==NULL:
+                    continue
+                pylabel=label[:].decode("utf-8","ignore")
+                word.labels.add(pylabel)
+        return word
+        
+    def __sizeof__(self) -> int:
+        return wlist_len(self.wlist)
+
+    def __dealloc__(self):
+        free_wordlist(self.wlist)
+        self.wlist=NULL
+
 
 cdef class DSegment:
     cdef segment segt 
@@ -296,18 +350,13 @@ cdef class DSegment:
             raise IOError(f"load {conffile} segment failed!")
 
     def cut(self,strs:str,max_mode:bool =False):
-        if not strs or len(strs)<3:
-            return strs
+        if not strs or len(strs)<1:
+            return (None,None)
         alist=PyAtomList(strs)
-        cdef wordlist wlist=token_str(self.segt,alist.alist,max_mode)
-        try:
-            ret_list=[]
-            walk_wlist(wlist, wlist_hit_func, <void*> ret_list)
-            return ret_list
-        finally:
-            free_wordlist(wlist)
-
-
+        wlist=PyWordList()
+        wlist.wlist=token_str(self.segt,alist.alist,max_mode)
+        return (alist,wlist)
+       
 
     def __dealloc__(self):
         free_segment(self.segt)

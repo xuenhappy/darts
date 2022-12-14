@@ -68,8 +68,8 @@ class AtomList {
      */
     explicit AtomList(const std::string& str, bool skip_space = true, bool norm = false) {
         if (norm) {
-            std::string nstr = normalize(str);
-            this->str        = to_utf32(nstr);
+            std::string nstr;
+            this->str = to_utf32(normalize(str, nstr));
         } else {
             this->str = to_utf32(str);
         }
@@ -250,7 +250,7 @@ typedef struct _Cursor {
     struct _Cursor* lack;
     std::shared_ptr<Word> val;
     int idx;
-} * Cursor;
+}* Cursor;
 
 /**
  * @brief create a cursor

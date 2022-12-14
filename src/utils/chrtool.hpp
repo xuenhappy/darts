@@ -136,8 +136,8 @@ inline int initializeMap() {
  * @param str
  * @return std::string
  */
-inline std::string normalize(const std::string& str) {
-    std::stringstream output;
+inline std::string& normalize(const std::string& str, std::string& ret) {
+    ret.reserve(str.size() + 2);
     utf8_iter ITER;
     utf8_initEx(&ITER, str.c_str(), str.length());
     std::string tmps;
@@ -146,12 +146,12 @@ inline std::string normalize(const std::string& str) {
         tmps = utf8_getchar(&ITER);
         it   = _WordMap.find(tmps);
         if (it != _WordMap.end()) {
-            output << it->second;
-        } else {
-            output << tmps;
+            ret.append(it->second);
+            continue;
         }
+        ret.append(tmps);
     }
-    return output.str();
+    return ret;
 }
 
 #endif  // SRC_UTILS_NORM_CHR_HPP_

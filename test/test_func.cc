@@ -34,7 +34,8 @@ void testGetResource() {
 void testNormalization() {
     printf("----- test function %s-----------------\n", "testNormalization");
     std::string ori("这是一段123 ss中文测试；看】🅿Ａ,Ｂ,Ｃ,Ｄ,Ｅ,Ｆ,Ｇ,Ｈ,Ｉ,   Ｊ,Ｋ,Ｌ,Ｍ,Ｎ,Ｏ,看？ ss");
-    std::string normals = normalize(ori);
+    std::string normals;
+    normalize(ori, normals);
     std::cout << "ori: " << ori << std::endl;
     std::cout << "normal: " << normals << std::endl;
 }
