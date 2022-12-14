@@ -140,7 +140,7 @@ inline std::string& normalize(const std::string& str, std::string& ret) {
     ret.reserve(str.size() + 2);
     utf8_iter ITER;
     utf8_initEx(&ITER, str.c_str(), str.length());
-    std::string tmps;
+    const char* tmps;
     std::unordered_map<std::string, std::string>::const_iterator it;
     while (utf8_next(&ITER)) {
         tmps = utf8_getchar(&ITER);

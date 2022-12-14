@@ -199,8 +199,7 @@ typedef std::function<void(const std::string&, const std::string&, size_t, size_
 
 inline void atomSplit(const U32StrIter& str, asplit_hit_func accept) {
     size_t bufstart = 0, pos = 0;
-    std::string btype("");
-    std::string cbuffer;
+    std::string btype = "", cbuffer = "";
 
     auto hit = [&](int64_t code, const char* ct, size_t position) {
         pos         = position;
@@ -217,9 +216,8 @@ inline void atomSplit(const U32StrIter& str, asplit_hit_func accept) {
                 return;
             }
 
-            if (!cbuffer.empty()) {
-                accept(cbuffer, btype, bufstart, position);
-            }
+            if (!cbuffer.empty()) accept(cbuffer, btype, bufstart, position);
+
             bufstart = position;
             cbuffer.clear();
         }
@@ -234,9 +232,7 @@ inline void atomSplit(const U32StrIter& str, asplit_hit_func accept) {
         cbuffer.append(ct);
     };
     str.iter(hit);
-    if (!cbuffer.empty()) {
-        accept(cbuffer, btype, bufstart, pos + 1);
-    }
+    if (!cbuffer.empty()) accept(cbuffer, btype, bufstart, pos + 1);
 }
 /**
  * @brief 对原始字符串进行切分

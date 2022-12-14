@@ -56,9 +56,7 @@ class BigramDict {
     size_t avg_union_freq  = 0;
 
     double getSingleNlogProp(int widx) const {
-        if (widx < 0) {
-            return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq * 1.0 / 2));
-        }
+        if (widx < 0) return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq * 1.0 / 2));
         return log((1000.0 + max_single_freq) / (1.0 + freqs.at(widx)));
     }
 
@@ -356,12 +354,8 @@ class BigramDict {
 
     double wordDist(const char* pre, const char* next) const {
         if (pre == NULL || next == NULL) {
-            if (pre) {
-                return getSingleNlogProp(pre);
-            }
-            if (next) {
-                return getSingleNlogProp(next);
-            }
+            if (pre) return getSingleNlogProp(pre);
+            if (next) return getSingleNlogProp(next);
             return 0.0;
         }
         return getNlogProp(pre, next);
@@ -369,12 +363,8 @@ class BigramDict {
 
     double wordDist(int pre_idx, int next_idx) const {
         if (pre_idx < 0 || next_idx < 0) {
-            if (pre_idx < 0) {
-                return getSingleNlogProp(pre_idx);
-            }
-            if (next_idx < 0) {
-                return getSingleNlogProp(next_idx);
-            }
+            if (pre_idx >= 0) return getSingleNlogProp(pre_idx);
+            if (next_idx >= 0) return getSingleNlogProp(next_idx);
             return 0.0;
         }
         return getNlogProp(pre_idx, next_idx);

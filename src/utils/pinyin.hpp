@@ -103,9 +103,7 @@ inline int loadPinyin() {
  */
 inline const std::shared_ptr<PinyinInfo> pinyin(const std::string& word) {
     auto it = _WordPinyin.find(word);
-    if (it != _WordPinyin.end()) {
-        return it->second;
-    }
+    if (it != _WordPinyin.end()) return it->second;
     return nullptr;
 }
 
