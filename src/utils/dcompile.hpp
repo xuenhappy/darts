@@ -361,9 +361,8 @@ class Builder {
         // set labels
         auto& lables = this->trie->Labels;
         lables.resize(this->labels.size());
-        for (auto& kv : this->labels) {
-            lables[kv.second] = kv.first;
-        }
+        for (auto& kv : this->labels) lables[kv.second] = kv.first;
+
         return EXIT_SUCCESS;
     }
 };
@@ -388,9 +387,7 @@ inline int compile(const KvPairsIter& pairs, Trie& trie) {
  */
 inline int compile(const KvPairsIter& pairs, const std::string& pbfile) {
     Trie trie;
-    if (compile(pairs, trie)) {
-        return EXIT_FAILURE;
-    }
+    if (compile(pairs, trie)) return EXIT_FAILURE;
     return trie.writePb(pbfile);
 }
 

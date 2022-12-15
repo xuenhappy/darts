@@ -44,18 +44,12 @@ class Trie {
     // trans
     int64_t transitionWithRoot(int64_t nodePos, int64_t c) const {
         int64_t b = 0;
-        if (nodePos < this->Base.size()) {
-            b = this->Base[nodePos];
-        }
+        if (nodePos < this->Base.size()) b = this->Base[nodePos];
         auto p = b + c + 1;
         auto x = 0;
-        if (p < this->Check.size()) {
-            x = this->Check[p];
-        }
+        if (p < this->Check.size()) x = this->Check[p];
         if (b != x) {
-            if (nodePos == 0) {
-                return 0;
-            }
+            if (nodePos == 0) return 0;
             return -1;
         }
         return p;
@@ -174,9 +168,7 @@ class Trie {
      * @return const std::string&
      */
     const char* getLabel(size_t label_idx) const {
-        if (label_idx < this->Labels.size()) {
-            return this->Labels[label_idx].c_str();
-        }
+        if (label_idx < this->Labels.size()) return this->Labels[label_idx].c_str();
         return "";
     }
     /**
@@ -187,9 +179,7 @@ class Trie {
      */
     int64_t getCode(const std::string& word) const {
         auto it = this->CodeMap.find(word);
-        if (it == this->CodeMap.end()) {
-            return this->CodeMap.size() + 1;
-        }
+        if (it == this->CodeMap.end()) return this->CodeMap.size() + 1;
         return it->second;
     }
     /**
@@ -215,9 +205,7 @@ class Trie {
             if (!hitArray) return false;
             for (auto h : *hitArray) {
                 auto preIndex = (indexBufferPos - this->L[h]) % this->MaxLen;
-                if (hit(indexBufer[preIndex], position + 1, this->V[h])) {
-                    return true;
-                }
+                if (hit(indexBufer[preIndex], position + 1, this->V[h])) return true;
             }
             return false;
         });

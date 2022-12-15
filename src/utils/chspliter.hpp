@@ -67,22 +67,16 @@ inline int loadCharMap() {
     std::string prefix = "";
     while (std::getline(in, line)) {
         darts::trim(line);
-        if (line.empty()) {
-            continue;
-        }
+        if (line.empty()) continue;
         if (!strncmp(line.c_str(), head.c_str(), head.size())) {
             prefix = line.substr(head.size());
             darts::trim(prefix);
-            if (prefix.empty()) {
-                std::cerr << "WARN: Bad word type tag name" << line.substr(head.size()) << std::endl;
-            }
+            if (prefix.empty()) std::cerr << "WARN: Bad word type tag name" << line.substr(head.size()) << std::endl;
             continue;
         }
         utf8_iter ITER;
         utf8_initEx(&ITER, line.c_str(), line.length());
-        while (utf8_next(&ITER)) {
-            _charType[ITER.codepoint] = prefix;
-        }
+        while (utf8_next(&ITER)) _charType[ITER.codepoint] = prefix;
     }
     in.close();
     load_cjk_words_();
