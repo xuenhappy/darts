@@ -9,12 +9,12 @@ enable_static=get_option('link-static')
 if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
 endif
-extra_compile_args = ['-Wno-sign-compare','-Wno-deprecated-declarations']
-extra_link_args=[]
+extra_compile_args = ['-Wno-sign-compare','-Wno-deprecated-declarations','-fPIC']
+extra_link_args=['-Wl']
 if meson.get_compiler('c').get_id() == 'clang'
     if build_machine.system()=='darwin'
         extra_compile_args += ['-mmacosx-version-min=11.0','-std=c++17','-stdlib=libc++']
-        extra_link_args+=['-Wl','-w']
+        extra_link_args+=['-w']
     endif
 endif
 
@@ -109,6 +109,6 @@ if get_option('build-python')
         link_with : darts_lib.get_static_lib(),
         install : true, install_dir : cur_dir/'python/darts',
         cpp_args : extra_compile_args,c_args : extra_compile_args,
-        link_args: extra_link_args
+        link_args: extra_link_args 
     )
 endif
