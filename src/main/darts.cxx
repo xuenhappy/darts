@@ -19,10 +19,10 @@
 #include <vector>
 #include "../core/segment.hpp"
 #include "../impl/confparser.hpp"
+#include "../utils/biggram.hpp"
 #include "../utils/dcompile.hpp"
 #include "../utils/utill.hpp"
 #include "core/core.hpp"
-
 struct _dregex {
     dregex::Trie* dat;
 };
@@ -132,9 +132,8 @@ class C_AtomIter_ : public dregex::StringIter {
     }
     void walks(std::function<bool(const std::string&, size_t)> hit) const {
         atomiter_buffer buf;
-        while (iter_func(user_data, &buf)) {
+        while (iter_func(user_data, &buf))
             if (hit(buf.word, buf.postion)) break;
-        }
     }
 };
 
@@ -248,7 +247,7 @@ void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data) {
     }
     ptrs.clear();
 }
-size_t wlist_len(wordlist wlist) { return wlist == NULL ? 0 : wlist->wlist.size(); }
+size_t wlist_len(wordlist wlist) { return !wlist ? 0 : wlist->wlist.size(); }
 // get npos word
 int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer) {
     if (wlist == NULL || index >= wlist->wlist.size()) return EXIT_FAILURE;
@@ -285,6 +284,10 @@ void free_wordlist(wordlist wlist) {
         wlist->wlist.clear();
         delete wlist;
     }
+}
+int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir) {
+    if (!single_freq_dict || !union_freq_dict | !outdir) return EXIT_FAILURE;
+    return darts::BigramDict::buildDict(single_freq_dict, union_freq_dict, outdir);
 }
 
 #endif  // SRC_MAIN_DARTS4PY_HPP_

@@ -110,7 +110,8 @@ segment load_segment(const char* conffile, const char* mode, bool isdevel);
 void free_segment(segment sg);
 // token str
 wordlist token_str(segment sg, atomlist alist, bool max_mode);
-
+// build the biggram dict
+int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir);
 #ifdef __cplusplus
 }
 #endif  /* __cplusplus */

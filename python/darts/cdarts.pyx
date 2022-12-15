@@ -70,6 +70,8 @@ cdef extern from 'darts.h':
     void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data)
     int compile_regex(const char* outpath, kviter kvs, void* user_data)
 
+    int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir)
+
 
     ctypedef struct word_buffer:
         void* label_cache
@@ -111,7 +113,13 @@ def charDtype(unichr:str)->str:
     cdef const char* ret=chtype(data)
     return ret[:].decode('utf-8','ignore') if ret else ""
     
-   
+def build_gramdict_fromfile(single_freq_dict:str, union_freq_dict:str, outdir:str):
+    assert single_freq_dict!=None and union_freq_dict!=None and outdir!=None
+    single_pbytes=single_freq_dict.encode('utf-8','ignore')
+    union_pbytes=union_freq_dict.encode('utf-8','ignore')
+    outdir_pbytes=outdir.encode('utf-8','ignore')
+    if build_biggram_dict(single_pbytes,union_pbytes,outdir_pbytes):
+        raise IOError("build biggram dict failed!")
 
 
 
@@ -170,8 +178,7 @@ cdef bool kviter_func(void* user_data, kviter_buffer* buf):
 
 cdef class Dregex:
     cdef dreg reg 
-    __slots__=()
-
+   
     def __cinit__(self, path:str):
         assert path is not None,"path must be give"
         py_byte_string= path.encode("utf-8",'ignore')
@@ -230,8 +237,7 @@ cdef bool alist_hit_func(void* user_data, atom_buffer* buf):
 
 cdef class PyAtomList:
     cdef atomlist alist 
-    __slots__=()
-
+   
     def __cinit__(self, str text,bool skip_space=True, bool normal_before=True):
         assert text is not None
         py_byte_string= text.encode("utf-8",'ignore')
@@ -239,6 +245,8 @@ cdef class PyAtomList:
         cdef size_t byteslen=len(py_byte_string)
         with nogil:
             self.alist=asplit(txt,byteslen,skip_space,normal_before)
+        if self.alist==NULL:
+            raise MemoryError("alloc memort error!")
 
     def tolist(self)->List[PyAtom]:
         user_data=[]
