@@ -11,6 +11,14 @@ if get_option('cpp_std') != 'c++17'
 endif
 extra_compile_args = ['-Wno-sign-compare','-Wno-deprecated-declarations','-fPIC']
 extra_link_args=['-Wl']
+
+if get_option('debug-memory')
+    message('compile with dmalloc!')
+    extra_compile_args+=['-g','-ddmalloc','-ddmalloc_func_check']
+else
+    extra_compile_args+=['-O2']
+endif
+
 if meson.get_compiler('c').get_id() == 'clang'
     if build_machine.system()=='darwin'
         extra_compile_args += ['-mmacosx-version-min=11.0','-std=c++17','-stdlib=libc++']

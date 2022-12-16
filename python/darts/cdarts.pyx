@@ -1,4 +1,3 @@
-from libc.stdlib cimport free
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.string cimport string
@@ -96,9 +95,7 @@ atexit.register(destroy_darts_env)
 init_darts_env()
 
 
-def normalize(content:str)->str:
-    if content is None:
-        return None
+def normalize(str content not None)->str:
     py_byte_string= content.encode('utf-8','replace')
     cdef char* data = py_byte_string
     cdef size_t byteslen=len(py_byte_string)
@@ -107,14 +104,15 @@ def normalize(content:str)->str:
         normalize_str(data,byteslen,&cache)
     return cache.c_str().decode('utf-8','replace')
 
-def charDtype(unichr:str)->str:
+def charDtype(str unichr not None)->str:
     py_byte_string= unichr.encode('utf-8','ignore')
     cdef char* data= py_byte_string
     cdef const char* ret=chtype(data)
-    return ret[:].decode('utf-8','ignore') if ret else ""
+    if not ret:
+        return ""
+    return ret[:].decode('utf-8','ignore')
     
-def build_gramdict_fromfile(single_freq_dict:str, union_freq_dict:str, outdir:str):
-    assert single_freq_dict!=None and union_freq_dict!=None and outdir!=None
+def build_gramdict_fromfile(str single_freq_dict not None, str union_freq_dict not None, str outdir not None):
     single_pbytes=single_freq_dict.encode('utf-8','ignore')
     union_pbytes=union_freq_dict.encode('utf-8','ignore')
     outdir_pbytes=outdir.encode('utf-8','ignore')
@@ -124,7 +122,7 @@ def build_gramdict_fromfile(single_freq_dict:str, union_freq_dict:str, outdir:st
 
 
 #define some callback function
-cdef bool atomiter_func(void* user_data,atomiter_buffer *ret):
+cdef inline bool atomiter_func(void* user_data,atomiter_buffer *ret):
     str_iter:Iterator[tuple[str,int]]= (<tuple>user_data)[0]
     try:
         atom_info=<tuple>next(str_iter)
@@ -139,7 +137,7 @@ cdef bool atomiter_func(void* user_data,atomiter_buffer *ret):
     
     
 
-cdef bool dregex_hit_callback(void* user_data, dhit_buffer* buf):
+cdef inline bool dregex_hit_callback(void* user_data, dhit_buffer* buf):
     py_hit:Callable[[int,int,List[str]]] =(<tuple>user_data)[1]
     ret_labels:List[str] =[]
     if buf.labels_size>0 and buf.labels:
@@ -153,14 +151,14 @@ cdef bool dregex_hit_callback(void* user_data, dhit_buffer* buf):
 
 ctypedef const char* cstr
 ctypedef vector[cstr]* ctsr_list
-cdef void copy_str_data(ctsr_list clist,list strs):
+cdef inline void copy_str_data(ctsr_list clist,list strs):
     for i in range(len(strs)):
         item=<str>strs[i]
         py_byte_string= item.encode("utf-8",'ignore')
         clist.push_back(py_byte_string)
        
     
-cdef bool kviter_func(void* user_data, kviter_buffer* buf):
+cdef inline bool kviter_func(void* user_data, kviter_buffer* buf):
     key_cache=<ctsr_list>(buf.key_cache)
     label_cache=<ctsr_list>(buf.label_cache)
 
@@ -179,8 +177,7 @@ cdef bool kviter_func(void* user_data, kviter_buffer* buf):
 cdef class Dregex:
     cdef dreg reg 
    
-    def __cinit__(self, path:str):
-        assert path is not None,"path must be give"
+    def __cinit__(self, str path not None):
         py_byte_string= path.encode("utf-8",'ignore')
         self.reg=load_dregex(py_byte_string)
         if self.reg==NULL:
@@ -192,8 +189,8 @@ cdef class Dregex:
         parse(self.reg, atomiter_func, dregex_hit_callback , user_data)
 
     @staticmethod
-    def compile(outpath:str,kv_pairs:Iterator[Tuple[List[str],List[str]]]):
-        if outpath is None or kv_pairs is None:
+    def compile(str outpath not None,kv_pairs:Iterator[Tuple[List[str],List[str]]]):
+        if kv_pairs is None:
             return 
         py_byte_string= outpath.encode("utf-8",'ignore')
         cdef const char* path=py_byte_string
@@ -226,7 +223,7 @@ cdef class PyAtom:
 
     
 
-cdef bool alist_hit_func(void* user_data, atom_buffer* buf):
+cdef inline bool alist_hit_func(void* user_data, atom_buffer* buf):
     ret=<list>user_data
     py_str=buf.image[:].decode("utf-8","ignore")
     atm=PyAtom(py_str,buf.st,buf.et);
@@ -238,8 +235,7 @@ cdef bool alist_hit_func(void* user_data, atom_buffer* buf):
 cdef class PyAtomList:
     cdef atomlist alist 
    
-    def __cinit__(self, str text,bool skip_space=True, bool normal_before=True):
-        assert text is not None
+    def __cinit__(self, str text not None,bool skip_space=True, bool normal_before=True):
         py_byte_string= text.encode("utf-8",'ignore')
         cdef const char* txt=py_byte_string
         cdef size_t byteslen=len(py_byte_string)
@@ -287,7 +283,7 @@ cdef class PyWord:
     def __repr__(self) -> str:
         return "%s[%d,%d]"%(self.image,self.atom_s,self.atom_e)
    
-cdef bool wlist_hit_func(void* user_data, word_buffer* buf):
+cdef inline bool wlist_hit_func(void* user_data, word_buffer* buf):
     ret=<list>user_data
     py_str=buf.image[:].decode("utf-8","ignore") if buf.image!=NULL else ""
     word=PyWord(py_str,buf.atom_s,buf.atom_e);
@@ -342,9 +338,7 @@ cdef class PyWordList:
 cdef class DSegment:
     cdef segment segt 
 
-    def __cinit__(self,conffile:str,mode:str,isdev:bool):
-        if conffile is None or len(conffile)<2:
-            raise IOError("conf file must given!")
+    def __cinit__(self,str conffile not None,str mode,bool isdev=False):
         py_bytes=conffile.encode("utf-8","ignore")
         cdef const char* confpath=py_bytes
         cdef const char* modstr=NULL

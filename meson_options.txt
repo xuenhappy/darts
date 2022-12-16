@@ -1,2 +1,3 @@
 option('build-python', type : 'boolean', value : true)
 option('link-static', type : 'boolean', value : true)
+option('debug-memory',type:'boolean',value:false)

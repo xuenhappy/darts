@@ -12,7 +12,9 @@
  */
 #ifndef SRC_MAIN_DARTS4PY_HPP_
 #define SRC_MAIN_DARTS4PY_HPP_
-#include "./darts.h"
+#ifdef dmalloc
+#include <dmalloc.h>
+#endif
 #include <string.h>
 #include <cstddef>
 #include <cstdlib>
@@ -22,6 +24,7 @@
 #include "../utils/biggram.hpp"
 #include "../utils/dcompile.hpp"
 #include "../utils/utill.hpp"
+#include "./darts.h"
 #include "core/core.hpp"
 struct _dregex {
     dregex::Trie* dat;
