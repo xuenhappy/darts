@@ -9,8 +9,8 @@ enable_static=get_option('link-static')
 if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
 endif
-extra_compile_args = ['-Wno-sign-compare','-Wno-deprecated-declarations','-fPIC']
-extra_link_args=['-Wl']
+extra_compile_args = ['-Wno-sign-compare','-Wno-deprecated-declarations']
+extra_link_args=['-w']
 
 if get_option('debug-memory')
     message('compile with dmalloc!')
@@ -19,12 +19,15 @@ else
     extra_compile_args+=['-O2']
 endif
 
-if meson.get_compiler('c').get_id() == 'clang'
-    if build_machine.system()=='darwin'
+if build_machine.system()=='darwin'
+    if meson.get_compiler('c').get_id() == 'clang'
         extra_compile_args += ['-mmacosx-version-min=11.0','-std=c++17','-stdlib=libc++']
-        extra_link_args+=['-w']
     endif
 endif
+
+
+    
+
 
 message('check the deps libray.....')
 cc = meson.get_compiler('cpp')
@@ -37,7 +40,7 @@ if not fmt_dep.found()
     )
 endif
 
-onnxrt_dep=dependency('onnxruntime',version:'1.12.1',required:false)
+onnxrt_dep=dependency('onnxruntime',version:'>=1.12.1',required:false)
 if not onnxrt_dep.found()
     onnx_dir='/opt/onnxruntime'
     onnxrt_dep = declare_dependency(
@@ -84,7 +87,7 @@ endforeach
 
 
 my_proto_deb=declare_dependency(
-    link_with : [static_library('proto',proto_sources,dependencies:proto_dep,cpp_args : extra_compile_args,c_args : extra_compile_args)],
+    link_with : [static_library('proto',proto_sources,dependencies:proto_dep,cpp_args : extra_compile_args,c_args : extra_compile_args, pic:true)],
     link_args : ['-ldl' ],
     sources:[proto_headers]
 )
@@ -97,12 +100,14 @@ incdir = include_directories('src')
 darts_lib=both_libraries('darts', 'src/main/darts.cxx', 
     version : '1.2.3', soversion : '0',
     dependencies:base_deps,include_directories : incdir,
-    cpp_args : extra_compile_args,c_args : extra_compile_args
+    cpp_args : extra_compile_args,c_args : extra_compile_args,
+    pic:true
 )
 
 darts_test_exe = executable('darts_test','test/test_func.cc',
     dependencies:base_deps,include_directories : incdir,
-    cpp_args : extra_compile_args,c_args : extra_compile_args
+    cpp_args : extra_compile_args,c_args : extra_compile_args,
+    build_rpath:'/opt/onnxruntime/lib'
 )
 if get_option('build-python')
     message('gen cython so...')
@@ -117,6 +122,7 @@ if get_option('build-python')
         link_with : darts_lib.get_static_lib(),
         install : true, install_dir : cur_dir/'python/darts',
         cpp_args : extra_compile_args,c_args : extra_compile_args,
-        link_args: extra_link_args 
+        link_args: extra_link_args,
+        install_rpath:'$ORIGIN'
     )
 endif

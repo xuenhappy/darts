@@ -12,15 +12,15 @@
 ## Install
 
 ```bash
-1. 安装onnxruntime依赖,并设置好lib路径，ubuntu可以设置ld.so.conf或者ld_libray_path
-2. pip install darts.whl
+1. pip install darts.whl
+2. if you need use devel package you must install depence package yourself
 ```
 
 ## Compile
 
 ```bash
 1. 编译安装需要安装依赖，具体依赖参见cmakelist文件或者meson文件
-2. 建议全部依赖都必须有静态依赖包同时开启了-fPIC ,这样生成的so文件可以更加方便的运行
+2. 建议全部依赖都必须有静态依赖包同时开启了-fPIC 或则set(CMAKE_POSITION_INDEPENDENT_CODE ON) ,这样生成的so文件可以更加方便的运行
 3. 使用cmake或者meson进行安装
 4. 进入python目录编译python的安装包文件
 

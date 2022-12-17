@@ -15,6 +15,7 @@ from setuptools.command.build_py import build_py as _build_py
 from setuptools import setup, find_packages
 import codecs
 import os
+import shutil
 
 
 def long_description():
@@ -23,15 +24,24 @@ def long_description():
     return long_description
 
 
+def copy_follow_symlinks(src, dstDir):
+    shutil.copy(src, dstDir, follow_symlinks=False)
+    if os.path.islink(src):
+        return copy_follow_symlinks(os.path.realpath(src), dstDir)
+
+
 class build_py(_build_py):
     """Custom build command."""
 
     def build_package_data(self):
         super().build_package_data()
         build_dir = os.path.join(*([self.build_lib]))
-        import shutil
         scripts_dir = os.path.split(os.path.realpath(__file__))[0]
         shutil.copytree(os.path.join(scripts_dir, '../data'), os.path.join(build_dir, 'darts/data'))
+        try:
+            copy_follow_symlinks('/opt/onnxruntime/lib/libonnxruntime.so', os.path.join(build_dir, 'darts/'))
+        except:
+            raise Exception("copy onnx libliary error ,this may caulase so not useless!")
 
 
 setarg = setup(
