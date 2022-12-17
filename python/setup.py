@@ -11,16 +11,21 @@ Modified By: Xu En (xuen@mokahr.com)
 Copyright 2021 - 2022 Your Company, Moka
 '''
 
-from setuptools.command.build_py import build_py as _build_py
-from setuptools import setup, find_packages
 import codecs
 import os
 import shutil
 
+from setuptools import Extension, find_packages, setup
+from setuptools.command.build_py import build_py as _build_py
+from setuptools.dist import Distribution
+
+_scripts_dir = os.path.split(os.path.realpath(__file__))[0]
+
 
 def long_description():
-    with codecs.open('../README.md', 'r', 'utf-8') as f:
-        long_description = f.read()
+    reamdme = os.path.join(_scripts_dir, '../README.md')
+    with codecs.open(reamdme, 'r', 'utf-8') as fp:
+        long_description = fp.read()
     return long_description
 
 
@@ -30,22 +35,30 @@ def copy_follow_symlinks(src, dstDir):
         return copy_follow_symlinks(os.path.realpath(src), dstDir)
 
 
+def wheel_name(**kwargs):
+    fuzzlib = Extension('fuzzlib', ['fuzz.pyx'])  # the files don't need to exist
+    # create a fake distribution from arguments
+    dist = Distribution(attrs={**kwargs, 'ext_modules': [fuzzlib]})
+    # finalize bdist_wheel command
+    bdist_wheel_cmd = dist.get_command_obj('bdist_wheel')
+    bdist_wheel_cmd.ensure_finalized()
+    return {'plat_name': bdist_wheel_cmd.plat_name, 'python_tag': bdist_wheel_cmd.python_tag}
+
+
 class build_py(_build_py):
     """Custom build command."""
 
     def build_package_data(self):
         super().build_package_data()
         build_dir = os.path.join(*([self.build_lib]))
-        scripts_dir = os.path.split(os.path.realpath(__file__))[0]
-        shutil.copytree(os.path.join(scripts_dir, '../data'), os.path.join(build_dir, 'darts/data'))
+        shutil.copytree(os.path.join(_scripts_dir, '../data'), os.path.join(build_dir, 'darts/data'))
         try:
             copy_follow_symlinks('/opt/onnxruntime/lib/libonnxruntime.so', os.path.join(build_dir, 'darts/'))
         except:
             raise Exception("copy onnx libliary error ,this may caulase so not useless!")
 
 
-setarg = setup(
-    name='darts',
+setup_kwargs = dict(name='darts',
     author='Xu En',
     author_email='xuen@mokahr.com',
     description='darts python wrapper',
@@ -69,5 +82,6 @@ setarg = setup(
     '': ['*.*'],
     },
     include_package_data=True,
-    python_requires='>=3.8, <=3.10',
-)
+    python_requires='>=3.8, <=3.10')
+
+setup(**setup_kwargs, options={'bdist_wheel': wheel_name(**setup_kwargs)})
