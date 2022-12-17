@@ -365,6 +365,8 @@ class WordPice : public SegmentPlugin {
         return codemap::emptylabel;
     }
 };
+const char* WordPice::BASE_DIR = "base.dir";
+REGISTER_Service(WordPice);
 
 class TypeEncoder : public SegmentPlugin {
    public:
@@ -470,6 +472,8 @@ class LabelEncoder : public TypeEncoder {
         return codemap::emptylabel;
     }
 };
+const char* LabelEncoder::LABEL_HX_FILE = "hx.file";
+REGISTER_Service(LabelEncoder);
 
 /**
  * pinyin标注
@@ -527,6 +531,7 @@ class PinyinEncoder : public TypeEncoder {
         return codemap::emptylabel;
     }
 };
+REGISTER_Service(PinyinEncoder);
 
 }  // end namespace darts
 

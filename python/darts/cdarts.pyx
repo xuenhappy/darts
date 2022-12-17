@@ -2,6 +2,7 @@ from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.map cimport map
+from libcpp.pair cimport pair
 import atexit
 from typing import Iterator,Callable,List,Iterable,Tuple
 
@@ -92,14 +93,14 @@ cdef extern from 'darts.h':
     wordlist token_str(segment sg, atomlist alist, bool max_mode) nogil
     void free_wordlist(wordlist wlist)
 
-    wtype_encoder get_wtype_encoder(void* map_param)
+    wtype_encoder get_wtype_encoder(void* map_param,const char* type_cls_name)
     void encode_wlist_type(wtype_encoder encoder, wordlist wlist, void* int_vector_buf) nogil
     void free_wtype_encoder(wtype_encoder encoder)
     size_t max_wtype_nums(wtype_encoder encoder)
     const char* decode_wtype(wtype_encoder encoder,int wtype)
 
-    alist_encoder get_alist_encoder(void* map_param)
-    void encode_alist(alist_encoder encoder, atomlist alist, void* int_vector_buf) nogil
+    alist_encoder get_alist_encoder(void* map_param,const char* type_cls_name)
+    void encode_alist(alist_encoder encoder, atomlist alist, void* int_pair_vector_buf) nogil
     void free_alist_encoder(alist_encoder encoder)
     size_t max_acode_nums(alist_encoder encoder) 
     const char* decode_atype(alist_encoder encoder,int atype)
@@ -383,9 +384,12 @@ cdef class DSegment:
 cdef class AtomCodec:
     cdef alist_encoder encoder
 
-    def __cinit__(self, dict str_params not None):
+    def __cinit__(self, dict str_params not None,str cls_name=None):
+        if cls_name is None:
+            cls_name="WordPice"
         cdef map[string,string] param=str_params
-        self.encoder=get_alist_encoder(&param)
+        py_bytes=cls_name.encode("utf-8")
+        self.encoder=get_alist_encoder(&param,py_bytes)
         if self.encoder==NULL:
             raise IOError("init atom codex failed fromparam=",str_params)
 
@@ -399,7 +403,7 @@ cdef class AtomCodec:
         return ""
 
     def encode(self,PyAtomList alist not None):
-        cdef vector[int] buf
+        cdef vector[pair[int,int]] buf
         with nogil:
             encode_alist(self.encoder,alist.alist,&buf)
         return buf
@@ -414,9 +418,10 @@ cdef class AtomCodec:
 cdef class WordCodec:
     cdef wtype_encoder encoder
 
-    def __cinit__(self,dict str_params not None):
+    def __cinit__(self,dict str_params not None,str cls_name not None):
+        py_bytes=cls_name.encode("utf-8")
         cdef map[string,string] param=str_params
-        self.encoder=get_wtype_encoder(&param)
+        self.encoder=get_wtype_encoder(&param,py_bytes)
         if self.encoder==NULL:
             raise IOError("init word codex failed fromparam=",str_params)
 

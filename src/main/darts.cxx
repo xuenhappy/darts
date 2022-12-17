@@ -12,7 +12,10 @@
  */
 #ifndef SRC_MAIN_DARTS4PY_HPP_
 #define SRC_MAIN_DARTS4PY_HPP_
+#include <iostream>
+#include <map>
 #include <memory>
+#include <utility>
 #ifdef dmalloc
 #include <dmalloc.h>
 #endif
@@ -297,47 +300,101 @@ int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict
 }
 
 struct _alist_encoder {
-    std::shared_ptr<darts::WordPice> piece;
+    darts::WordPice* piece;
 };
 struct _wtype_encoder {
-    std::shared_ptr<darts::TypeEncoder> encoder;
+    darts::TypeEncoder* encoder;
 };
 
-wtype_encoder get_wtype_encoder(void* map_param) { return NULL; }
+wtype_encoder get_wtype_encoder(void* map_param, const char* type_cls_name) {
+    if (!map_param || !type_cls_name) return NULL;
+    darts::SegmentPlugin* plugin = darts::SegmentPluginRegisterer::GetInstanceByName(type_cls_name);
+    if (!plugin) {
+        std::cerr << "no wtype encoder found! " << type_cls_name << std::endl;
+        return NULL;
+    }
+
+    std::map<std::string, std::string>* params = static_cast<std::map<std::string, std::string>*>(map_param);
+    if (!params) {
+        std::cerr << "param must map[string,string]" << std::endl;
+        return NULL;
+    }
+    wtype_encoder encoder = new struct _wtype_encoder;
+    encoder->encoder      = static_cast<darts::TypeEncoder*>(plugin);
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> plugins;
+    if (!encoder->encoder || encoder->encoder->initalize(*params, plugins)) {
+        free_wtype_encoder(encoder);
+        encoder = NULL;
+    }
+    return encoder;
+}
 void encode_wlist_type(wtype_encoder encoder, wordlist wlist, void* int_vector_buf) {
-    if (!encoder || encoder->encoder == nullptr || !wlist || wlist->wlist.empty() || !int_vector_buf) return;
+    if (!encoder || !encoder->encoder || !wlist || wlist->wlist.empty() || !int_vector_buf) return;
     std::vector<int>& buf = *(static_cast<std::vector<int>*>(int_vector_buf));
     buf.reserve(wlist->wlist.size());
     auto& codec = *(encoder->encoder);
     for (auto w : wlist->wlist) buf.emplace_back(codec.encode(w));
 }
 size_t max_wtype_nums(wtype_encoder encoder) {
-    return !encoder || encoder->encoder == nullptr ? 0 : encoder->encoder->getLabelSize();
+    return !encoder || !encoder->encoder ? 0 : encoder->encoder->getLabelSize();
 }
 
 void free_wtype_encoder(wtype_encoder encoder) {
     if (encoder) {
-        encoder->encoder = nullptr;
+        if (encoder->encoder) delete encoder->encoder;
+        encoder->encoder = NULL;
         delete encoder;
     }
 }
 const char* decode_wtype(wtype_encoder encoder, int wtype) {
-    return !encoder || encoder->encoder == nullptr ? NULL : encoder->encoder->decode(wtype).c_str();
+    return !encoder || !encoder->encoder ? NULL : encoder->encoder->decode(wtype).c_str();
 }
 // wlist encoder
-alist_encoder get_alist_encoder(void* map_param) { return NULL; }
-void encode_alist(alist_encoder encoder, atomlist alist, void* int_vector_buf);
+alist_encoder get_alist_encoder(void* map_param, const char* type_cls_name) {
+    if (!map_param || !type_cls_name) return NULL;
+    darts::SegmentPlugin* plugin = darts::SegmentPluginRegisterer::GetInstanceByName(type_cls_name);
+    if (!plugin) {
+        std::cerr << "no alist encoder found! " << type_cls_name << std::endl;
+        return NULL;
+    }
+    std::map<std::string, std::string>* params = static_cast<std::map<std::string, std::string>*>(map_param);
+    if (!params) {
+        std::cerr << "param must map[string,string]" << std::endl;
+        return NULL;
+    }
+    alist_encoder encoder = new struct _alist_encoder;
+    encoder->piece        = static_cast<darts::WordPice*>(plugin);
+    std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> plugins;
+    if (!encoder->piece || encoder->piece->initalize(*params, plugins)) {
+        free_alist_encoder(encoder);
+        encoder = NULL;
+    }
+    return encoder;
+}
+void encode_alist(alist_encoder encoder, atomlist alist, void* int_pair_vector_buf) {
+    if (!encoder || !encoder->piece || !alist || !alist->alist || !int_pair_vector_buf) return;
+    using pair_vector_buf = std::vector<std::pair<int, int>>;
+    pair_vector_buf* buf  = static_cast<pair_vector_buf*>(int_pair_vector_buf);
+    if (!buf) {
+        std::cerr << "buf must vector[pair[int,int]]" << std::endl;
+        return;
+    }
+    buf->reserve(alist->alist->size() * 2 + 2);
+    auto ret_hit = [buf](int code, int atom_postion) { buf->emplace_back(std::make_pair(code, atom_postion)); };
+    encoder->piece->encode(*(alist->alist), ret_hit);
+}
 void free_alist_encoder(alist_encoder encoder) {
     if (encoder) {
-        encoder->piece = nullptr;
+        if (encoder->piece) delete encoder->piece;
+        encoder->piece = NULL;
         delete encoder;
     }
 }
 size_t max_acode_nums(alist_encoder encoder) {
-    return !encoder || encoder->piece == nullptr ? 0 : encoder->piece->getLabelSize();
+    return !encoder || !encoder->piece ? 0 : encoder->piece->getLabelSize();
 }
 const char* decode_atype(alist_encoder encoder, int atype) {
-    return !encoder || encoder->piece == nullptr ? NULL : encoder->piece->decode(atype).c_str();
+    return !encoder || !encoder->piece ? NULL : encoder->piece->decode(atype).c_str();
 }
 
 #endif  // SRC_MAIN_DARTS4PY_HPP_
