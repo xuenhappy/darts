@@ -20,11 +20,11 @@ extern "C" {
 #include <stdlib.h>
 
 typedef struct _dregex* dreg;
-typedef struct _decider* decider;
 typedef struct _atomlist* atomlist;
 typedef struct _wordlist* wordlist;
 typedef struct _segment* segment;
-typedef struct _encoder* encoder;
+typedef struct _alist_encoder* alist_encoder;
+typedef struct _wtype_encoder* wtype_encoder;
 
 // first do
 void init_darts_env();
@@ -112,6 +112,15 @@ void free_segment(segment sg);
 wordlist token_str(segment sg, atomlist alist, bool max_mode);
 // build the biggram dict
 int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir);
+// alist_encoder
+wtype_encoder get_wtype_encoder(void* map_param);
+void encode_wlist_type(wtype_encoder encoder, wordlist wlist, void* int_vector_buf);
+void free_wtype_encoder(wtype_encoder);
+// wlist encoder
+alist_encoder get_alist_encoder(void* map_param);
+void encode_alist(alist_encoder encoder, atomlist alist, void* int_vector_buf);
+void free_alist_encoder(alist_encoder);
+
 #ifdef __cplusplus
 }
 #endif  /* __cplusplus */
