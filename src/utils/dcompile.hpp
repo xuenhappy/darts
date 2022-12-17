@@ -56,16 +56,12 @@ inline void insertSorted(std::vector<int64_t>& s, int64_t e) { s.insert(std::upp
 
 // add emit
 inline void addEmit(State* s, int64_t keyword) {
-    if (keyword != INT64_MIN) {
-        insertSorted(s->emits, keyword);
-    }
+    if (keyword != INT64_MIN) insertSorted(s->emits, keyword);
 }
 
 // get l code
 inline int64_t getMaxValueID(State* s) {
-    if (s->emits.empty()) {
-        return INT64_MIN;
-    }
+    if (s->emits.empty()) return INT64_MIN;
     return s->emits.back();
 }
 
@@ -79,9 +75,7 @@ inline void setFailure(State* s, State* failState, std::vector<int64_t>& fail) {
 inline State* nextState(State* s, int64_t character, bool ignoreRootState) {
     auto it = s->success.find(character);
     if (it == s->success.end()) {
-        if ((!ignoreRootState) && (s->depth == 0)) {
-            return s;
-        }
+        if ((!ignoreRootState) && (s->depth == 0)) return s;
         return NULL;
     }
     return it->second;
@@ -158,6 +152,7 @@ class Builder {
         while (!queue.empty()) {
             auto currentState = queue.front();
             queue.pop();
+
             for (auto& kv : currentState->success) {
                 auto transition  = kv.first;
                 auto targetState = nextState(currentState, transition, false);
@@ -194,9 +189,8 @@ class Builder {
             });
             addEmit(currentState, index);
             t->L.push_back(lens);
-            if (lens > t->MaxLen) {
-                t->MaxLen = lens;
-            }
+            if (lens > t->MaxLen) t->MaxLen = lens;
+
             maxCode += lens;
             auto lables_idx = new std::set<int64_t>();
             for (size_t i = 0; i < label_size; ++i) {
@@ -333,7 +327,9 @@ class Builder {
 
     int build(const KvPairsIter& kvs) {
         int ret;
+        std::cout << "buiding code..." << std::endl;
         size_t maxCode = addAllKeyword(kvs, &ret);
+        std::cout << "finish build code maxcode=" << maxCode << std::endl;
         if (ret) {
             std::cerr << "ERROR: build trie failed!" << std::endl;
             return EXIT_FAILURE;
@@ -343,25 +339,28 @@ class Builder {
             return EXIT_SUCCESS;
         }
         // build double array tire base on tire
+        std::cout << "buiding state..." << std::endl;
         resize(maxCode + 10);
         this->trie->Base[0] = 1;
         auto siblings       = fetch(this->rootState);
         if (!siblings->empty()) {
             std::queue<std::pair<int64_t, std::vector<std::pair<int64_t, State*>>*>> queue;
             queue.push(std::pair<int64_t, std::vector<std::pair<int64_t, State*>>*>(-1, siblings));
-            while (!queue.empty()) {
-                insert(queue);
-            }
+            while (!queue.empty()) insert(queue);
+
         } else {
             delete siblings;
         }
+        std::cout << "construct failure states..." << std::endl;
         // build failure table and merge output table
         constructFailureStates();
+        std::cout << "buiding darray..." << std::endl;
         zipWeight();
         // set labels
         auto& lables = this->trie->Labels;
         lables.resize(this->labels.size());
         for (auto& kv : this->labels) lables[kv.second] = kv.first;
+        std::cout << "finish build darray!!" << std::endl;
 
         return EXIT_SUCCESS;
     }

@@ -113,7 +113,7 @@ init_darts_env()
 
 def normalize(str content not None)->str:
     py_byte_string= content.encode('utf-8','replace')
-    cdef char* data = py_byte_string
+    cdef const char* data = py_byte_string
     cdef size_t byteslen=len(py_byte_string)
     cdef string cache
     with nogil:
@@ -121,9 +121,8 @@ def normalize(str content not None)->str:
     return cache.c_str().decode('utf-8','replace')
 
 def charDtype(str unichr not None)->str:
-    py_byte_string= unichr.encode('utf-8','ignore')
-    cdef char* data= py_byte_string
-    cdef const char* ret=chtype(data)
+    py_bytes=unichr.encode('utf-8','ignore')
+    cdef const char* ret=chtype(py_bytes)
     if not ret:
         return ""
     return ret[:].decode('utf-8','ignore')
@@ -139,11 +138,10 @@ def build_gramdict_fromfile(str single_freq_dict not None, str union_freq_dict n
 
 #define some callback function
 cdef inline bool atomiter_func(void* user_data,atomiter_buffer *ret):
-    str_iter:Iterator[tuple[str,int]]= (<tuple>user_data)[0]
+    str_iter:Iterator[tuple[bytes,int]]= (<tuple>user_data)[0]
     try:
         atom_info=<tuple>next(str_iter)
-        chrs=<str>atom_info[0]
-        py_byte_string= chrs.encode('utf-8','replace')
+        py_byte_string=<bytes>atom_info[0]
         ret.word=<char*>py_byte_string
         ret.len=len(py_byte_string)
         ret.postion=<size_t>atom_info[1]
@@ -167,22 +165,19 @@ cdef inline bool dregex_hit_callback(void* user_data, dhit_buffer* buf):
 
 ctypedef const char* cstr
 ctypedef vector[cstr]* ctsr_list
-cdef inline void copy_str_data(ctsr_list clist,list strs):
-    for i in range(len(strs)):
-        item=<str>strs[i]
-        py_byte_string= item.encode("utf-8",'ignore')
-        clist.push_back(py_byte_string)
-       
+
     
 cdef inline bool kviter_func(void* user_data, kviter_buffer* buf):
-    key_cache=<ctsr_list>(buf.key_cache)
-    label_cache=<ctsr_list>(buf.label_cache)
+    cdef ctsr_list key_cache=<ctsr_list>(buf.key_cache)
+    cdef ctsr_list label_cache=<ctsr_list>(buf.label_cache)
 
     kviters:Iterator[Tuple[List[str],List[str]]]= (<tuple>user_data)[0]
     try:
         kv_info=<tuple>next(kviters)
-        copy_str_data(key_cache,<list>(kv_info[0]))
-        copy_str_data(label_cache,<list>(kv_info[1]))
+        for iterm in (<list>(kv_info[0])):
+            key_cache.push_back(<cstr>iterm)
+        for iterm in (<list>(kv_info[1])):
+            label_cache.push_back(<cstr>iterm)
     except StopIteration:
         return False
 
@@ -199,17 +194,16 @@ cdef class Dregex:
         if self.reg==NULL:
             raise IOError("load %s regex file failed!"%path)
 
-    def parse(self, atoms:Iterable[str],hit:Callable[[int,int,List[str]]]):
+    def parse(self, atoms:Iterable[bytes],hit:Callable[[int,int,List[str]]]):
         py_user_data=(iter(atoms),hit)
         cdef void* user_data =<void*>py_user_data
         parse(self.reg, atomiter_func, dregex_hit_callback , user_data)
 
     @staticmethod
-    def compile(str outpath not None,kv_pairs:Iterator[Tuple[List[str],List[str]]]):
+    def compile(str outpath not None,kv_pairs:Iterator[Tuple[List[bytes],List[bytes]]]):
         if kv_pairs is None:
             return 
-        py_byte_string= outpath.encode("utf-8",'ignore')
-        cdef const char* path=py_byte_string
+        path=outpath.encode("utf-8",'ignore')
         pydata=(kv_pairs,)
         if compile_regex(path,kviter_func,<void*>pydata):
             raise IOError("compile and write [%s] failed!"%outpath)
@@ -355,12 +349,11 @@ cdef class DSegment:
     cdef segment segt 
 
     def __cinit__(self,str conffile not None,str mode,bool isdev=False):
-        py_bytes=conffile.encode("utf-8","ignore")
-        cdef const char* confpath=py_bytes
+        confpath=conffile.encode("utf-8","ignore")
         cdef const char* modstr=NULL
         if mode:
-            py_bytes=mode.encode("utf-8","ignore")
-            modstr=py_bytes
+            mode_bytes=mode.encode("utf-8","ignore")
+            modstr=mode_bytes
         self.segt=load_segment(confpath, modstr, isdev)
         if self.segt==NULL:
             raise IOError(f"load {conffile} segment failed!")
@@ -419,8 +412,8 @@ cdef class WordCodec:
     cdef wtype_encoder encoder
 
     def __cinit__(self,dict str_params not None,str cls_name not None):
-        py_bytes=cls_name.encode("utf-8")
         cdef map[string,string] param=str_params
+        py_bytes=cls_name.encode("utf-8")
         self.encoder=get_wtype_encoder(&param,py_bytes)
         if self.encoder==NULL:
             raise IOError("init word codex failed fromparam=",str_params)
