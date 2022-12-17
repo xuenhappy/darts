@@ -12,6 +12,7 @@
  */
 #ifndef SRC_MAIN_DARTS4PY_HPP_
 #define SRC_MAIN_DARTS4PY_HPP_
+#include <memory>
 #ifdef dmalloc
 #include <dmalloc.h>
 #endif
@@ -21,11 +22,13 @@
 #include <vector>
 #include "../core/segment.hpp"
 #include "../impl/confparser.hpp"
+#include "../impl/encoder.hpp"
 #include "../utils/biggram.hpp"
 #include "../utils/dcompile.hpp"
 #include "../utils/utill.hpp"
 #include "./darts.h"
 #include "core/core.hpp"
+
 struct _dregex {
     dregex::Trie* dat;
 };
@@ -291,6 +294,50 @@ void free_wordlist(wordlist wlist) {
 int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir) {
     if (!single_freq_dict || !union_freq_dict | !outdir) return EXIT_FAILURE;
     return darts::BigramDict::buildDict(single_freq_dict, union_freq_dict, outdir);
+}
+
+struct _alist_encoder {
+    std::shared_ptr<darts::WordPice> piece;
+};
+struct _wtype_encoder {
+    std::shared_ptr<darts::TypeEncoder> encoder;
+};
+
+wtype_encoder get_wtype_encoder(void* map_param) { return NULL; }
+void encode_wlist_type(wtype_encoder encoder, wordlist wlist, void* int_vector_buf) {
+    if (!encoder || encoder->encoder == nullptr || !wlist || wlist->wlist.empty() || !int_vector_buf) return;
+    std::vector<int>& buf = *(static_cast<std::vector<int>*>(int_vector_buf));
+    buf.reserve(wlist->wlist.size());
+    auto& codec = *(encoder->encoder);
+    for (auto w : wlist->wlist) buf.emplace_back(codec.encode(w));
+}
+size_t max_wtype_nums(wtype_encoder encoder) {
+    return !encoder || encoder->encoder == nullptr ? 0 : encoder->encoder->getLabelSize();
+}
+
+void free_wtype_encoder(wtype_encoder encoder) {
+    if (encoder) {
+        encoder->encoder = nullptr;
+        delete encoder;
+    }
+}
+const char* decode_wtype(wtype_encoder encoder, int wtype) {
+    return !encoder || encoder->encoder == nullptr ? NULL : encoder->encoder->decode(wtype).c_str();
+}
+// wlist encoder
+alist_encoder get_alist_encoder(void* map_param) { return NULL; }
+void encode_alist(alist_encoder encoder, atomlist alist, void* int_vector_buf);
+void free_alist_encoder(alist_encoder encoder) {
+    if (encoder) {
+        encoder->piece = nullptr;
+        delete encoder;
+    }
+}
+size_t max_acode_nums(alist_encoder encoder) {
+    return !encoder || encoder->piece == nullptr ? 0 : encoder->piece->getLabelSize();
+}
+const char* decode_atype(alist_encoder encoder, int atype) {
+    return !encoder || encoder->piece == nullptr ? NULL : encoder->piece->decode(atype).c_str();
 }
 
 #endif  // SRC_MAIN_DARTS4PY_HPP_

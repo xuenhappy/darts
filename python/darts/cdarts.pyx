@@ -1,24 +1,26 @@
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.string cimport string
+from libcpp.map cimport map
 import atexit
 from typing import Iterator,Callable,List,Iterable,Tuple
 
 
 cdef extern from 'darts.h':
     ctypedef struct _dregex 
-    ctypedef struct _decider
     ctypedef struct _atomlist
     ctypedef struct _wordlist
     ctypedef struct _segment
-    ctypedef struct _encoder
+    ctypedef struct _alist_encoder
+    ctypedef struct _wtype_encoder
 
     ctypedef _dregex* dreg
-    ctypedef _decider* decider
     ctypedef _atomlist* atomlist
     ctypedef _wordlist* wordlist
     ctypedef _segment* segment
-    ctypedef _encoder* encoder
+    ctypedef _alist_encoder* alist_encoder
+    ctypedef _wtype_encoder* wtype_encoder
+
 
     
     void init_darts_env()
@@ -89,6 +91,19 @@ cdef extern from 'darts.h':
     int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer)
     wordlist token_str(segment sg, atomlist alist, bool max_mode) nogil
     void free_wordlist(wordlist wlist)
+
+    wtype_encoder get_wtype_encoder(void* map_param)
+    void encode_wlist_type(wtype_encoder encoder, wordlist wlist, void* int_vector_buf) nogil
+    void free_wtype_encoder(wtype_encoder encoder)
+    size_t max_wtype_nums(wtype_encoder encoder)
+    const char* decode_wtype(wtype_encoder encoder,int wtype)
+
+    alist_encoder get_alist_encoder(void* map_param)
+    void encode_alist(alist_encoder encoder, atomlist alist, void* int_vector_buf) nogil
+    void free_alist_encoder(alist_encoder encoder)
+    size_t max_acode_nums(alist_encoder encoder) 
+    const char* decode_atype(alist_encoder encoder,int atype)
+
 
 #init some thing
 atexit.register(destroy_darts_env)
@@ -362,3 +377,67 @@ cdef class DSegment:
     def __dealloc__(self):
         free_segment(self.segt)
         self.segt=NULL
+
+
+
+cdef class AtomCodec:
+    cdef alist_encoder encoder
+
+    def __cinit__(self, dict str_params not None):
+        cdef map[string,string] param=str_params
+        self.encoder=get_alist_encoder(&param)
+        if self.encoder==NULL:
+            raise IOError("init atom codex failed fromparam=",str_params)
+
+    def label_nums(self):
+        return max_acode_nums(self.encoder)
+
+    def decode(self,int label):
+        cdef const char* str_label=decode_atype(self.encoder,label)
+        if str_label!=NULL:
+            return str_label[:].decode("utf-8")
+        return ""
+
+    def encode(self,PyAtomList alist not None):
+        cdef vector[int] buf
+        with nogil:
+            encode_alist(self.encoder,alist.alist,&buf)
+        return buf
+
+
+    def __dealloc__(self):
+        free_alist_encoder(self.encoder)
+        self.encoder=NULL
+
+
+
+cdef class WordCodec:
+    cdef wtype_encoder encoder
+
+    def __cinit__(self,dict str_params not None):
+        cdef map[string,string] param=str_params
+        self.encoder=get_wtype_encoder(&param)
+        if self.encoder==NULL:
+            raise IOError("init word codex failed fromparam=",str_params)
+
+    def label_nums(self):
+        return max_wtype_nums(self.encoder)
+
+    def decode(self,int label):
+        cdef const char* str_label=decode_wtype(self.encoder,label)
+        if str_label!=NULL:
+            return str_label[:].decode("utf-8")
+        return ""
+
+
+    def encode(self,PyWordList wlist not None):
+        cdef vector[int] buf
+        with nogil:
+            encode_wlist_type(self.encoder,wlist.wlist,&buf)
+        return buf
+
+
+
+    def __dealloc__(self):
+        free_wtype_encoder(self.encoder)
+        self.encoder=NULL

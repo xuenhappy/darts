@@ -115,11 +115,15 @@ int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict
 // alist_encoder
 wtype_encoder get_wtype_encoder(void* map_param);
 void encode_wlist_type(wtype_encoder encoder, wordlist wlist, void* int_vector_buf);
-void free_wtype_encoder(wtype_encoder);
+void free_wtype_encoder(wtype_encoder encoder);
+size_t max_wtype_nums(wtype_encoder encoder);
+const char* decode_wtype(wtype_encoder encoder,int wtype);
 // wlist encoder
 alist_encoder get_alist_encoder(void* map_param);
 void encode_alist(alist_encoder encoder, atomlist alist, void* int_vector_buf);
-void free_alist_encoder(alist_encoder);
+void free_alist_encoder(alist_encoder encoder);
+size_t max_acode_nums(alist_encoder encoder);
+const char* decode_atype(alist_encoder encoder,int atype);
 
 #ifdef __cplusplus
 }
