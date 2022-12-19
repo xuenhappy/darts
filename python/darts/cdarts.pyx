@@ -105,10 +105,12 @@ cdef extern from 'darts.h':
     size_t max_acode_nums(alist_encoder encoder) 
     const char* decode_atype(alist_encoder encoder,int atype)
 
-
+ctypedef const char* cstr
+ctypedef vector[cstr]* ctsr_list
 #init some thing
 atexit.register(destroy_darts_env)
 init_darts_env()
+
 
 
 def normalize(str content not None)->str:
@@ -136,57 +138,62 @@ def build_gramdict_fromfile(str single_freq_dict not None, str union_freq_dict n
 
 
 
-#define some callback function
-cdef inline bool atomiter_func(void* user_data,atomiter_buffer *ret):
-    str_iter:Iterator[tuple[bytes,int]]= (<tuple>user_data)[0]
-    try:
-        atom_info=<tuple>next(str_iter)
-        py_byte_string=<bytes>atom_info[0]
-        ret.word=<char*>py_byte_string
-        ret.len=len(py_byte_string)
-        ret.postion=<size_t>atom_info[1]
-    except StopIteration:
-        return False
-    return True
-    
-    
-
-cdef inline bool dregex_hit_callback(void* user_data, dhit_buffer* buf):
-    py_hit:Callable[[int,int,List[str]]] =(<tuple>user_data)[1]
-    ret_labels:List[str] =[]
-    if buf.labels_size>0 and buf.labels:
-        for i in range(buf.labels_size):
-            if not buf.labels[i]:
-                continue
-            ret_labels.append(buf.labels[i][:].decode("utf-8","ignore"))
-    py_hit(buf.s,buf.e,ret_labels)
-    return False
-
-
-ctypedef const char* cstr
-ctypedef vector[cstr]* ctsr_list
 
     
-cdef inline bool kviter_func(void* user_data, kviter_buffer* buf):
-    cdef ctsr_list key_cache=<ctsr_list>(buf.key_cache)
-    cdef ctsr_list label_cache=<ctsr_list>(buf.label_cache)
-
-    kviters:Iterator[Tuple[List[str],List[str]]]= (<tuple>user_data)[0]
-    try:
-        kv_info=<tuple>next(kviters)
-        for iterm in (<list>(kv_info[0])):
-            key_cache.push_back(<cstr>iterm)
-        for iterm in (<list>(kv_info[1])):
-            label_cache.push_back(<cstr>iterm)
-    except StopIteration:
-        return False
-
-    return True
-    
-
-
 cdef class Dregex:
     cdef dreg reg 
+
+    @staticmethod
+    cdef inline bool atomiter_func(void* user_data,atomiter_buffer *ret):
+        tuple_data=<tuple>user_data
+        cdef list bytes_cache=<list>(user_data[1])
+        try:
+            atom_info=<tuple>next(tuple_data[0])
+            py_byte_string=(<str>atom_info[0]).encode("utf-8",'ignore')
+            bytes_cache[0]=py_byte_string #add to cache 
+            ret.word=py_byte_string
+            ret.len=len(py_byte_string)
+            ret.postion=<size_t>atom_info[1]
+        except StopIteration:
+            return False
+        return True
+    
+    
+    @staticmethod
+    cdef inline bool dregex_hit_callback(void* user_data, dhit_buffer* buf):
+        py_hit=(<tuple>user_data)[2]
+        ret_labels=[]
+        if buf.labels_size>0 and buf.labels:
+            for i in range(buf.labels_size):
+                if not buf.labels[i]:
+                    continue
+                ret_labels.append(buf.labels[i][:].decode("utf-8","ignore"))
+        py_hit(<int>buf.s,<int>buf.e,ret_labels)
+        return False
+
+
+    @staticmethod
+    cdef inline bool kviter_func(void* user_data, kviter_buffer* buf):
+        tuple_data=<tuple>user_data
+        cdef list kcache=<list>(tuple_data[1])
+        cdef list vcache=<list>(tuple_data[2])
+        cdef ctsr_list key_cache=<ctsr_list>(buf.key_cache)
+        cdef ctsr_list label_cache=<ctsr_list>(buf.label_cache)
+        
+        try:
+            kv_info=<tuple>next(tuple_data[0])
+            key_strs=<list>(kv_info[0])
+            label_strs=<list>(kv_info[1])
+            kcache[:]=iter((<str>l).encode("utf-8",'ignore') for l in key_strs)
+            vcache[:]=iter((<str>l).encode("utf-8",'ignore') for l in label_strs)
+            for iterm in kcache:
+                key_cache.push_back(<cstr>iterm)
+            for iterm in vcache:
+                label_cache.push_back(<cstr>iterm)
+        except StopIteration:
+            return False
+
+        return True
    
     def __cinit__(self, str path not None):
         py_byte_string= path.encode("utf-8",'ignore')
@@ -194,18 +201,18 @@ cdef class Dregex:
         if self.reg==NULL:
             raise IOError("load %s regex file failed!"%path)
 
-    def parse(self, atoms:Iterable[bytes],hit:Callable[[int,int,List[str]]]):
-        py_user_data=(iter(atoms),hit)
+    def parse(self, atoms:Iterable[str],hit:Callable[[int,int,List[str]]]):
+        py_user_data=(iter(atoms),[b""],hit)
         cdef void* user_data =<void*>py_user_data
-        parse(self.reg, atomiter_func, dregex_hit_callback , user_data)
+        parse(self.reg, Dregex.atomiter_func, Dregex.dregex_hit_callback , user_data)
 
     @staticmethod
-    def compile(str outpath not None,kv_pairs:Iterator[Tuple[List[bytes],List[bytes]]]):
+    def compile(str outpath not None,kv_pairs:Iterator[Tuple[List[str],List[str]]]):
         if kv_pairs is None:
             return 
         path=outpath.encode("utf-8",'ignore')
-        pydata=(kv_pairs,)
-        if compile_regex(path,kviter_func,<void*>pydata):
+        pydata=(kv_pairs,[],[])
+        if compile_regex(path,Dregex.kviter_func,<void*>pydata):
             raise IOError("compile and write [%s] failed!"%outpath)
         
 
@@ -233,17 +240,20 @@ cdef class PyAtom:
 
     
 
-cdef inline bool alist_hit_func(void* user_data, atom_buffer* buf):
-    ret=<list>user_data
-    py_str=buf.image[:].decode("utf-8","ignore")
-    atm=PyAtom(py_str,buf.st,buf.et);
-    atm.chtype=buf.char_type[:].decode("utf-8","ignore")
-    atm.masked=buf.masked
-    ret.append(atm)
-    return False
+
 
 cdef class PyAtomList:
-    cdef atomlist alist 
+    cdef atomlist alist
+    
+    @staticmethod
+    cdef inline bool alist_hit_func(void* user_data, atom_buffer* buf):
+        cdef list ret=<list>user_data
+        cdef str py_str=buf.image[:].decode("utf-8","ignore")
+        atm=PyAtom(py_str,buf.st,buf.et);
+        atm.chtype=buf.char_type[:].decode("utf-8","ignore")
+        atm.masked=buf.masked
+        ret.append(atm)
+        return False
    
     def __cinit__(self, str text not None,bool skip_space=True, bool normal_before=True):
         py_byte_string= text.encode("utf-8",'ignore')
@@ -256,7 +266,7 @@ cdef class PyAtomList:
 
     def tolist(self)->List[PyAtom]:
         user_data=[]
-        walk_alist(self.alist,alist_hit_func, <void*> user_data)
+        walk_alist(self.alist,PyAtomList.alist_hit_func, <void*> user_data)
         return user_data
 
     def __getiterm__(self,idx:size_t)->PyAtom:
@@ -293,19 +303,7 @@ cdef class PyWord:
     def __repr__(self) -> str:
         return "%s[%d,%d]"%(self.image,self.atom_s,self.atom_e)
    
-cdef inline bool wlist_hit_func(void* user_data, word_buffer* buf):
-    ret=<list>user_data
-    py_str=buf.image[:].decode("utf-8","ignore") if buf.image!=NULL else ""
-    word=PyWord(py_str,buf.atom_s,buf.atom_e);
-    if buf.label_nums>0 and buf.labels!=NULL:
-        for i in range(buf.label_nums):
-            label=buf.labels[i]
-            if label==NULL:
-                continue
-            pylabel=label[:].decode("utf-8","ignore")
-            word.labels.add(pylabel)
-    ret.append(word)
-    return False
+
 
 
 cdef class PyWordList:
@@ -314,10 +312,25 @@ cdef class PyWordList:
     def __cinit__(self):
         self.wlist=NULL
 
+    @staticmethod
+    cdef inline bool wlist_hit_func(void* user_data, word_buffer* buf):
+        cdef list ret=<list>user_data
+        cdef str py_str=buf.image[:].decode("utf-8","ignore") if buf.image!=NULL else ""
+        word=PyWord(py_str,buf.atom_s,buf.atom_e);
+        if buf.label_nums>0 and buf.labels!=NULL:
+            for i in range(buf.label_nums):
+                label=buf.labels[i]
+                if label==NULL:
+                    continue
+                pylabel=label[:].decode("utf-8","ignore")
+                word.labels.add(pylabel)
+        ret.append(word)
+        return False
+
     def tolist(self)->List[PyWord]:
         if self.wlist==NULL: return []
         ret_list=[]
-        walk_wlist(self.wlist, wlist_hit_func, <void*> ret_list)
+        walk_wlist(self.wlist, PyWordList.wlist_hit_func, <void*> ret_list)
         return ret_list
 
     def __getiterm__(self,index:size_t)->PyWord:
