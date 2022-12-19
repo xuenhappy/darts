@@ -244,7 +244,7 @@ cdef class PyAtom:
 
 cdef class PyAtomList:
     cdef atomlist alist
-    
+
     @staticmethod
     cdef inline bool alist_hit_func(void* user_data, atom_buffer* buf):
         cdef list ret=<list>user_data
@@ -281,7 +281,7 @@ cdef class PyAtomList:
             atm.char_type=buf.char_type[:].decode("utf-8","ignore")
         return atm
 
-    def size(self)->size_t:
+    def __len__(self)->int:
         return alist_len(self.alist)
 
     def __dealloc__(self):
@@ -350,7 +350,7 @@ cdef class PyWordList:
                 word.labels.add(pylabel)
         return word
         
-    def __sizeof__(self) -> int:
+    def __len__(self) -> int:
         return wlist_len(self.wlist)
 
     def __dealloc__(self):
