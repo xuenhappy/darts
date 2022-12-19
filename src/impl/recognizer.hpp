@@ -156,7 +156,7 @@ class PinyinRecongnizer : public CellRecognizer {
                 adds.push_back(w);
             }
         };
-        cmap.iterRow(NULL, -1, dfunc);
+        cmap.iterRow(nullptr, -1, dfunc);
         if (!adds.empty()) {
             auto cur = cmap.Head();
             for (auto w : adds) {

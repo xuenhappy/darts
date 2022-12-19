@@ -142,12 +142,12 @@ inline std::shared_ptr<darts::CellRecognizer> loadRecognizer(
     if (!recognizer) {
         std::cerr << "ERROR: create class [" << recognizer << "] CellRecognizer failed!" << std::endl;
         deps.clear();
-        return NULL;
+        return nullptr;
     }
     if (recognizer->initalize(params, deps)) {
         std::cerr << "ERROR: init class [" << recognizer << "] CellRecognizer obj failed!" << std::endl;
         deps.clear();
-        return NULL;
+        return nullptr;
     }
     std::shared_ptr<darts::CellRecognizer> ret(recognizer);
     cache[name] = std::dynamic_pointer_cast<darts::SegmentPlugin>(ret);
@@ -226,9 +226,9 @@ inline int checkDep(Json::Value& root, Json::Value& node, std::string& fname,
  * @param segment point val pointer
  * @return int 1 error ,0 success
  */
-inline int loadSegment(const char* json_conf_file, darts::Segment** segment, const char* start_mode = NULL,
+inline int loadSegment(const char* json_conf_file, darts::Segment** segment, const char* start_mode = nullptr,
                        bool devel_mode = false) {
-    *segment = NULL;
+    *segment = nullptr;
     std::string data;
     if (getFileText(json_conf_file, data)) {
         std::cerr << "ERROR: open conf data " << json_conf_file << " file failed " << std::endl;

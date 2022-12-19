@@ -187,7 +187,7 @@ class Segment {
             assert(dist >= 0);
             head_tmp->push_back(new _GraphEdge{pre->idx, dist});
         };
-        cmap.iterRow(NULL, 0, dfunc_head);
+        cmap.iterRow(nullptr, 0, dfunc_head);
         graph.putEdges(-1, head_tmp);
 
         auto dfunc = [&](Cursor pre) {
@@ -206,7 +206,7 @@ class Segment {
             }
             graph.putEdges(pre->idx, tmp);
         };
-        cmap.iterRow(NULL, -1, dfunc);
+        cmap.iterRow(nullptr, -1, dfunc);
     }
 
     /**
@@ -233,7 +233,7 @@ class Segment {
                 ret.push_back(word);
             }
         };
-        cmap.iterRow(NULL, -1, dfunc);
+        cmap.iterRow(nullptr, -1, dfunc);
     }
 
     void buildSegPath(const AtomList& atomList, SegPath& cmap) {
@@ -286,7 +286,7 @@ class Segment {
                 word->et += atom_start_pos;
                 ret.push_back(word);
             };
-            cmap->iterRow(NULL, -1, dfunc);
+            cmap->iterRow(nullptr, -1, dfunc);
         } else {
             splitContent(atomList, *cmap, ret, atom_start_pos);
         }

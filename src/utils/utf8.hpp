@@ -60,7 +60,7 @@ inline void utf8_init(utf8_iter* iter, const char* ptr) {
         iter->position  = 0;
         iter->next      = 0;
         iter->count     = 0;
-        iter->length    = ptr == NULL ? 0 : strlen(ptr);
+        iter->length    = ptr == nullptr ? 0 : strlen(ptr);
     }
 }
 
@@ -76,8 +76,8 @@ inline void utf8_initEx(utf8_iter* iter, const char* ptr, uint32_t length) {
 }
 
 inline uint8_t utf8_next(utf8_iter* iter) {
-    if (iter == NULL) return 0;
-    if (iter->ptr == NULL) return 0;
+    if (iter == nullptr) return 0;
+    if (iter->ptr == nullptr) return 0;
 
     const char* pointer;
 
@@ -104,8 +104,8 @@ inline uint8_t utf8_next(utf8_iter* iter) {
 }
 
 inline uint8_t utf8_previous(utf8_iter* iter) {
-    if (iter == NULL) return 0;
-    if (iter->ptr == NULL) return 0;
+    if (iter == nullptr) return 0;
+    if (iter->ptr == nullptr) return 0;
 
     if (iter->length != 0) {
         if (iter->position == 0 && iter->next == 0) {
@@ -150,8 +150,8 @@ inline const char* utf8_getchar(utf8_iter* iter) {
 
     str[0] = '\0';
 
-    if (iter == NULL) return str;
-    if (iter->ptr == NULL) return str;
+    if (iter == nullptr) return str;
+    if (iter->ptr == nullptr) return str;
     if (iter->size == 0) return str;
 
     if (iter->size == 1) {
@@ -174,7 +174,7 @@ inline const char* utf8_getchar(utf8_iter* iter) {
 // Utilities
 
 inline uint32_t utf8_strlen(const char* string) {
-    if (string == NULL) return 0;
+    if (string == nullptr) return 0;
 
     uint32_t length   = 0;
     uint32_t position = 0;
@@ -188,7 +188,7 @@ inline uint32_t utf8_strlen(const char* string) {
 }
 
 inline uint32_t utf8_strnlen(const char* string, uint32_t end) {
-    if (string == NULL) return 0;
+    if (string == nullptr) return 0;
 
     uint32_t length   = 0;
     uint32_t position = 0;
@@ -202,7 +202,7 @@ inline uint32_t utf8_strnlen(const char* string, uint32_t end) {
 }
 
 inline uint32_t utf8_to_unicode(const char* character) {
-    if (character == NULL) return 0;
+    if (character == nullptr) return 0;
     if (character[0] == 0) return 0;
 
     uint8_t size = utf8_charsize(character);
@@ -221,7 +221,7 @@ inline const char* unicode_to_utf8(uint32_t codepoint) {
 // UTF8 to Unicode
 
 inline uint8_t utf8_charsize(const char* character) {
-    if (character == NULL) return 0;
+    if (character == nullptr) return 0;
     if (character[0] == 0) return 0;
 
     if ((character[0] & 0x80) == 0)
@@ -244,7 +244,7 @@ static const uint8_t table_unicode[] = {0, 0, 0x1F, 0xF, 0x7, 0x3, 0x1};
 
 inline uint32_t utf8_converter(const char* character, uint8_t size) {
     if (size == 0) return 0;
-    if (character == NULL) return 0;
+    if (character == nullptr) return 0;
     if (character[0] == 0) return 0;
 
     static uint32_t codepoint = 0;

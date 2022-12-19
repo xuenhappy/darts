@@ -88,7 +88,7 @@ class BigramPersenter : public Decider {
             if (pidx < 0) pidx = this->ngdict.getWordKey(w->maxHlabel(nullptr));
             w->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>{pidx}));
         };
-        cmap.iterRow(NULL, -1, dfunc);
+        cmap.iterRow(nullptr, -1, dfunc);
     }
 
     /**

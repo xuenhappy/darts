@@ -21,19 +21,19 @@ namespace registerer {
 // idea from boost any but make it more simple and don't use type_info.
 class Any {
    public:
-    Any() : content_(NULL) {}
+    Any() : content_(nullptr) {}
 
     template <typename ValueType>
     Any(const ValueType& value)  // NOLINT
         : content_(new Holder<ValueType>(value)) {}
 
-    Any(const Any& other) : content_(other.content_ ? other.content_->clone() : NULL) {}
+    Any(const Any& other) : content_(other.content_ ? other.content_->clone() : nullptr) {}
 
     ~Any() { delete content_; }
 
     template <typename ValueType>
     ValueType* any_cast() {
-        return content_ ? &static_cast<Holder<ValueType>*>(content_)->held_ : NULL;  // NOLINT
+        return content_ ? &static_cast<Holder<ValueType>*>(content_)->held_ : nullptr;  // NOLINT
     }
 
    private:
@@ -85,7 +85,7 @@ BaseClassMap& global_factory_map() {
             FactoryMap& map           = ::registerer::global_factory_map()[#base_class]; \
             FactoryMap::iterator iter = map.find(name);                                  \
             if (iter == map.end()) {                                                     \
-                return NULL;                                                             \
+                return nullptr;                                                          \
             }                                                                            \
             Any object = iter->second->NewInstance();                                    \
             return *(object.any_cast<base_class*>());                                    \

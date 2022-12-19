@@ -193,7 +193,7 @@ class OnnxIndicator {
         words_tensor_values[words_tensor_size - 2] = adim - 1;
         words_tensor_values[words_tensor_size - 1] = codemap::cls_code;
         // set common
-        cmap.iterRow(NULL, -1, [this, &words_tensor_values, &start_, &ends_](Cursor cur) {
+        cmap.iterRow(nullptr, -1, [this, &words_tensor_values, &start_, &ends_](Cursor cur) {
             auto w     = cur->val;
             size_t idx = (cur->idx + 1) * 3;
 
@@ -213,7 +213,7 @@ class OnnxIndicator {
         // set cmap data
         const float* floatarr = output_tensor.GetTensorMutableData<float>();
         cmap.SrcNode()->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(floatarr, floatarr + emdim)));
-        cmap.iterRow(NULL, -1, [this, floatarr](Cursor cur) {
+        cmap.iterRow(nullptr, -1, [this, floatarr](Cursor cur) {
             const float* arr = floatarr + (cur->idx + 1) * emdim;
             cur->val->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(arr, arr + emdim)));
         });
@@ -224,7 +224,7 @@ class OnnxIndicator {
     ~OnnxIndicator() {
         if (this->session) {
             delete this->session;
-            this->session = NULL;
+            this->session = nullptr;
         }
         input_name_.clear();
         output_name_.clear();
@@ -366,7 +366,7 @@ class OnnxQuantizer {
     ~OnnxQuantizer() {
         if (this->session) {
             delete this->session;
-            this->session = NULL;
+            this->session = nullptr;
         }
         input_name_.clear();
         output_name_.clear();
@@ -614,7 +614,7 @@ class OnnxRecongnizer : public CellRecognizer {
     ~OnnxRecongnizer() {
         if (session) {
             delete session;
-            session = NULL;
+            session = nullptr;
         }
         input_name_.clear();
         output_name_.clear();

@@ -35,18 +35,18 @@ inline State* newState(int depth, bool fake) {
     auto S     = new State();
     S->depth   = depth;
     S->fake    = fake;
-    S->failure = NULL;
+    S->failure = nullptr;
     S->index   = 0;
     return S;
 }
 
 inline void freeState(State* state) {
-    if (state == NULL) return;
+    if (state == nullptr) return;
     for (auto& kv : state->success) {
         freeState(kv.second);
     }
     state->success.clear();
-    state->failure = NULL;
+    state->failure = nullptr;
     state->emits.clear();
     delete state;
 }
@@ -76,14 +76,14 @@ inline State* nextState(State* s, int64_t character, bool ignoreRootState) {
     auto it = s->success.find(character);
     if (it == s->success.end()) {
         if ((!ignoreRootState) && (s->depth == 0)) return s;
-        return NULL;
+        return nullptr;
     }
     return it->second;
 }
 
 inline State* addState(State* s, int64_t character) {
     auto nextS = nextState(s, character, true);
-    if (nextS == NULL) {
+    if (nextS == nullptr) {
         nextS                 = newState(s->depth + 1, false);
         s->success[character] = nextS;
     }
@@ -136,7 +136,7 @@ class Builder {
 
     void constructFailureStates() {
         this->trie->Fail.resize(this->size + 1, 0);
-        this->trie->OutPut.resize(this->size + 1, NULL);
+        this->trie->OutPut.resize(this->size + 1, nullptr);
         std::queue<State*> queue;
 
         for (auto& kv : this->rootState->success) {
@@ -306,7 +306,7 @@ class Builder {
         for (auto& item : *siblings) {
             if (item.second->fake) {
                 delete item.second;
-                item.second = NULL;
+                item.second = nullptr;
             }
         }
         siblings->clear();
@@ -319,9 +319,9 @@ class Builder {
         this->trie = &trie;
     }
     ~Builder() {
-        trie = NULL;
+        trie = nullptr;
         freeState(rootState);
-        rootState = NULL;
+        rootState = nullptr;
         labels.clear();
     }
 

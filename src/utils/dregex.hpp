@@ -121,20 +121,20 @@ class Trie {
         auto& l = dat.l();
         this->L.insert(this->L.end(), l.begin(), l.end());
         auto size = dat.v_size();
-        this->V.assign(size, NULL);
+        this->V.assign(size, nullptr);
         for (size_t i = 0; i < size; i++) {
             if (dat.v(i).item_size() < 1) {
-                this->V[i] = NULL;
+                this->V[i] = nullptr;
                 continue;
             }
             auto& vlist = dat.v(i).item();
             this->V[i]  = new std::set<int64_t>(vlist.begin(), vlist.end());
         }
         size = dat.output_size();
-        this->OutPut.assign(size, NULL);
+        this->OutPut.assign(size, nullptr);
         for (size_t i = 0; i < size; i++) {
             if (dat.output(i).item_size() < 1) {
-                this->OutPut[i] = NULL;
+                this->OutPut[i] = nullptr;
                 continue;
             }
             auto& vlist     = dat.output(i).item();

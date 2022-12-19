@@ -206,10 +206,10 @@ class Word {
 
     void addLabel(const std::string& tag) { labels.insert(tag); }
     void addLabels(const std::set<std::string>* tags) {
-        if (tags != NULL) labels.insert(tags->begin(), tags->end());
+        if (tags != nullptr) labels.insert(tags->begin(), tags->end());
     }
     void addLabels(std::vector<std::string>* tags) {
-        if (tags != NULL) labels.insert(tags->begin(), tags->end());
+        if (tags != nullptr) labels.insert(tags->begin(), tags->end());
     }
     void addLabels(const std::shared_ptr<Word> other) {
         if (other != nullptr) labels.insert(other->labels.begin(), other->labels.end());
@@ -288,7 +288,7 @@ class SegPath {
     size_t Column() const { return this->colums; }
 
     SegPath() {
-        this->head = makeCursor(nullptr, NULL, NULL);
+        this->head = makeCursor(nullptr, nullptr, nullptr);
         src_node   = std::make_shared<Word>("", -1, 0);
         end_node   = std::make_shared<Word>("", 0, -1);
 
@@ -401,7 +401,7 @@ class SegPath {
             n->prev   = m;
             return m;
         }
-        cur->lack = makeCursor(cell, cur, NULL);
+        cur->lack = makeCursor(cell, cur, nullptr);
         this->size++;
         return cur->lack;
     }

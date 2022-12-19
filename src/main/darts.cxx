@@ -58,14 +58,14 @@ void normalize_str(const char* str, size_t len, void* cpp_string_cache) {
 }
 // a string word type
 const char* chtype(const char* word) {
-    if (!word) return NULL;
+    if (!word) return nullptr;
     auto& tname = charType(utf8_to_unicode(word));
     return tname.c_str();
 }
 
 // convert a text to a alist
 atomlist asplit(const char* txt, size_t textlen, bool skip_space, bool normal_before) {
-    if (!txt || textlen < 0) return NULL;
+    if (!txt || textlen < 0) return nullptr;
     atomlist alist = new struct _atomlist;
     alist->alist   = new darts::AtomList(txt, skip_space, normal_before);
     return alist;
@@ -75,13 +75,13 @@ void free_alist(atomlist alist) {
     if (alist) {
         if (alist->alist) {
             delete alist->alist;
-            alist->alist = NULL;
+            alist->alist = nullptr;
         }
         delete alist;
     }
 }
 // give the alist len
-size_t alist_len(atomlist alist) { return alist == NULL ? 0 : alist->alist->size(); }
+size_t alist_len(atomlist alist) { return alist == nullptr ? 0 : alist->alist->size(); }
 void walk_alist(atomlist alist, walk_alist_hit hit, void* user_data) {
     if (!alist || !alist->alist) return;
     atom_buffer buf;
@@ -96,7 +96,7 @@ void walk_alist(atomlist alist, walk_alist_hit hit, void* user_data) {
     }
 }
 int get_npos_atom(atomlist alist, size_t idx, atom_buffer* buffer) {
-    if (alist == NULL || alist->alist == NULL) return EXIT_FAILURE;
+    if (alist == nullptr || alist->alist == nullptr) return EXIT_FAILURE;
     auto al = alist->alist;
     if (idx >= al->size()) return EXIT_FAILURE;
     auto x = al->at(idx);
@@ -109,11 +109,11 @@ int get_npos_atom(atomlist alist, size_t idx, atom_buffer* buffer) {
 }
 // load the dregex from file
 dreg load_dregex(const char* path) {
-    if (!path) return NULL;
+    if (!path) return nullptr;
     dregex::Trie* trie = new dregex::Trie();
     if (trie->loadPb(path)) {
         delete trie;
-        return NULL;
+        return nullptr;
     }
     auto reg = new struct _dregex();
     reg->dat = trie;
@@ -124,7 +124,7 @@ void free_dregex(dreg regex) {
     if (regex) {
         if (regex->dat) {
             delete regex->dat;
-            regex->dat = NULL;
+            regex->dat = nullptr;
         }
         delete regex;
     }
@@ -155,7 +155,7 @@ void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data) {
     dhit_buffer buf;
     auto hitfunc = [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
         tmpl.clear();
-        if (labels != NULL && (!labels->empty())) {
+        if (labels != nullptr && (!labels->empty())) {
             for (auto idx : *labels) {
                 tmpl.push_back(dat->getLabel(idx));
             }
@@ -214,13 +214,13 @@ int compile_regex(const char* outpath, kviter kvs, void* user_data) {
 }
 // load segment
 segment load_segment(const char* conffile, const char* mode, bool isdevel) {
-    if (!conffile) return NULL;
-    darts::Segment* sgemnet = NULL;
+    if (!conffile) return nullptr;
+    darts::Segment* sgemnet = nullptr;
     if (loadSegment(conffile, &sgemnet, mode, isdevel)) {
         if (!sgemnet) delete sgemnet;
-        return NULL;
+        return nullptr;
     }
-    if (!sgemnet) return NULL;
+    if (!sgemnet) return nullptr;
     segment sg = new struct _segment;
 
     sg->segment = sgemnet;
@@ -230,7 +230,7 @@ segment load_segment(const char* conffile, const char* mode, bool isdevel) {
 void free_segment(segment sg) {
     if (sg) {
         if (sg->segment) delete sg->segment;
-        sg->segment = NULL;
+        sg->segment = nullptr;
         delete sg;
     }
 }
@@ -259,7 +259,7 @@ void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data) {
 size_t wlist_len(wordlist wlist) { return !wlist ? 0 : wlist->wlist.size(); }
 // get npos word
 int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer) {
-    if (wlist == NULL || index >= wlist->wlist.size()) return EXIT_FAILURE;
+    if (wlist == nullptr || index >= wlist->wlist.size()) return EXIT_FAILURE;
     std::vector<const char*>* ptrs;
     ptrs   = static_cast<std::vector<const char*>*>(buffer->label_cache);
     auto w = wlist->wlist[index];
@@ -281,7 +281,7 @@ int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer) {
 
 // token str
 wordlist token_str(segment sg, atomlist alist, bool max_mode) {
-    if (!sg || !sg->segment || !alist || !alist->alist) return NULL;
+    if (!sg || !sg->segment || !alist || !alist->alist) return nullptr;
     auto sgment  = sg->segment;
     wordlist ret = new struct _wordlist;
     darts::tokenize(*sgment, *(alist->alist), ret->wlist, max_mode);
@@ -307,24 +307,24 @@ struct _wtype_encoder {
 };
 
 wtype_encoder get_wtype_encoder(void* map_param, const char* type_cls_name) {
-    if (!map_param || !type_cls_name) return NULL;
+    if (!map_param || !type_cls_name) return nullptr;
     darts::SegmentPlugin* plugin = darts::SegmentPluginRegisterer::GetInstanceByName(type_cls_name);
     if (!plugin) {
         std::cerr << "no wtype encoder found! " << type_cls_name << std::endl;
-        return NULL;
+        return nullptr;
     }
 
     std::map<std::string, std::string>* params = static_cast<std::map<std::string, std::string>*>(map_param);
     if (!params) {
         std::cerr << "param must map[string,string]" << std::endl;
-        return NULL;
+        return nullptr;
     }
     wtype_encoder encoder = new struct _wtype_encoder;
     encoder->encoder      = static_cast<darts::TypeEncoder*>(plugin);
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> plugins;
     if (!encoder->encoder || encoder->encoder->initalize(*params, plugins)) {
         free_wtype_encoder(encoder);
-        encoder = NULL;
+        encoder = nullptr;
     }
     return encoder;
 }
@@ -342,32 +342,32 @@ size_t max_wtype_nums(wtype_encoder encoder) {
 void free_wtype_encoder(wtype_encoder encoder) {
     if (encoder) {
         if (encoder->encoder) delete encoder->encoder;
-        encoder->encoder = NULL;
+        encoder->encoder = nullptr;
         delete encoder;
     }
 }
 const char* decode_wtype(wtype_encoder encoder, int wtype) {
-    return !encoder || !encoder->encoder ? NULL : encoder->encoder->decode(wtype).c_str();
+    return !encoder || !encoder->encoder ? nullptr : encoder->encoder->decode(wtype).c_str();
 }
 // wlist encoder
 alist_encoder get_alist_encoder(void* map_param, const char* type_cls_name) {
-    if (!map_param || !type_cls_name) return NULL;
+    if (!map_param || !type_cls_name) return nullptr;
     darts::SegmentPlugin* plugin = darts::SegmentPluginRegisterer::GetInstanceByName(type_cls_name);
     if (!plugin) {
         std::cerr << "no alist encoder found! " << type_cls_name << std::endl;
-        return NULL;
+        return nullptr;
     }
     std::map<std::string, std::string>* params = static_cast<std::map<std::string, std::string>*>(map_param);
     if (!params) {
         std::cerr << "param must map[string,string]" << std::endl;
-        return NULL;
+        return nullptr;
     }
     alist_encoder encoder = new struct _alist_encoder;
     encoder->piece        = static_cast<darts::WordPice*>(plugin);
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> plugins;
     if (!encoder->piece || encoder->piece->initalize(*params, plugins)) {
         free_alist_encoder(encoder);
-        encoder = NULL;
+        encoder = nullptr;
     }
     return encoder;
 }
@@ -386,7 +386,7 @@ void encode_alist(alist_encoder encoder, atomlist alist, void* int_pair_vector_b
 void free_alist_encoder(alist_encoder encoder) {
     if (encoder) {
         if (encoder->piece) delete encoder->piece;
-        encoder->piece = NULL;
+        encoder->piece = nullptr;
         delete encoder;
     }
 }
@@ -394,7 +394,7 @@ size_t max_acode_nums(alist_encoder encoder) {
     return !encoder || !encoder->piece ? 0 : encoder->piece->getLabelSize();
 }
 const char* decode_atype(alist_encoder encoder, int atype) {
-    return !encoder || !encoder->piece ? NULL : encoder->piece->decode(atype).c_str();
+    return !encoder || !encoder->piece ? nullptr : encoder->piece->decode(atype).c_str();
 }
 
 #endif  // SRC_MAIN_DARTS4PY_HPP_

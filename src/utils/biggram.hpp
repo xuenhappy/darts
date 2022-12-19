@@ -353,7 +353,7 @@ class BigramDict {
     }
 
     double wordDist(const char* pre, const char* next) const {
-        if (pre == NULL || next == NULL) {
+        if (pre == nullptr || next == nullptr) {
             if (pre) return getSingleNlogProp(pre);
             if (next) return getSingleNlogProp(next);
             return 0.0;
