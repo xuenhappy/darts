@@ -361,7 +361,9 @@ cdef class PyWordList:
 cdef class DSegment:
     cdef segment segt 
 
-    def __cinit__(self,str conffile not None,str mode,bool isdev=False):
+    def __cinit__(self,str conffile,str mode,bool isdev=False):
+        if conffile is None:
+            conffile="data/conf.json"
         confpath=conffile.encode("utf-8","ignore")
         cdef const char* modstr=NULL
         if mode:
