@@ -153,7 +153,7 @@ void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data) {
     C_AtomIter_ alist(user_data, atomlist);
     std::vector<const char*> tmpl;
     dhit_buffer buf;
-    auto hitfunc = [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
+    auto hitfunc = [&](size_t s, size_t e, const std::vector<int64_t>* labels) -> bool {
         tmpl.clear();
         if (labels != nullptr && (!labels->empty())) {
             for (auto idx : *labels) {

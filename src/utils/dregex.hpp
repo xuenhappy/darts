@@ -16,7 +16,6 @@
 #include <fstream>
 #include <map>
 #include <queue>
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -34,7 +33,7 @@ class Trie {
    public:
     std::vector<std::string> Labels;
     std::vector<int64_t> Check, Base, Fail, L;
-    std::vector<std::set<int64_t>*> V, OutPut;
+    std::vector<std::vector<int64_t>*> V, OutPut;
     size_t MaxLen;
     std::map<std::string, int> CodeMap;
 
@@ -128,7 +127,7 @@ class Trie {
                 continue;
             }
             auto& vlist = dat.v(i).item();
-            this->V[i]  = new std::set<int64_t>(vlist.begin(), vlist.end());
+            this->V[i]  = new std::vector<int64_t>(vlist.begin(), vlist.end());
         }
         size = dat.output_size();
         this->OutPut.assign(size, nullptr);
@@ -137,8 +136,10 @@ class Trie {
                 this->OutPut[i] = nullptr;
                 continue;
             }
-            auto& vlist     = dat.output(i).item();
-            this->OutPut[i] = new std::set<int64_t>(vlist.begin(), vlist.end());
+            auto& vlist = dat.output(i).item();
+            auto lbs    = new std::vector<int64_t>(vlist.size(), 0);
+            for (size_t idx = 0; idx < vlist.size(); ++idx) (*lbs)[idx] = vlist.at(idx);
+            this->OutPut[i] = lbs;
         }
         auto& cmap = dat.codemap();
         this->CodeMap.insert(cmap.begin(), cmap.end());
@@ -188,7 +189,7 @@ class Trie {
      * @param text src word list
      * @param hit match call back function
      */
-    void parse(StringIter& text, std::function<bool(size_t, size_t, const std::set<int64_t>*)> hit) const {
+    void parse(StringIter& text, std::function<bool(size_t, size_t, const std::vector<int64_t>*)> hit) const {
         if (this->MaxLen < 1 || this->V.empty()) {
             std::cerr << "ERROR: parse on empty trie!" << std::endl;
             return;

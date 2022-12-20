@@ -82,7 +82,7 @@ class DictWordRecongnizer : public CellRecognizer {
         AtomListIterator iter(dstSrc);
         auto cur = cmap.Head();
         if (atom_mode) {
-            auto hit = [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
+            auto hit = [&](size_t s, size_t e, const std::vector<int64_t>* labels) -> bool {
                 if (!labels) return false;
                 int feat = -1;
                 for (auto tidx : *labels) {
@@ -99,7 +99,7 @@ class DictWordRecongnizer : public CellRecognizer {
             };
             this->trie.parse(iter, hit);
         } else {
-            auto hit = [&](size_t s, size_t e, const std::set<int64_t>* labels) -> bool {
+            auto hit = [&](size_t s, size_t e, const std::vector<int64_t>* labels) -> bool {
                 auto word = std::make_shared<Word>(dstSrc, s, e);
                 if (labels)
                     for (auto tidx : *labels) {

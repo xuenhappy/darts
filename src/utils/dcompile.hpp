@@ -133,21 +133,28 @@ class Builder {
         this->trie->Base.resize(msize);
         this->trie->Check.resize(msize);
     }
+    std::vector<int64_t>* dumpTrans(State* state, std::set<int64_t>& lcache) {
+        lcache.clear();
+        lcache.insert(state->emits.begin(), state->emits.end());
+        auto dt = new std::vector<int64_t>();
+        dt->reserve(lcache.size());
+        dt->insert(dt->end(), lcache.begin(), lcache.end());
+        return dt;
+    }
 
     void constructFailureStates() {
         this->trie->Fail.resize(this->size + 1, 0);
         this->trie->OutPut.resize(this->size + 1, nullptr);
         std::queue<State*> queue;
+        std::set<int64_t> lcache;
 
         for (auto& kv : this->rootState->success) {
             auto depthOneState = kv.second;
             setFailure(depthOneState, this->rootState, this->trie->Fail);
             queue.push(depthOneState);
 
-            if (!depthOneState->emits.empty()) {
-                auto dt = new std::set<int64_t>(depthOneState->emits.begin(), depthOneState->emits.end());
-                this->trie->OutPut[depthOneState->index] = dt;
-            }
+            if (!depthOneState->emits.empty())
+                this->trie->OutPut[depthOneState->index] = dumpTrans(depthOneState, lcache);
         }
         while (!queue.empty()) {
             auto currentState = queue.front();
@@ -166,8 +173,7 @@ class Builder {
                 for (auto e : newFailureState->emits) {
                     addEmit(targetState, e);
                 }
-                auto dt = new std::set<int64_t>(targetState->emits.begin(), targetState->emits.end());
-                this->trie->OutPut[targetState->index] = dt;
+                this->trie->OutPut[targetState->index] = dumpTrans(targetState, lcache);
             }
         }
     }
@@ -192,16 +198,16 @@ class Builder {
             if (lens > t->MaxLen) t->MaxLen = lens;
 
             maxCode += lens;
-            auto lables_idx = new std::set<int64_t>();
+            auto lables_idx = new std::vector<int64_t>(label_size, 0);
             for (size_t i = 0; i < label_size; ++i) {
                 auto vit = this->labels.find(lables[i]);
                 if (vit == this->labels.end()) {
-                    auto idx = this->labels.size();
-                    lables_idx->insert(idx);
+                    auto idx                = this->labels.size();
+                    (*lables_idx)[i]        = idx;
                     this->labels[lables[i]] = idx;
-                } else {
-                    lables_idx->insert(vit->second);
+                    continue;
                 }
+                (*lables_idx)[i] = vit->second;
             }
             t->V.push_back(lables_idx);
         });
