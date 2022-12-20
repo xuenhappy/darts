@@ -30,6 +30,7 @@
 #include "../utils/strtool.hpp"
 #include "./encoder.hpp"
 #include "core/core.hpp"
+#include "utils/filetool.hpp"
 
 namespace darts {
 class AtomListIterator : public dregex::StringIter {
@@ -75,7 +76,8 @@ class DictWordRecongnizer : public CellRecognizer {
             std::cerr << PB_FILE_KEY << " key not found in dictionary!" << std::endl;
             return EXIT_FAILURE;
         }
-        return this->trie.loadPb(iter->second);
+        std::string dictfile = getResource(iter->second);
+        return this->trie.loadPb(dictfile);
     }
 
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {

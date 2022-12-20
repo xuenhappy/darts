@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 #include "../core/segment.hpp"
+#include "../utils/filetool.hpp"
 #include "../utils/strtool.hpp"
 #include "./encoder.hpp"
 namespace darts {
@@ -141,9 +142,10 @@ class OnnxIndicator {
             std::cerr << "no param key find" << MODEL_PATH_KEY << std::endl;
             return EXIT_FAILURE;
         }
-        this->session = loadmodel(pit->second.c_str());
+        std::string modelpath = getResource(pit->second);
+        this->session         = loadmodel(modelpath.c_str());
         if (!this->session) {
-            std::cerr << "load model " << MODEL_PATH_KEY << " from path " << it->second << " failed!" << std::endl;
+            std::cerr << "load model " << MODEL_PATH_KEY << " from path " << modelpath << " failed!" << std::endl;
             return EXIT_FAILURE;
         }
         if (validator(this->session)) {
@@ -317,9 +319,10 @@ class OnnxQuantizer {
             std::cerr << "no param key find" << MODEL_PATH_KEY << std::endl;
             return EXIT_FAILURE;
         }
-        this->session = loadmodel(pit->second.c_str());
+        std::string modelpath = getResource(pit->second);
+        this->session         = loadmodel(modelpath.c_str());
         if (!this->session) {
-            std::cerr << "load model " << MODEL_PATH_KEY << " from path " << pit->second << " failed!" << std::endl;
+            std::cerr << "load model " << MODEL_PATH_KEY << " from path " << modelpath << " failed!" << std::endl;
             return EXIT_FAILURE;
         }
         if (validator(this->session)) {
@@ -569,9 +572,10 @@ class OnnxRecongnizer : public CellRecognizer {
             std::cerr << "no param key find" << MODEL_PATH_KEY << std::endl;
             return EXIT_FAILURE;
         }
-        this->session = loadmodel(pit->second.c_str());
+        std::string modelpath = getResource(pit->second);
+        this->session         = loadmodel(modelpath.c_str());
         if (!this->session) {
-            std::cerr << "load model " << MODEL_PATH_KEY << " from path " << it->second << " failed!" << std::endl;
+            std::cerr << "load model " << MODEL_PATH_KEY << " from path " << modelpath << " failed!" << std::endl;
             return EXIT_FAILURE;
         }
         if (validator(this->session)) {

@@ -2,6 +2,10 @@
 {
     //the services for segment plugin used
     "dservices": {
+        "wtype.encoder": {
+            "type": "LabelEncoder",
+            "hx.file": "data/codes/type.hx.txt"
+        },
         "wordpiece.dict": {}
     },
     //all the recognizers plugin

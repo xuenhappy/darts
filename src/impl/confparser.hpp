@@ -226,8 +226,11 @@ inline int checkDep(Json::Value& root, Json::Value& node, std::string& fname,
  * @param segment point val pointer
  * @return int 1 error ,0 success
  */
-inline int loadSegment(const char* json_conf_file, darts::Segment** segment, const char* start_mode = nullptr,
+inline int loadSegment(const char* conffile, darts::Segment** segment, const char* start_mode = nullptr,
                        bool devel_mode = false) {
+    if (!conffile || !segment) return EXIT_FAILURE;
+    std::string json_conf_file = getResource(conffile);
+
     *segment = nullptr;
     std::string data;
     if (getFileText(json_conf_file, data)) {

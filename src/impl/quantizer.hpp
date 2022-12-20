@@ -61,19 +61,19 @@ REGISTER_Persenter(MinCoverPersenter);
  */
 class BigramPersenter : public Decider {
    private:
-    static const char* DAT_DIR_KEY;
+    static const char* DAT_PATH_KEY;
     BigramDict ngdict;
 
    public:
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& dicts) {
-        auto it = params.find(DAT_DIR_KEY);
+        auto it = params.find(DAT_PATH_KEY);
         if (it == params.end() || it->second.empty()) {
-            std::cerr << "ERROR: could not find key:" << DAT_DIR_KEY << std::endl;
+            std::cerr << "ERROR: could not find key:" << DAT_PATH_KEY << std::endl;
             return EXIT_FAILURE;
         }
-        std::string path = getResource(it->second, true);
-        return ngdict.loadDict(path);
+        std::string dictfile = getResource(it->second);
+        return ngdict.loadDict(dictfile);
     }
     /**
      * @brief set word idx
@@ -112,7 +112,7 @@ class BigramPersenter : public Decider {
 
     ~BigramPersenter() {}
 };
-const char* BigramPersenter::DAT_DIR_KEY = "dat.dir";
+const char* BigramPersenter::DAT_PATH_KEY = "dat.path";
 REGISTER_Persenter(BigramPersenter);
 
 }  // namespace darts

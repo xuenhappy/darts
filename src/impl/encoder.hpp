@@ -29,6 +29,7 @@
 #include <vector>
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
+#include "../utils/filetool.hpp"
 #include "../utils/pinyin.hpp"
 #include "../utils/strtool.hpp"
 
@@ -289,9 +290,9 @@ class WordPice : public SegmentPlugin {
 
         fs::path engdict_dir(it->second);
         engdict_dir.append("engdict");
-        std::string releng_dir = getResource(engdict_dir.c_str(), true);
-        if (!english_token_dict.loadDict(releng_dir)) {
-            std::cerr << "ERROR: load english token dict dir " << releng_dir << " failed " << std::endl;
+        std::string releng_dictfile = getResource(engdict_dir.c_str());
+        if (!english_token_dict.loadDict(releng_dictfile)) {
+            std::cerr << "ERROR: load english token dict dir " << releng_dictfile << " failed " << std::endl;
             return EXIT_FAILURE;
         }
 
@@ -429,10 +430,8 @@ class LabelEncoder : public TypeEncoder {
             std::cerr << "ERROR: could not find key:" << LABEL_HX_FILE << std::endl;
             return EXIT_FAILURE;
         }
-        if (loadKindCodeMap(it->second)) {
-            return EXIT_FAILURE;
-        }
-        return EXIT_SUCCESS;
+        std::string hxfile = getResource(it->second);
+        return loadKindCodeMap(hxfile);
     }
 
     size_t getLabelSize() const { return labels.size() + codemap::special_code_nums; }
