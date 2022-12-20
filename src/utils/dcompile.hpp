@@ -255,9 +255,8 @@ class Builder {
         auto t = this->trie;
         while (true) {
             pos++;
-            if (this->allocSize <= pos) {
-                resize(pos + pos / 2 + 1);
-            }
+            if (this->allocSize <= pos) resize(pos + pos / 2 + 1);
+
             if (t->Check[pos] != 0) {
                 nonZeroNum++;
                 continue;
@@ -270,9 +269,8 @@ class Builder {
             if (this->allocSize <= (begin + siblings->back().first)) {
                 resize(begin + siblings->back().first + 100);
             }
-            if (this->used[begin]) {
-                continue;
-            }
+            if (this->used[begin]) continue;
+
             auto allIszero = true;
             for (auto& kv : *siblings) {
                 if (t->Check[begin + kv.first] != 0) {
@@ -280,9 +278,7 @@ class Builder {
                     break;
                 }
             }
-            if (allIszero) {
-                break;
-            }
+            if (allIszero) break;
         }
 
         if (double(nonZeroNum) / double(pos - this->nextCheckPos + 1) >= 0.95) {
