@@ -197,8 +197,10 @@ class C_KvIter_ : public dregex::KvPairsIter {
         buf.label_cache = &labelcache;
         // set data and hit
         while (iter_func(user_data, &buf)) {
-            CStr_AtomIter_ iter(&keycache);
-            hit(iter, &labelcache[0], labelcache.size());
+            if (!keycache.empty()) {
+                CStr_AtomIter_ iter(&keycache);
+                hit(iter, &labelcache[0], labelcache.size());
+            }
             keycache.clear();
             labelcache.clear();
         }
