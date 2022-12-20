@@ -149,11 +149,11 @@ cdef class Dregex:
         cdef list bytes_cache=<list>(tuple_data[1])
         try:
             atom_info=<tuple>next(tuple_data[0])
-            py_byte_string=(<str>atom_info[0]).encode("utf-8",'ignore')
+            py_byte_string=(<str>atom_info[1]).encode("utf-8",'ignore')
             bytes_cache[0]=py_byte_string #add to cache 
             ret.word=py_byte_string
             ret.len=len(py_byte_string)
-            ret.postion=<size_t>atom_info[1]
+            ret.postion=<size_t>atom_info[0]
         except StopIteration:
             return False
         return True
@@ -202,7 +202,7 @@ cdef class Dregex:
             raise IOError("load %s regex file failed!"%path)
 
     def parse(self, atoms:Iterable[str],hit:Callable[[int,int,List[str]]]):
-        py_user_data=(iter(atoms),[b""],hit)
+        py_user_data=(enumerate(atoms),[b""],hit)
         cdef void* user_data =<void*>py_user_data
         parse(self.reg, Dregex.atomiter_func, Dregex.dregex_hit_callback , user_data)
 

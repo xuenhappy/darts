@@ -73,7 +73,7 @@ class AtomList {
         } else {
             this->str = to_utf32(str);
         }
-        data.reserve(str.length());
+        data.reserve(this->str.length());
         auto accept = [&](const std::string& astr, const std::string& ttype, size_t s, size_t e) {
             if (skip_space && ttype == char_type::EMPTY) return;
             auto atom       = std::make_shared<Atom>(astr, s, e);

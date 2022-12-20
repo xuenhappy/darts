@@ -14,6 +14,7 @@
 #ifndef SRC_UTILS_CHSPLITER_HPP_
 #define SRC_UTILS_CHSPLITER_HPP_
 #include <cctype>
+#include <cwctype>
 #include <fstream>
 #include <functional>
 #include <sstream>
@@ -90,7 +91,8 @@ inline int loadCharMap() {
  * @return WordType
  */
 inline const std::string& charType(uint32_t code) {
-    if (std::isspace(code)) return char_type::EMPTY;
+    if (std::iswspace(code)) return char_type::EMPTY;
+    if (!std::iswprint(code)) return char_type::POS;
     auto it = _charType.find(code);
     if (it != _charType.end()) return it->second;
     if (code < 255) {
