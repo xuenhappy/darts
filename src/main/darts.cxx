@@ -294,9 +294,11 @@ void free_wordlist(wordlist wlist) {
         delete wlist;
     }
 }
-int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir) {
-    if (!single_freq_dict || !union_freq_dict | !outdir) return EXIT_FAILURE;
-    return darts::BigramDict::buildDict(single_freq_dict, union_freq_dict, outdir);
+int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outfile) {
+    if (!single_freq_dict || !union_freq_dict | !outfile) return EXIT_FAILURE;
+    darts::BigramDict dict;
+    if (dict.loadDictFromTxt(single_freq_dict, union_freq_dict)) return EXIT_FAILURE;
+    return dict.saveDict(outfile);
 }
 
 struct _alist_encoder {

@@ -12,6 +12,7 @@
 #ifndef SRC_UTILS_BIGGRAM_HPP_
 #define SRC_UTILS_BIGGRAM_HPP_
 
+#include <cstdlib>
 #pragma once
 #include <darts.pb.h>
 #include <math.h>
@@ -19,7 +20,7 @@
 #include <map>
 #include <string>
 #include <vector>
-#include "./cedar.h"
+#include "./cedar.hpp"
 #include "./filetool.hpp"
 #include "./strtool.hpp"
 #include "./zipfile.hpp"
@@ -112,22 +113,9 @@ class BigramDict {
      * @param ifile
      * @return int
      */
-    int readTable(const std::string& ifile) {
-        zipfile::ZipFileReader zfile(ifile);
-        std::istream* zipIn = zfile.Get_File("table.pb");
-        if (!zipIn) {
-            std::cerr << "ERROR: load table file failed:" << ifile << std::endl;
-            return EXIT_FAILURE;
-        }
-
+    int readTable(std::istream& is) {
         darts::BigramDat dat;
-        if (!dat.ParseFromIstream(zipIn)) {
-            std::cerr << "ERROR: Failed to read table file:" << ifile << std::endl;
-            delete zipIn;
-            return EXIT_FAILURE;
-        }
-        delete zipIn;
-
+        if (!dat.ParseFromIstream(&is)) return EXIT_FAILURE;
         this->avg_single_freq = dat.avg_single_freq();
         this->avg_union_freq  = dat.avg_union_freq();
         this->max_single_freq = dat.max_single_freq();
@@ -149,12 +137,7 @@ class BigramDict {
      * @param outfile
      * @return int
      */
-    int writeTable(const std::string& outfile) const {
-        std::fstream f_out(outfile, std::ios::out | std::ios::trunc | std::ios::binary);
-        if (!f_out.is_open()) {
-            std::cerr << "ERROE: write table file failed:" << outfile << std::endl;
-            return EXIT_FAILURE;
-        }
+    int writeTable(std::ostream& os) const {
         darts::BigramDat dat;
         dat.set_avg_single_freq(this->avg_single_freq);
         dat.set_avg_union_freq(this->avg_union_freq);
@@ -168,15 +151,8 @@ class BigramDict {
             table->set_y(kv.first.j);
             table->set_freq(kv.second.count);
         }
-
-        zipfile::ZipFileWriter zfile(outfile);
-        std::ostream* zipOut = zfile.Add_File("table.pb");
-        if (!dat.SerializePartialToOstream(zipOut)) {
-            std::cerr << "ERROR: Failed to write table file: " << outfile << std::endl;
-            delete zipOut;
-            return EXIT_FAILURE;
-        }
-        delete zipOut;
+        if (!dat.SerializePartialToOstream(&os)) return EXIT_FAILURE;
+        os.flush();
         return EXIT_SUCCESS;
     }
 
@@ -207,10 +183,40 @@ class BigramDict {
      */
     int getWordKey(const std::string& word) const {
         auto widx = idx.exactMatchSearch<int>(word.c_str(), word.length());
-        if (widx == cedar::da<int>::CEDAR_NO_VALUE) {
-            return -1;
+        return widx == cedar::da<int>::CEDAR_NO_VALUE ? -1 : widx;
+    }
+
+    /**
+     * @brief load the dictionary
+     *
+     * @param dictionary_dir
+     * @return int
+     */
+    int loadDict(const std::string& dict_file) {
+        zipfile::ZipFileReader zfile(dict_file);
+        std::istream* keyidx_zipIn = zfile.Get_File(KEY_IDX_FILE);
+        if (!keyidx_zipIn) {
+            std::cerr << "ERROR:load word idx file failed!" << std::endl;
+            return EXIT_FAILURE;
         }
-        return widx;
+        if (idx.open(*keyidx_zipIn)) {
+            delete keyidx_zipIn;
+            std::cerr << "ERROR:read word idx dict failed! " << std::endl;
+            return EXIT_FAILURE;
+        }
+        delete keyidx_zipIn;
+        std::istream* table_zipIn = zfile.Get_File(TABLE_FILE);
+        if (!table_zipIn) {
+            std::cerr << "ERROR:load table file failed:" << KEY_IDX_FILE << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (readTable(*table_zipIn)) {
+            std::cerr << "ERROR:read table file failed:" << KEY_IDX_FILE << std::endl;
+            delete table_zipIn;
+            return EXIT_FAILURE;
+        }
+        delete table_zipIn;
+        return EXIT_SUCCESS;
     }
 
     /**
@@ -218,25 +224,9 @@ class BigramDict {
      *
      * @param single_freq_dict 单个词频的数据
      * @param union_freq_dict   联合词频数据
-     * @param outdir 输出目录
      * @return int
      */
-    static int buildDict(const std::string& single_freq_dict, const std::string& union_freq_dict,
-                         const std::string& outdir) {
-        // create dir
-        if (createDirectory(outdir)) {
-            std::cerr << "ERROR:create out dir error: " << outdir << std::endl;
-            return EXIT_FAILURE;
-        }
-        BigramDict biggram_dict;
-        // get output file
-        namespace fs = std::filesystem;
-        fs::path widx_path(outdir);
-        widx_path.append(KEY_IDX_FILE);
-        fs::path table_path(outdir);
-        table_path.append(TABLE_FILE);
-
-        // read freq data
+    int loadDictFromTxt(const std::string& single_freq_dict, const std::string& union_freq_dict) {
         std::ifstream idx_in(single_freq_dict.c_str());
         if (!idx_in.is_open()) {
             std::cerr << "ERROR: open data " << single_freq_dict << " file failed " << std::endl;
@@ -265,8 +255,8 @@ class BigramDict {
             }
             freq_sum += freq;
             if (freq > max_freq) max_freq = freq;
-            biggram_dict.idx.update(word.c_str(), word.length(), n++);
-            biggram_dict.freqs[n - 1] = freq;
+            this->idx.update(word.c_str(), word.length(), n++);
+            this->freqs[n - 1] = freq;
         }
         idx_in.close();
 
@@ -307,49 +297,53 @@ class BigramDict {
                 std::cerr << "WARN:bad line words for table: " << line << std::endl;
                 continue;
             }
-            auto pidx = biggram_dict.getWordKey(tmpkey[0]);
-            auto nidx = biggram_dict.getWordKey(tmpkey[1]);
+            auto pidx = this->getWordKey(tmpkey[0]);
+            auto nidx = this->getWordKey(tmpkey[1]);
             if (pidx < 0 || nidx < 0) {
                 std::cerr << "WARN:bad line words for table,words not in freq txt: "
                           << "key1:" << tmpkey[0] << "," << pidx << " key2:" << tmpkey[1] << "," << nidx << "|" << line
                           << std::endl;
                 continue;
             }
-            biggram_dict.bigrams[bigram_key(pidx, nidx)] = bigram_data(freq);
+            this->bigrams[bigram_key(pidx, nidx)] = bigram_data(freq);
             union_freq_sum += freq;
             unum++;
         }
         table_in.close();
         // set static info
-        biggram_dict.avg_single_freq = freq_sum / (1 + n);
-        biggram_dict.avg_union_freq  = union_freq_sum / (1 + unum);
-        biggram_dict.max_single_freq = max_freq;
-
-        // save data
-        if (biggram_dict.idx.save(widx_path.string().c_str())) {
-            std::cerr << "ERROR: cannot save trie: " << widx_path.string() << std::endl;
-            return EXIT_FAILURE;
-        }
-        return biggram_dict.writeTable(table_path.string());
+        this->avg_single_freq = freq_sum / (1 + n);
+        this->avg_union_freq  = union_freq_sum / (1 + unum);
+        this->max_single_freq = max_freq;
+        return EXIT_SUCCESS;
     }
 
-    /**
-     * @brief load the dictionary
-     *
-     * @param dictionary_dir
-     * @return int
-     */
-    int loadDict(const std::string& dictionary_dir) {
-        namespace fs = std::filesystem;
-        fs::path widx_path(dictionary_dir);
-        widx_path.append(KEY_IDX_FILE);
-        fs::path table_path(dictionary_dir);
-        table_path.append(TABLE_FILE);
-        if (idx.open(widx_path.string().c_str())) {
-            std::cerr << "ERROR:cannot open word idx: " << widx_path.string() << std::endl;
+    int saveDict(const std::string& outfile) {
+        // create file
+        zipfile::ZipFileWriter zfile(outfile);
+        std::ostream* keyidx_zipOut = zfile.Add_File(KEY_IDX_FILE);
+        if (!keyidx_zipOut) {
+            std::cout << "create idx zipfile failed!" << std::endl;
             return EXIT_FAILURE;
         }
-        return this->readTable(table_path.string());
+        if (idx.save(*keyidx_zipOut)) {
+            std::cout << "save idx failed" << std::endl;
+            delete keyidx_zipOut;
+            return EXIT_FAILURE;
+        }
+        delete keyidx_zipOut;
+
+        std::ostream* table_zipOut = zfile.Add_File(TABLE_FILE);
+        if (!table_zipOut) {
+            std::cout << "craete table failed!" << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (writeTable(*table_zipOut)) {
+            std::cout << "write table failed!" << std::endl;
+            delete table_zipOut;
+            return EXIT_FAILURE;
+        }
+        delete table_zipOut;
+        return EXIT_SUCCESS;
     }
 
     double wordDist(const char* pre, const char* next) const {
@@ -377,7 +371,7 @@ class BigramDict {
     }
 };
 const char* BigramDict::KEY_IDX_FILE = "words.da";
-const char* BigramDict::TABLE_FILE   = "table.pb.gz";
+const char* BigramDict::TABLE_FILE   = "table.pb";
 }  // namespace darts
 
 #endif  // SRC_UTILS_BIGGRAM_HPP_

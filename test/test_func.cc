@@ -65,7 +65,14 @@ void testDictWordRecongnizer() {
 
 void testBigramPersenterDictMake() {
     printf("----- test function %s-----------------\n", "testBigramPersenterDictMake");
-    darts::BigramDict::buildDict("SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt", "bigram");
+    darts::BigramDict dict;
+    if (dict.loadDictFromTxt("SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt")) {
+        if (dict.saveDict("bigram.bdf")) {
+            printf("----- test function %s-----------------\n", "testBigramPersenterDictMake success!");
+            return;
+        }
+    }
+    printf("----- test function %s-----------------\n", "testBigramPersenterDictMake failed!");
 }
 
 void testJsonConfLoad() {
