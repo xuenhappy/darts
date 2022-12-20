@@ -4,8 +4,28 @@
     "dservices": {
         "wordpiece.dict": {}
     },
-    // all the persenter plugins
-    "persenters": {
+    //all the recognizers plugin
+    "recognizers": {
+        "date.dict": {
+            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
+            "type": "HmmRecongnizer"
+        },
+        "hmm.dict": {
+            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
+            "type": "HmmRecongnizer"
+        },
+        "inner.dict": {
+            "pbfile.path": "data/models/panda.pbs",
+            "atom.mode": "false",
+            "type": "DictWordRecongnizer"
+        },
+        "pinyin.dict": {
+            "type": "",
+            "data.dir": ""
+        }
+    },
+    // all the deciders plugins
+    "deciders": {
         "bert.embed": {
             "model.path": "",
             "type": "TinyBertPersenter"
@@ -31,25 +51,6 @@
         "pinyin.embeder": {
             "type": "",
             "model.path": ""
-        }
-    },
-    //all the decider plugin
-    "deciders": {
-        "date.dict": {
-            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
-            "type": "HmmRecongnizer"
-        },
-        "hmm.dict": {
-            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
-            "type": "HmmRecongnizer"
-        },
-        "inner.dict": {
-            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
-            "type": "DictWordRecongnizer"
-        },
-        "pinyin.dict": {
-            "type": "",
-            "data.dir": ""
         }
     },
     // all mode that the segment working
