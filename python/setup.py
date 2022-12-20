@@ -52,10 +52,7 @@ class build_py(_build_py):
         super().build_package_data()
         build_dir = os.path.join(*([self.build_lib]))
         shutil.copytree(os.path.join(_scripts_dir, '../data'), os.path.join(build_dir, 'darts/data'))
-        try:
-            copy_follow_symlinks('/opt/onnxruntime/lib/libonnxruntime.so', os.path.join(build_dir, 'darts/'))
-        except:
-            raise Exception("copy onnx libliary error ,this may caulase so not useless!")
+        shutil.copytree('/opt/onnxruntime/lib/', os.path.join(build_dir, 'darts/'), dirs_exist_ok=True)
 
 
 setup_kwargs = dict(name='darts',
