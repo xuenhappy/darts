@@ -146,7 +146,7 @@ cdef class Dregex:
     @staticmethod
     cdef inline bool atomiter_func(void* user_data,atomiter_buffer *ret):
         tuple_data=<tuple>user_data
-        cdef list bytes_cache=<list>(user_data[1])
+        cdef list bytes_cache=<list>(tuple_data[1])
         try:
             atom_info=<tuple>next(tuple_data[0])
             py_byte_string=(<str>atom_info[0]).encode("utf-8",'ignore')
