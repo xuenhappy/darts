@@ -12,16 +12,16 @@
  */
 #ifndef SRC_MAIN_DARTS4PY_HPP_
 #define SRC_MAIN_DARTS4PY_HPP_
-#include <iostream>
-#include <map>
-#include <memory>
-#include <utility>
 #ifdef dmalloc
 #include <dmalloc.h>
 #endif
 #include <string.h>
 #include <cstddef>
 #include <cstdlib>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <utility>
 #include <vector>
 #include "../core/segment.hpp"
 #include "../impl/confparser.hpp"

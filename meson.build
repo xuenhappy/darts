@@ -14,7 +14,8 @@ extra_link_args=['-w']
 
 if get_option('debug-memory')
     message('compile with dmalloc!')
-    extra_compile_args+=['-g','-ddmalloc','-ddmalloc_func_check']
+    extra_compile_args+=['-g','-ddmalloc','-ldmallocxx','-ddmalloc_func_check' ]
+    extra_link_args+=['-ldmalloc']
 else
     extra_compile_args+=['-O2']
 endif
