@@ -242,7 +242,7 @@ inline int loadSegment(const char* json_conf_file, darts::Segment** segment, con
     }
     // get start mode
     std::string mode;
-    if (!start_mode) mode = start_mode;
+    if (start_mode) mode = start_mode;
     if (mode.empty()) {
         if (!root.isMember("default.mode")) {
             std::cerr << "ERROR: no root key [default.mode] found!" << std::endl;
