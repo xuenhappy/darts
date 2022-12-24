@@ -296,11 +296,12 @@ class da {
         return 0;
     }
     int open(std::istream& is) {
+        // set array
+        clear(false);
         // get size
         is.read(reinterpret_cast<char*>(&_size), sizeof(_size));
         if (!_size) return -1;
-        // set array
-        clear(false);
+
         _array = static_cast<node*>(std::malloc(sizeof(node) * _size));
         if (!_array) _err(__FILE__, __LINE__, "memory allocation failed\n");
         is.read(reinterpret_cast<char*>(_array), std::streamsize(_size * sizeof(node)));
