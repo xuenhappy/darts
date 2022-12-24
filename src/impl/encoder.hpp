@@ -187,7 +187,7 @@ class WordPice : public SegmentPlugin {
         }
         int sidx    = 0;
         int leftnum = num.length() % piceNum;
-        int lenOuts = num.length();
+        int lenOuts = num.length() / piceNum;
         if (leftnum != 0) {
             lenOuts += 1;
         } else {
@@ -195,7 +195,7 @@ class WordPice : public SegmentPlugin {
         }
         for (int i = 0; i < lenOuts; i++) {
             int endi = piceNum * i + leftnum;
-            ret.push_back(num.substr(sidx, endi - sidx));
+            ret.emplace_back(num.substr(sidx, endi - sidx));
             sidx = endi;
         }
     }
