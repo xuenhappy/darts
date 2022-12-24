@@ -75,7 +75,6 @@ class WordGraph {
         s.size  = size;
         s.idx   = idx;
         nodes.emplace_back(s);
-        std::cout << "XXX " << pos << "*" << size << "*" << idx << std::endl;
     }
 
     void setPath(int endidx, std::function<double(int, int)> idx_dist) {
@@ -93,7 +92,7 @@ class WordGraph {
             int nextpos  = prenode->start + prenode->size;
             if (nextpos >= endidx) {
                 addPath(i, -1, 0);
-                break;
+                continue;
             }
             for (size_t j = i + 1; j < nodes.size(); j++) {
                 auto nxnode = &nodes[j];
@@ -119,8 +118,8 @@ class WordGraph {
             int u = pq.top().second;
             pq.pop();
             for (size_t i = u + 1; i < path_nums; i++) {
-                if (paths[i].right == u) {
-                    int v  = paths[i].left;
+                if (paths[i].left == u) {
+                    int v  = paths[i].right;
                     int pv = v < 0 ? dist.size() - 1 : v + 1;
 
                     double new_weight = dist[u + 1] + paths[i].score;
@@ -131,8 +130,9 @@ class WordGraph {
                         if (v >= 0) pq.push(std::make_pair(new_weight, v));
                     }
                     continue;
-                }
-                if (paths[i].right > u) break;
+
+                } else if (paths[i].left > u)
+                    break;
             }
         }
         // get code
