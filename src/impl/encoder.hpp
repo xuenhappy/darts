@@ -289,7 +289,7 @@ class WordPice : public SegmentPlugin {
         namespace fs = std::filesystem;
 
         fs::path engdict_dir(it->second);
-        engdict_dir.append("engdict");
+        engdict_dir.append("engpiece.mbs");
         std::string releng_dictfile = getResource(engdict_dir.c_str());
         if (!english_token_dict.loadDict(releng_dictfile)) {
             std::cerr << "ERROR: load english token dict dir " << releng_dictfile << " failed " << std::endl;
@@ -297,7 +297,7 @@ class WordPice : public SegmentPlugin {
         }
 
         fs::path dict_path(it->second);
-        dict_path.append("chars.map.txt");
+        dict_path.append("table.vocab");
         std::string relpath = getResource(dict_path.c_str());
         if (loadCodeMap(relpath)) {
             return EXIT_FAILURE;

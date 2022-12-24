@@ -6,7 +6,10 @@
             "type": "LabelEncoder",
             "hx.file": "data/codes/type.hx.txt"
         },
-        "wordpiece.dict": {}
+        "wordpiece.dict": {
+            "type": "WordPice",
+            "base.dir": "data/models/codex"
+        }
     },
     //all the recognizers plugin
     "recognizers": {
