@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <iostream>
 #include <limits>
 #include <list>
 #include <map>
@@ -74,6 +75,7 @@ class WordGraph {
         s.size  = size;
         s.idx   = idx;
         nodes.emplace_back(s);
+        std::cout << "XXX " << pos << "*" << size << "*" << idx << std::endl;
     }
 
     void setPath(int endidx, std::function<double(int, int)> idx_dist) {
@@ -215,6 +217,8 @@ class WordPice : public SegmentPlugin {
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
         // token english str
         std::string token = fmt::format("▁{}", eng);
+        tolower(token);
+
         if (token.length() < 4 || token.length() > 50) {  // too long or short codes
             ret.push_back(token);
             return;
@@ -227,9 +231,7 @@ class WordPice : public SegmentPlugin {
             graph.addNode(i, 1, english_token_dict.getWordKey(token.substr(i, 1)));
         }
         english_token_dict.matchKey(token, [&graph](int pos, int size, int idx) {
-            if (size > 1) {
-                graph.addNode(pos, size, idx);
-            }
+            if ((pos == 0 && size > 4) || (pos > 2 && size > 1)) graph.addNode(pos, size, idx);
         });
         // set uni-gram
         graph.setPath(token.size(), [this](int pidx, int nidx) -> double {

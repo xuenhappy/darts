@@ -166,12 +166,16 @@ class BigramDict {
      */
     void matchKey(const std::string& word, std::function<void(int, int, int)> hit) const {
         const char* key = word.c_str();
-        size_t from = 0, len = word.size();
-        for (size_t pos = 0; pos < len;) {
-            auto widx = idx.traverse(key, from, pos, pos + 1);
-            if (widx == cedar::da<int>::CEDAR_NO_VALUE) continue;
-            if (widx == cedar::da<int>::CEDAR_NO_PATH) break;
-            hit(from, pos, widx);
+        size_t len      = word.size();
+
+        for (size_t s = 0; s < len; ++s) {
+            size_t didx = 0;
+            for (size_t pos = s; pos < len;) {
+                auto widx = idx.traverse(key, didx, pos, pos + 1);
+                if (widx == cedar::da<int>::CEDAR_NO_VALUE) continue;
+                if (widx == cedar::da<int>::CEDAR_NO_PATH) break;
+                hit(s, pos - s, widx);
+            }
         }
     }
 
