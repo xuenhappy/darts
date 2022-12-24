@@ -395,11 +395,12 @@ cdef class AtomCodec:
     def __cinit__(self, dict str_params not None,str cls_name=None):
         if cls_name is None:
             cls_name="WordPice"
-        cdef map[string,string] param=str_params
+        pparams={k.encode():v.encode() for k,v in str_params.items()}
+        cdef map[string,string] param=pparams
         py_bytes=cls_name.encode("utf-8")
         self.encoder=get_alist_encoder(&param,py_bytes)
         if self.encoder==NULL:
-            raise IOError("init atom codex failed fromparam=",str_params)
+            raise IOError("init atom codex failed from param",str_params)
 
     def label_nums(self):
         return max_acode_nums(self.encoder)

@@ -370,6 +370,7 @@ alist_encoder get_alist_encoder(void* map_param, const char* type_cls_name) {
     encoder->piece        = static_cast<darts::WordPice*>(plugin);
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> plugins;
     if (!encoder->piece || encoder->piece->initalize(*params, plugins)) {
+        std::cerr << "init param failed! " << type_cls_name << std::endl;
         free_alist_encoder(encoder);
         encoder = nullptr;
     }
