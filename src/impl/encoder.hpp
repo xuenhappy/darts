@@ -154,17 +154,16 @@ inline bool is_digits(const std::string& str) {
 }
 
 namespace codemap {
-static const int special_code_nums = 5;
+static const int special_code_nums = 6;
 static const std::string emptylabel;
-static const std::string special_image[special_code_nums] = {
-    "[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]",
-};
+static const std::string special_image[special_code_nums] = {"[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", "[SPACE]"};
 // const code
-static const int pad_code  = 0;
-static const int unk_code  = 1;
-static const int cls_code  = 2;
-static const int sep_code  = 3;
-static const int mask_code = 4;
+static const int pad_code   = 0;
+static const int unk_code   = 1;
+static const int cls_code   = 2;
+static const int sep_code   = 3;
+static const int mask_code  = 4;
+static const int space_code = 5;
 
 }  // namespace codemap
 
@@ -216,15 +215,15 @@ class WordPice : public SegmentPlugin {
     void engToken(const std::string& eng, std::vector<std::string>& ret) const {
         // token english str
         std::string token = fmt::format("▁{}", eng);
-        if (token.length() < 3 || token.length() > 50) {  // too long or short codes
+        if (token.length() < 4 || token.length() > 50) {  // too long or short codes
             ret.push_back(token);
             return;
         }
         // load code
         WordGraph graph(token.size() * 2);
         // Splits the input into character sequence
-        graph.addNode(0, 2, english_token_dict.getWordKey(token.substr(0, 2)));
-        for (size_t i = 2; i < token.size(); i++) {
+        graph.addNode(0, 4, english_token_dict.getWordKey(token.substr(0, 4)));
+        for (size_t i = 4; i < token.size(); i++) {
             graph.addNode(i, 1, english_token_dict.getWordKey(token.substr(i, 1)));
         }
         english_token_dict.matchKey(token, [&graph](int pos, int size, int idx) {
@@ -317,6 +316,11 @@ class WordPice : public SegmentPlugin {
                 hit(codemap::mask_code, postion);
                 continue;
             }
+            if (!atom->char_type.compare("EMPTY")) {  // space char
+                hit(codemap::space_code, postion);
+                continue;
+            }
+
             if (!atom->char_type.compare("ENG")) {
                 _cache.clear();
                 engToken(atom->image, _cache);
