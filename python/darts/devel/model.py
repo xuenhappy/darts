@@ -8,132 +8,192 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from .utils import *
 
 
-class Embeder(nn.Module):
-    """单词表示"""
+class WordEncoder(nn.Module):
 
-    def __init__(self, token_size, hidden_size):
+    def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, wtype_num):
         super().__init__()
-        self.embeding = nn.Embedding(token_size, hidden_size)
+        self.vocab_num = vocab_num
+        self.wtype_num = wtype_num
+        self.vocab_embeding = nn.Embedding(vocab_num, vocab_esize)
+        self.encoder = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=True)
+        self.type_embeding = nn.Embedding(wtype_num, word_esize)
+        self.imner = nn.Linear(hidden_size * 2, word_esize)
+        self.dropin = nn.Dropout(0.2)
         self.normal = nn.LayerNorm(hidden_size)
-        self.drop = nn.Dropout(0.5)
 
-    def forward(self, input_idx, type_embeding=None, input_mask=None):
-        embeding = self.embeding(input_idx)
-        if type_embeding is not None:
-            embeding += type_embeding
-        embeding = self.drop(self.normal(embeding))
-        if input_mask is not None:
-            embeding = embeding * input_mask.to(embeding.dtype)
-        return embeding
+    def forward(self, batch_input_idx, batch_word_info):
+        #batch_input_idx (batch*time_step)
+        #batch_word_info(words_num*[bidx,s,e,tidx])
+        word_type_embeding = self.type_embeding(batch_word_info[:, 3])
+        sent_embeding = self.imner(self.encoder(self.vocab_embeding(batch_input_idx)))
+        word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
+        word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
+        word_sent_embeding = (word_head_embeding + word_tail_embeding) / 2.0
 
+        return self.normal(self.dropin(word_type_embeding) + word_sent_embeding)
 
-class SentenceEncoder(nn.Module):
-    """句子表示"""
+    def export2onnx(self):
+        sents_idx = torch.randint(0, self.vocab_num, (11, ))
+        word_se = torch.LongTensor([[0, 0], [1, 2], [3, 3], [4, 6], [7, 7], [8, 9], [10, 10]])
+        wtype_idx = torch.randint(0, self.wtype_num, (word_se.shape[0], 1))
+        word_info = torch.concat((word_se, wtype_idx), dim=1)
 
-    def __init__(self, token_size, hidden_size, type_size=-1):
-        super().__init__()
-        self.embeding = Embeder(token_size, hidden_size)
-        if type_size > 0:
-            self.type_embeding = nn.Embedding(type_size, hidden_size)
-        self.encoder = nn.GRU(hidden_size, hidden_size * 2, batch_first=True, bidirectional=True)
-        self.dropin = nn.Dropout(0.3)
-        self.imner = nn.Linear(hidden_size * 2, hidden_size)
-        self.imgate = nn.Linear(hidden_size * 2, hidden_size)
-        self.output = nn.Linear(hidden_size, hidden_size)
-        self.normal = nn.LayerNorm(hidden_size)
-        self.dropout = nn.Dropout(0.2)
+        def _script(sents, words):
+            sents = torch.unsqueeze(sents, 0)
+            bidx = torch.zeros((words.shape[0], 1), dtype=wtype_idx.dtype)
+            words = torch.concat((bidx, words), dim=1)
+            return self(sents, words)
 
-    def forward(self, input_idx, seq_lengths=None, type_idxs=None):
-        attention_mask = None
-        if seq_lengths is not None:
-            _tmp_tensor = torch.cumsum(torch.ones(input_idx.size()), dim=-1).to(input_idx.device)
-            attention_mask = (_tmp_tensor < seq_lengths.unsqueeze(-1)).byte().unsqueeze(2)
+        # args must same as forawrd
+        outfile = "lstm.encoder.onnx"
+        inputdata = (sents_idx, word_info)
+        inputnames = ['sents', 'wordinfo']
+        dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
 
-        type_embeding = None
-        if (type_idxs is not None) and hasattr(self, 'type_embeding'):
-            type_embeding = self.type_embeding(type_idxs)
-
-        embeding = self.embeding(input_idx, type_embeding, attention_mask)
-        if seq_lengths is None:
-            encoding = self.encoder(embeding)
-        else:
-            encoding = run_rnn(self.encoder, embeding, seq_lengths)
-
-        encoding = self.dropin(encoding)
-        output = self.output(self.imner(encoding) * torch.sigmoid(self.imgate(encoding)))
-        output = self.normal(output)
-        if attention_mask is not None:
-            output = output * attention_mask.to(output.dtype)
-        return self.drop(output)
+        torch.onnx.export(
+            _script,
+            inputdata,
+            outfile,
+            export_params=True,  # store the trained parameter weights inside the model file
+            opset_version=12,  # the ONNX version to export the model to
+            do_constant_folding=True,  # whether to execute constant folding for optimization
+            input_names=inputnames,  # the model's input names
+            output_names=['wordemb'],  # the model's output names
+            dynamic_axes=dynamic_axes)
+        return outfile
 
 
 class Quantizer(nn.Module):
-    """距离量化模型"""
 
     def __init__(self, input_size, hidden_size):
         nn.Module.__init__(self)
+        self.input_size = input_size
+        self.hidden_size = hidden_size
         self.Kmap = nn.Linear(input_size, hidden_size)
         self.Qmap = nn.Linear(input_size, hidden_size)
         self.alpha = np.sqrt(hidden_size)
 
-    def distance(self, x, y):
+    def forward(self, x, y):
         K, Q = self.Kmap(x), self.Qmap(y)
         dist = torch.einsum('ij,ij->i', K, Q) / self.alpha
         return F.softplus(dist).squeeze(-1)
 
+    def export2onnx(self):
+
+        def _script(x, y):
+            return self(torch.unsqueeze(x, 0), torch.unsqueeze(y, 0))
+
+        # args must same as forawrd
+        outfile = "sample.quantizer.onnx"
+        inputdata = (torch.randn((self.input_size, )), torch.randn((self.input_size, )))
+        inputnames = ['a', 'b']
+        dynamic_axes = {}
+
+        torch.onnx.export(
+            _script,
+            inputdata,
+            outfile,
+            export_params=True,  # store the trained parameter weights inside the model file
+            opset_version=12,  # the ONNX version to export the model to
+            do_constant_folding=True,  # whether to execute constant folding for optimization
+            input_names=inputnames,  # the model's input names
+            output_names=['distance'],  # the model's output names
+            dynamic_axes=dynamic_axes)
+        return outfile
+
+
+class CrfNer(nn.Module):
+
+    def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, tag_nums):
+        super().__init__()
+        self.crf = CRFLoss(tag_nums)
+        self.vocab_num = vocab_num
+        self.vocab_embeding = nn.Embedding(vocab_num, vocab_esize)
+        self.encoder = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=True)
+        self.imner = nn.Linear(hidden_size * 2, word_esize)
+        self.normal = nn.LayerNorm(hidden_size)
+        self.dropin = nn.Dropout(0.2)
+        self.prop = nn.Linear(word_esize, tag_nums)
+
+    def getWordprop(self, batch_input_idx, batch_word_info):
+        #batch_input_idx (batch*time_step)
+        #batch_word_info(words_num*[bidx,s,e])
+        sent_embeding = self.imner(self.encoder(self.vocab_embeding(batch_input_idx)))
+        word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
+        word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
+        word_sent_embeding = (word_head_embeding + word_tail_embeding) / 2.0
+        word_emb = self.dropin(self.normal(word_sent_embeding))
+        return self.prop(word_emb)
+
+    def forward(self, batch_input_idx, batch_word_info):
+        #batch_input_idx (batch*time_step)
+        #batch_word_info(words_num*[bidx,s,e,tagidx])
+        featsLen, featsIdx = getFeatsIdx(batch_word_info[:, 0])
+        wordprop = self.getWordprop(batch_input_idx, batch_word_info[:, :-1])
+        word_sent = wordprop.index_select(0, featsIdx.view(-1)).view((*featsIdx.shape, -1))
+        tag_sent = batch_word_info[:, -1].index_select(0, featsIdx.view(-1)).view(featsIdx.shape)
+        return self.crf(word_sent, tag_sent, featsLen)
+
+    def export2onnx(self):
+        sents_idx = torch.randint(0, self.vocab_num, (11, ))
+        word_info = torch.LongTensor([[0, 0], [1, 2], [3, 3], [4, 6], [7, 7], [8, 9], [10, 10]])
+
+        def _script(sents, words):
+            sents = torch.unsqueeze(sents, 0)
+            bidx = torch.zeros((words.shape[0], 1), dtype=words.dtype)
+            words = torch.concat((bidx, words), dim=1)
+            prop = self.getWordprop(sents, words)
+            return self.crf.viterbi_decode(prop)
+
+        # args must same as forawrd
+        outfile = "lstm.encoder.onnx"
+        inputdata = (sents_idx, word_info)
+        inputnames = ['sents', 'wordinfo']
+        dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
+
+        torch.onnx.export(
+            _script,
+            inputdata,
+            outfile,
+            export_params=True,  # store the trained parameter weights inside the model file
+            opset_version=12,  # the ONNX version to export the model to
+            do_constant_folding=True,  # whether to execute constant folding for optimization
+            input_names=inputnames,  # the model's input names
+            output_names=['wordemb'],  # the model's output names
+            dynamic_axes=dynamic_axes)
+        return outfile
+
 
 class GraphTrainer(nn.Module):
-    """图训练"""
 
-    def __init__(self, token_size, hidden_size, type_size=-1):
+    def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, wtype_num):
         super().__init__()
-        self.predictor = SentenceEncoder(token_size, hidden_size, type_size=type_size)
+        self.predictor = WordEncoder(vocab_num, vocab_esize, hidden_size, word_esize, wtype_num)
         self.quantizer = Quantizer(hidden_size, 32)
         self.lossfunc = GraphLoss()
 
-    def loss(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index):
-        sentence_embeding = self.predictor(batch_input_idx, batch_seq_lengths, batch_type_idxs)
-        atoms_embeding = batch_segment_max(sentence_embeding, batch_atoms)
-        batch_atom_index = torch.from_numpy(graph[:, :2]).long().to(atoms_embeding.device)
-        losses = []
-        gs = 0
-        for ge in graph_index:
-            graph = batch_graph[gs:ge]
-            atom_index = batch_atom_index[gs:ge]
-            gs = ge
-            s_atom_embeding = atoms_embeding[atom_index[:, 0]]
-            e_atom_embeding = atoms_embeding[atom_index[:, 1]]
-            weight = self.quantizer(s_atom_embeding, e_atom_embeding)
-            losses.append(self.lossfunc(graph, weight))
-        return sum(losses) / len(losses)
+    def loss(self, batch_input_idx, batch_word_info, batch_graph):
+        #batch_input_idx (batch*time_step)
+        #batch_word_info(words_num*[bidx,s,e,tidx])
+        #batch_graph:batch*(bidx,bwidx_s,bwidx_e,wl_start,wl_end,bool)
+        word_embeds = self.predictor(batch_input_idx, batch_word_info)
+        egeds_dists = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
+        featsLen, featsIdx = getFeatsIdx(batch_graph[:, 0])
+        loses = torch.FloatTensor(0, device=batch_input_idx.device)
+        for bidx in range(featsLen.shape[0]):
+            nidxs = featsIdx[bidx][:featsLen[bidx]]
+            edge_weight = egeds_dists[nidxs]
+            graph = batch_graph[nidxs][:, 3:]
+            loses += self.lossfunc(graph, edge_weight)
 
-    def forward(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph, graph_index):
-        """
+        return loses / featsLen.shape[0]
 
-        Args:
-            batch_input_idx (int numpy): N*T
-            batch_seq_lengths (int numpy): N
-            batch_type_idxs (int numpy): N*T
-            batch_atoms (int numpy): M*3 coloum is [batch_idx start,end]
-            batch_graph (int numpy): K*3 coloum is [atom_sidx,atom_eidx,bool]
-            graph_index (int numpy): N coloum is [graph_eidx]
-
-        Returns:
-            losses
-        """
-
-        batch_input_idx = torch.from_numpy(batch_input_idx).long()
-        batch_seq_lengths = torch.from_numpy(batch_seq_lengths).long()
-        batch_type_idxs = torch.from_numpy(batch_type_idxs).long()
-        batch_atoms = torch.from_numpy(batch_atoms).long()
-
+    def forward(self, batch_input_idx, batch_word_info, batch_graph):
         if torch.cuda.is_available():
             batch_input_idx = batch_input_idx.cuda()
-            batch_seq_lengths = batch_seq_lengths.cuda()
-            batch_type_idxs = batch_type_idxs.cuda()
-            batch_atoms = batch_atoms.cuda()
-
-        return self.loss(self, batch_input_idx, batch_seq_lengths, batch_type_idxs, batch_atoms, batch_graph,
-            graph_index)
+            batch_word_info = batch_word_info.cuda()
+            batch_graph = batch_graph.cuda()
+        return self.loss(self, batch_input_idx, batch_word_info, batch_graph)

@@ -15,7 +15,6 @@ import time
 import numpy as np
 import torch
 from torch import optim
-import h5py
 
 if not torch.cuda.is_available():
     print("WARN: NO CUDA DEVICE!")
@@ -29,19 +28,16 @@ def saveTorchModel(model, out_dir, epoch_num):
     # save model for numpy
     state_dict = dict((k, v.cpu().numpy()) for (k, v) in model.state_dict().items())
     np.savez(os.path.join(out_dir, "model-%d" % epoch_num), **state_dict)
-    # save model for h5
-    with h5py.File(os.path.join(out_dir, "model-%d.h5" % epoch_num), 'w') as hf:
-        for k, v in state_dict.items():
-            hf.create_dataset(k, data=v)
     print("Write model to {}".format(out_dir))
 
 
 def loadInitModel(model, modeldir, filename="model-init.npz"):
     model_path = os.path.join(modeldir, filename)
     if not os.path.exists(model_path):
-        return
+        return []
     param_dict = dict((k, torch.from_numpy(v)) for k, v in np.load(model_path).items())
     print("Load model from {}".format(model_path))
+
     for name, p in model.named_parameters():
         if name not in param_dict:
             print("param [%s] not in dict,we skip it" % name)
@@ -53,7 +49,7 @@ def loadInitModel(model, modeldir, filename="model-init.npz"):
         p.data = give.to(p.data.device)
 
 
-class TeachSolver():
+class TSolver():
 
     def __init__(self, model, train_iter, conf={}):
         self.train_iter = train_iter
@@ -66,8 +62,6 @@ class TeachSolver():
         modeldir = os.path.abspath(os.path.join(os.path.curdir, self.model_outdir))
         self.out_dir = os.path.join(modeldir, str(int(time.time())))
         loadInitModel(self.model, modeldir, filename=conf.get("initfile", "model-init.npz"))
-        self.max_grad_csum_step = 10 if not hasattr(self, 'max_grad_csum_step') else self.max_grad_csum_step
-        self.max_grad_csum_step = max(1, self.max_grad_csum_step)
 
         self.lrate = 0.001 if not hasattr(self, "lrate") else self.lrate
         self.lrate = max(1e-4, self.lrate)
@@ -91,18 +85,10 @@ class TeachSolver():
             lr=self.lrate)
 
     def solve(self):
-        # init flag data
         _step, _epoch, _sample = 0, 0, 0
         self.optimizer.zero_grad()
-
-        def apply_grad():
-            # apply loss and clear grad
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-
         # save test before start
         saveTorchModel(self.model, self.out_dir, _epoch)
-
         # iter data
         while _epoch < self.epoch_num:
             _sample = 0
@@ -115,7 +101,8 @@ class TeachSolver():
                 loss = self.model(*td)
                 loss.backward()
                 # apply loss
-                apply_grad()
+                self.optimizer.step()
+                self.optimizer.zero_grad()
                 print('train [epoch|step|sample]:[%d|%d|%d] loss:%g' % (_epoch, _step, _sample, float(loss.cpu())))
                 if _step % 200000 == 0:
                     saveTorchModel(self.model, self.out_dir, _epoch)
