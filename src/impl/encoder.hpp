@@ -205,10 +205,17 @@ class WordPice : public SegmentPlugin {
         std::unordered_map<std::string, int>::const_iterator _it;
         _it = codes.find(image);
         if (_it == codes.end()) {
-            _it = codes.find(ttype);
-            if (_it == codes.end()) {
-                return codemap::unk_code;
+            if (!ttype.compare("POS")) {
+                std::string new_image = trim_copy(image.c_str());
+                _it                   = codes.find(new_image);
+                if (_it != codes.end()) return _it->second + codemap::special_code_nums;
+                _it = codes.find(new_image.substr(0, 1));
+                if (_it != codes.end()) return _it->second + codemap::special_code_nums;
             }
+            std::string fmttype = fmt::format("[{}]", ttype);
+
+            _it = codes.find(fmttype);
+            if (_it == codes.end()) return codemap::unk_code;
         }
         // keep special image label
         return _it->second + codemap::special_code_nums;
