@@ -31,15 +31,15 @@ int checkDep(Json::Value& root, Json::Value& node, std::string& fname,
 inline void getParams(Json::Value& node, std::map<std::string, std::string>& params) {
     auto mem = node.getMemberNames();
     for (auto iter = mem.begin(); iter != mem.end(); iter++) {
-        params[*iter] = node[*iter].asString();
+        if (node[*iter].isString()) params[*iter] = node[*iter].asString();
     }
 }
 
 inline void getList(Json::Value& node, std::vector<std::string>& ret) {
+    if (!node.isArray()) return;
     auto cnt = node.size();
-    for (auto i = 0; i < cnt; i++) {
-        ret.push_back(node[i].asString());
-    }
+    for (auto i = 0; i < cnt; i++)
+        if (node[i].isString()) ret.push_back(node[i].asString());
 }
 
 inline std::shared_ptr<darts::SegmentPlugin> loadServices(

@@ -9,14 +9,13 @@
         "wordpiece.dict": {
             "type": "WordPice",
             "base.dir": "data/models/codex"
+        },
+        "pinyin.encoder": {
+            "type": "PinyinEncoder"
         }
     },
     //all the recognizers plugin
     "recognizers": {
-        "date.dict": {
-            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
-            "type": "HmmRecongnizer"
-        },
         "hmm.dict": {
             "pbfile.path": "data/model-dict/mini_dict.pb.gz",
             "type": "HmmRecongnizer"
@@ -27,35 +26,39 @@
             "type": "DictWordRecongnizer"
         },
         "pinyin.dict": {
-            "type": "",
-            "data.dir": ""
+            "type": "PinyinRecongnizer",
+            "deps": {
+                "pyin.encoder": "pinyin.encoder"
+            }
+        },
+        "hmm.new.finder": {
+            "type": "OnnxRecongnizer",
+            "label.list": "",
+            "model.path": "",
+            "deps": {
+                "wordpice.name": "wordpiece.dict"
+            }
         }
     },
     // all the deciders plugins
     "deciders": {
-        "bert.embed": {
-            "model.path": "",
-            "type": "TinyBertPersenter"
-        },
-        "elmo.embed": {
-            "deps": {
-                "encoder": ""
-            },
-            "model.path": "",
-            "type": "ElmoPersenter"
-        },
-        "mini.ngram": {
-            "dat.dir": "data/model-dict/bigram",
-            "type": "BigramPersenter"
+        "ngram.decider": {
+            "type": "BigramPersenter",
+            "dat.dir": "data/model-dict/bigram"
         },
         "mini.rule": {
             "type": "MinCoverPersenter"
         },
-        "wordvec.embed": {
-            "model.path": "",
-            "type": ""
+        "onnx.decider": {
+            "type": "OnnxDecider",
+            "pmodel.path": "data/model/onnx/",
+            "qmodel.path": "data/model/onnx/",
+            "dep": {
+                "wordpiece.name": "wordpiece.dict",
+                "tencode.name": "wtype.encoder"
+            }
         },
-        "pinyin.embeder": {
+        "pyin.decider": {
             "type": "",
             "model.path": ""
         }

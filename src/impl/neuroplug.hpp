@@ -234,7 +234,7 @@ class OnnxIndicator {
         lencoder  = nullptr;
     }
 };
-const char* OnnxIndicator::MODEL_PATH_KEY    = "model.path";
+const char* OnnxIndicator::MODEL_PATH_KEY    = "pmodel.path";
 const char* OnnxIndicator::WORDPIECE_PARAM   = "wordpiece.name";
 const char* OnnxIndicator::TYPEENCODER_PARAM = "tencode.name";
 
@@ -375,7 +375,7 @@ class OnnxQuantizer {
         output_name_.clear();
     }
 };
-const char* OnnxQuantizer::MODEL_PATH_KEY = "model.path";
+const char* OnnxQuantizer::MODEL_PATH_KEY = "qmodel.path";
 
 /**
  * @brief
@@ -395,13 +395,8 @@ class OnnxDecider : public Decider {
      */
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        if (indicator.load(params, plugins)) {
-            return EXIT_FAILURE;
-        }
-        if (quantizer.load(params, indicator.getEmbSize())) {
-            return EXIT_FAILURE;
-        }
-
+        if (indicator.load(params, plugins)) return EXIT_FAILURE;
+        if (quantizer.load(params, indicator.getEmbSize())) return EXIT_FAILURE;
         return EXIT_SUCCESS;
     }
     /**
