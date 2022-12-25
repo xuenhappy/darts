@@ -16,14 +16,10 @@
     },
     //all the recognizers plugin
     "recognizers": {
-        "hmm.dict": {
-            "pbfile.path": "data/model-dict/mini_dict.pb.gz",
-            "type": "HmmRecongnizer"
-        },
         "inner.dict": {
+            "type": "DictWordRecongnizer",
             "pbfile.path": "data/models/panda.pbs",
-            "atom.mode": "false",
-            "type": "DictWordRecongnizer"
+            "atom.mode": "false"
         },
         "pinyin.dict": {
             "type": "PinyinRecongnizer",
