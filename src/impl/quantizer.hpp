@@ -12,6 +12,7 @@
 #ifndef SRC_IMPL_QUANTIZER_HPP_
 #define SRC_IMPL_QUANTIZER_HPP_
 
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <set>
@@ -20,10 +21,10 @@
 #include "../core/segment.hpp"
 #include "../utils/biggram.hpp"
 #include "../utils/filetool.hpp"
-#include "core/core.hpp"
+#include "./encoder.hpp"
 
 namespace darts {
-class MinCoverPersenter : public Decider {
+class MinCoverDecider : public Decider {
    public:
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
@@ -50,19 +51,21 @@ class MinCoverPersenter : public Decider {
         }
         return lena + lenb;
     }
-    ~MinCoverPersenter() {}
+    ~MinCoverDecider() {}
 };
 
-REGISTER_Persenter(MinCoverPersenter);
+REGISTER_Persenter(MinCoverDecider);
 
 /**
  * @brief this use cedar store thing
  *
  */
-class BigramPersenter : public Decider {
+class BigramDecider : public Decider {
    private:
     static const char* DAT_PATH_KEY;
+    static const char* TYPE_ENC_PARAM;
     BigramDict ngdict;
+    std::shared_ptr<LabelEncoder> type_encoder;
 
    public:
     int initalize(const std::map<std::string, std::string>& params,
@@ -73,7 +76,17 @@ class BigramPersenter : public Decider {
             return EXIT_FAILURE;
         }
         std::string dictfile = getResource(it->second);
-        return ngdict.loadDict(dictfile);
+        if (ngdict.loadDict(dictfile)) return EXIT_FAILURE;
+        auto pit = dicts.find(TYPE_ENC_PARAM);
+        if (pit != dicts.end()) {
+            type_encoder = std::dynamic_pointer_cast<LabelEncoder>(pit->second);
+            if (type_encoder == nullptr) {
+                std::cerr << "ERROR:value not type LabelEncoder " << TYPE_ENC_PARAM << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+
+        return EXIT_SUCCESS;
     }
     /**
      * @brief set word idx
@@ -85,7 +98,14 @@ class BigramPersenter : public Decider {
         auto dfunc = [this](Cursor cur) {
             auto w     = cur->val;
             float pidx = this->ngdict.getWordKey(w->text());
-            if (pidx < 0) pidx = this->ngdict.getWordKey(w->maxHlabel(nullptr));
+            if (pidx < 0) {
+                if (type_encoder == nullptr) {
+                    pidx = this->ngdict.getWordKey(w->maxHlabel(nullptr));
+                } else {
+                    auto hunc = std::bind(&LabelEncoder::labelH, this->type_encoder, std::placeholders::_1);
+                    pidx      = this->ngdict.getWordKey(w->maxHlabel(hunc));
+                }
+            }
             w->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>{pidx}));
         };
         cmap.iterRow(nullptr, -1, dfunc);
@@ -110,10 +130,11 @@ class BigramPersenter : public Decider {
         return ngdict.wordDist(pidx, nidx);
     }
 
-    ~BigramPersenter() {}
+    ~BigramDecider() {}
 };
-const char* BigramPersenter::DAT_PATH_KEY = "dat.path";
-REGISTER_Persenter(BigramPersenter);
+const char* BigramDecider::DAT_PATH_KEY   = "dat.path";
+const char* BigramDecider::TYPE_ENC_PARAM = "type.enc";
+REGISTER_Persenter(BigramDecider);
 
 }  // namespace darts
 

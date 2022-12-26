@@ -444,21 +444,18 @@ class LabelEncoder : public TypeEncoder {
 
     size_t getLabelSize() const { return labels.size() + codemap::special_code_nums; }
 
-    int encode(const std::shared_ptr<darts::Word> word) const {
-        auto labelHx = [this](const std::string& label) -> float {
-            std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
-            _it = this->kind_codes.find(label);
-            if (_it == this->kind_codes.end()) {
-                return 0;
-            }
-            return _it->second.second;
-        };
-        std::string label(word->maxHlabel(labelHx));
+    float labelH(const std::string& label) const {
         std::unordered_map<std::string, std::pair<int, float>>::const_iterator _it;
-        _it = kind_codes.find(label);
-        if (_it == kind_codes.end()) {
-            return codemap::unk_code;
-        }
+        _it = this->kind_codes.find(label);
+        if (_it == this->kind_codes.end()) return 0;
+        return _it->second.second;
+    }
+
+    int encode(const std::shared_ptr<darts::Word> word) const {
+        auto labelHx = std::bind(&LabelEncoder::labelH, this, std::placeholders::_1);
+        std::string label(word->maxHlabel(labelHx));
+        auto _it = kind_codes.find(label);
+        if (_it == kind_codes.end()) return codemap::unk_code;
         return _it->second.first + codemap::special_code_nums;
     }
 

@@ -39,11 +39,11 @@
     // all the deciders plugins
     "deciders": {
         "ngram.decider": {
-            "type": "BigramPersenter",
-            "dat.dir": "data/model-dict/bigram"
+            "type": "BigramDecider",
+            "dat.path": "data/models/bigram.mbs"
         },
-        "mini.rule": {
-            "type": "MinCoverPersenter"
+        "mini.decider": {
+            "type": "MinCoverDecider"
         },
         "onnx.decider": {
             "type": "OnnxDecider",

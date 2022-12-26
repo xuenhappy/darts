@@ -26,11 +26,10 @@
 #include <vector>
 #include "../core/segment.hpp"
 #include "../utils/dregex.hpp"
+#include "../utils/filetool.hpp"
 #include "../utils/pinyin.hpp"
 #include "../utils/strtool.hpp"
 #include "./encoder.hpp"
-#include "core/core.hpp"
-#include "utils/filetool.hpp"
 
 namespace darts {
 class AtomListIterator : public dregex::StringIter {
