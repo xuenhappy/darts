@@ -54,7 +54,7 @@ class MinCoverDecider : public Decider {
     ~MinCoverDecider() {}
 };
 
-REGISTER_Persenter(MinCoverDecider);
+REGISTER_Decider(MinCoverDecider);
 
 /**
  * @brief this use cedar store thing
@@ -134,7 +134,7 @@ class BigramDecider : public Decider {
 };
 const char* BigramDecider::DAT_PATH_KEY   = "dat.path";
 const char* BigramDecider::TYPE_ENC_PARAM = "type.enc";
-REGISTER_Persenter(BigramDecider);
+REGISTER_Decider(BigramDecider);
 
 }  // namespace darts
 

@@ -420,7 +420,7 @@ class OnnxDecider : public Decider {
     ~OnnxDecider() {}
 };
 
-REGISTER_Persenter(OnnxDecider);
+REGISTER_Decider(OnnxDecider);
 
 /**
  * @brief a cell recongnizer that use hmm

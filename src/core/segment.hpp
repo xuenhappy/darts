@@ -74,13 +74,13 @@ REGISTER_REGISTERER(CellRecognizer);
 REGISTER_REGISTERER(Decider);
 #define REGISTER_Service(name) REGISTER_CLASS(SegmentPlugin, name)
 #define REGISTER_Recognizer(name) REGISTER_CLASS(CellRecognizer, name)
-#define REGISTER_Persenter(name) REGISTER_CLASS(Decider, name)
+#define REGISTER_Decider(name) REGISTER_CLASS(Decider, name)
 // end defined
 
 typedef struct _GraphEdge {
     int et;
     double weight;
-} * GraphEdge;
+}* GraphEdge;
 
 class SegGraph {
    private:
