@@ -313,20 +313,15 @@ inline void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_p
     // too long context
     size_t pre = 0;
     for (size_t pos = minLineLength; pos < ori.size(); pos++) {
-        auto a = ori.at(pos);
         if (pos - pre >= maxLineLength) {
-            continue;
             AtomList temp(ori, pre, pos + 1);
             sg.select(temp, ret, maxMode, pre);
             pre = pos + 1;
+            continue;
         }
+        if (SENTENCE_POS.find(ori.at(pos)->image) == SENTENCE_POS.end()) continue;
+        if (pos - pre < minLineLength) continue;
 
-        if (SENTENCE_POS.find(a->image) == SENTENCE_POS.end()) {
-            continue;
-        }
-        if (pos - pre < minLineLength) {
-            continue;
-        }
         AtomList temp(ori, pre, pos + 1);
         sg.select(temp, ret, maxMode, pre);
         pre = pos + 1;
