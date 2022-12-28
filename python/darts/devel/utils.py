@@ -127,15 +127,15 @@ class GraphLoss(nn.Module):
     def _get_dep_order(graph):
         with torch.no_grad():
             nodex = graph.max() + 1
-            connc = torch.zeros((nodex, nodex), dtype=torch.float, device=graph.device)
-            connc[graph[:, 0], graph[:, 1]] = 1
-            initc = torch.zeros(nodex, dtype=torch.long, device=graph.device)
-            initc[nodex - 1] = 1
-            deg = connc.sum(1)
-            while initc.min() < 1:
-                trans = torch.matmul((initc > 0).float().view(1, -1), connc.T)
-                initc += (trans == deg).long().view(-1)
-            return torch.argsort(initc), nodex
+            _trans = torch.zeros((nodex, nodex), dtype=torch.float, device=graph.device)
+            _trans[graph[:, 0], graph[:, 1]] = 1
+            flags = torch.zeros(nodex, dtype=torch.long, device=graph.device)
+            flags[nodex - 1] = 1
+            degree = _trans.sum(1)
+            while flags.min() < 1:
+                passv = torch.matmul((flags > 0).float().view(1, -1), _trans.T)
+                flags += (passv == degree).long().view(-1)
+            return torch.argsort(flags), nodex
 
     @staticmethod
     def _get_paths(graph):
@@ -166,9 +166,9 @@ class GraphLoss(nn.Module):
 
     def forward(self, graph, weight):
         """
-        graph must has one start idx=0 and one end point=last_idx
-        graph is [path_nums,3] int numpy tensor ,every graph path (start,end,bool)
-        weight is [path_nums] float torch tensor,every graph path weight
+        graph node idx must be continue and min idx is start, max idx is the end point;\n
+        graph is a int tensor and shape is edge_nums*3 ,the coloum is (start,end,bool);\n
+        weight is a float and shape is edge_nums,the row index is same as graph
         """
         gold_score = (weight * graph[:, 2].to(weight)).sum(0)
         graph = graph[:, :2] - graph[:, :2].min()
