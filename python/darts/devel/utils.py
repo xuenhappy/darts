@@ -126,7 +126,6 @@ class GraphLoss(nn.Module):
     @staticmethod
     def _get_dep_order(graph):
         with torch.no_grad():
-            graph = graph - graph.min()
             nodex = graph.max() + 1
             connc = torch.zeros((nodex, nodex), dtype=torch.float, device=graph.device)
             connc[graph[:, 0], graph[:, 1]] = 1
@@ -172,5 +171,6 @@ class GraphLoss(nn.Module):
         weight is [path_nums] float torch tensor,every graph path weight
         """
         gold_score = (weight * graph[:, 2].to(weight)).sum(0)
-        forward_score = self._forward_alg(graph[:, :2], weight)
+        graph = graph[:, :2] - graph[:, :2].min()
+        forward_score = self._forward_alg(graph, weight)
         return gold_score + forward_score
