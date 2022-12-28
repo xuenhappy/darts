@@ -8,7 +8,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from .utils import *
 
 
 class WordEncoder(nn.Module):
