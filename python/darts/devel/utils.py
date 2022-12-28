@@ -123,39 +123,45 @@ class GraphLoss(nn.Module):
     def __init__(self):
         super(GraphLoss, self).__init__()
 
+    @staticmethod
+    def _get_dep_order(graph):
+        with torch.no_grad():
+            graph = graph - graph.min()
+            nodex = graph.max() + 1
+            connc = torch.zeros((nodex, nodex), dtype=torch.float, device=graph.device)
+            connc[graph[:, 0], graph[:, 1]] = 1
+            initc = torch.zeros(nodex, dtype=torch.long, device=graph.device)
+            initc[nodex - 1] = 1
+            deg = connc.sum(1)
+            while initc.min() < 1:
+                trans = torch.matmul((initc > 0).float().view(1, -1), connc.T)
+                initc += (trans == deg).long().view(-1)
+            return torch.argsort(initc), nodex
+
+    @staticmethod
+    def _get_paths(graph):
+        with torch.no_grad():
+            paths = {}
+            for i, (s, e) in enumerate(graph):
+                e = int(e.data.cpu())
+                pth = paths.get(e, [])
+                pth.append((s, i))
+                paths[e] = pth
+            paths = {k: torch.LongTensor(v).to(graph.device) for k, v in paths.items()}
+            return paths
+
     def _forward_alg(self, graph, weight):
-        # caluate th paths
-        paths = {}
-        for i, (s, e) in enumerate(graph):
-            pth = paths.get(e, [])
-            pth.append((s, i))
-            paths[e] = pth
+        dep_orders, node_nums = self._get_dep_order(graph)
+        paths = self._get_paths(graph)
         # init data
-        esum = torch.zeros(len(paths) + 1).to(weight)
-        flag = [False] * (len(paths) + 1)
-        flag[0] = True
-        stack = [len(paths)]
-
+        esum = torch.zeros(node_nums, dtype=weight.dtype, device=weight.device)
+        index = torch.arange(node_nums, dtype=torch.long, device=weight.device)
         # calculate the prob
-        while stack:
-            if flag[stack[-1]]:
-                # this node has been calculated
-                stack.pop()
-                continue
-            # check sub path
-            allpre_ready = True
-            for idx, _ in paths[stack[-1]]:
-                if not flag[idx]:
-                    stack.append(idx)
-                    allpre_ready = False
-                    continue
-
-            if allpre_ready:
-                idx = stack.pop()
-                pth = torch.LongTensor(paths[idx]).to(weight.device())
-                pre_esums = esum.index_select(0, pth[:, 0]) - weight.index_select(0, pth[:, 1])
-                esum[idx] = torch.logsumexp(pre_esums, 0)
-                flag[idx] = True
+        for idx in dep_orders[1:]:
+            dep_points = paths[int(idx.data.cpu())]
+            idx_tensor = (index == idx).to(weight.dtype)
+            pre_esums = esum.index_select(0, dep_points[:, 0]) - weight.index_select(0, dep_points[:, 1])
+            esum += idx_tensor * torch.logsumexp(pre_esums, 0)
 
         return esum[-1]
 
@@ -166,7 +172,5 @@ class GraphLoss(nn.Module):
         weight is [path_nums] float torch tensor,every graph path weight
         """
         gold_score = (weight * graph[:, 2].to(weight)).sum(0)
-        graph_path = graph[:, :2]
-        forward_score = self._forward_alg(graph_path - graph_path.min(), weight)
-
+        forward_score = self._forward_alg(graph[:, :2], weight)
         return gold_score + forward_score
