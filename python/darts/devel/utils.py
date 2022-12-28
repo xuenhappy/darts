@@ -16,13 +16,14 @@ import torch.nn as nn
 def getFeatsIdx(postions):
     """postions shape is (N,)
     """
-    feats_lens = torch.unique(postions, return_counts=True)[1]
-    words_len = torch.max(feats_lens)
-    base_idx = torch.arange(0, words_len, device=feats_lens.device).view(1, -1).repeat(feats_lens.shape[0], 1)
-    start_idx = torch.roll(torch.cumsum(feats_lens, -1), 1)
-    start_idx[0] = 0
-    feats_idx = (base_idx + start_idx.view((-1, 1))) * (base_idx < feats_lens.view(-1, 1))
-    return feats_lens, feats_idx
+    with torch.no_grad():
+        feats_lens = torch.unique(postions, return_counts=True)[1]
+        words_len = torch.max(feats_lens)
+        base_idx = torch.arange(0, words_len, device=feats_lens.device).view(1, -1).repeat(feats_lens.shape[0], 1)
+        start_idx = torch.roll(torch.cumsum(feats_lens, -1), 1)
+        start_idx[0] = 0
+        feats_idx = (base_idx + start_idx.view((-1, 1))) * (base_idx < feats_lens.view(-1, 1))
+        return feats_lens, feats_idx
 
 
 def batch_segment_fill(arr, batch_slices, val):
@@ -43,8 +44,9 @@ def batch_segment_fill(arr, batch_slices, val):
         cidx = batch_slice[:, 2][group] - incre_idx
         return group, ridx, cidx
 
-    group, ridx, cidx = _getGroupMask(batch_slices)
-    arr[ridx, cidx] = val[group]
+    with torch.no_grad():
+        group, ridx, cidx = _getGroupMask(batch_slices)
+        arr[ridx, cidx] = val[group]
 
 
 class CRFLoss(nn.Module):

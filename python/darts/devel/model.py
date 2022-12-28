@@ -19,21 +19,24 @@ class WordEncoder(nn.Module):
         self.wtype_num = wtype_num
         self.vocab_embeding = nn.Embedding(vocab_num, vocab_esize)
         self.encoder = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=True)
-        self.type_embeding = nn.Embedding(wtype_num, word_esize)
+        if wtype_num > 0:
+            self.dropin = nn.Dropout(0.2)
+            self.type_embeding = nn.Embedding(wtype_num, word_esize)
         self.imner = nn.Linear(hidden_size * 2, word_esize)
-        self.dropin = nn.Dropout(0.2)
+
         self.normal = nn.LayerNorm(hidden_size)
 
     def forward(self, batch_input_idx, batch_word_info):
         #batch_input_idx (batch*time_step)
         #batch_word_info(words_num*[bidx,s,e,tidx])
-        word_type_embeding = self.type_embeding(batch_word_info[:, 3])
         sent_embeding = self.imner(self.encoder(self.vocab_embeding(batch_input_idx)))
         word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
         word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
         word_sent_embeding = (word_head_embeding + word_tail_embeding) / 2.0
-
-        return self.normal(self.dropin(word_type_embeding) + word_sent_embeding)
+        if self.wtype_num > 0:
+            word_type_embeding = self.type_embeding(batch_word_info[:, 3])
+            return self.normal(self.dropin(word_type_embeding) + word_sent_embeding)
+        return self.normal(word_sent_embeding)
 
     def export2onnx(self):
         sents_idx = torch.randint(0, self.vocab_num, (11, ))
@@ -79,7 +82,7 @@ class Quantizer(nn.Module):
     def forward(self, x, y):
         K, Q = self.Kmap(x), self.Qmap(y)
         dist = torch.einsum('ij,ij->i', K, Q) / self.alpha
-        return F.softplus(dist).squeeze(-1)
+        return F.softplus(dist).view(-1)
 
     def export2onnx(self):
 
@@ -109,30 +112,21 @@ class CrfNer(nn.Module):
 
     def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, tag_nums):
         super().__init__()
-        self.crf = CRFLoss(tag_nums)
-        self.vocab_num = vocab_num
-        self.vocab_embeding = nn.Embedding(vocab_num, vocab_esize)
-        self.encoder = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=True)
-        self.imner = nn.Linear(hidden_size * 2, word_esize)
-        self.normal = nn.LayerNorm(hidden_size)
-        self.dropin = nn.Dropout(0.2)
+        self.encoder = WordEncoder(vocab_num, vocab_esize, hidden_size, word_esize, -1)
         self.prop = nn.Linear(word_esize, tag_nums)
+        self.crf = CRFLoss(tag_nums)
 
     def getWordprop(self, batch_input_idx, batch_word_info):
         #batch_input_idx (batch*time_step)
         #batch_word_info(words_num*[bidx,s,e])
-        sent_embeding = self.imner(self.encoder(self.vocab_embeding(batch_input_idx)))
-        word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
-        word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
-        word_sent_embeding = (word_head_embeding + word_tail_embeding) / 2.0
-        word_emb = self.dropin(self.normal(word_sent_embeding))
-        return self.prop(word_emb)
+        return self.prop(self.encoder(batch_input_idx, batch_word_info))
 
     def forward(self, batch_input_idx, batch_word_info):
         #batch_input_idx (batch*time_step)
         #batch_word_info(words_num*[bidx,s,e,tagidx])
+        wordprop = self.getWordprop(batch_input_idx, batch_word_info)
+
         featsLen, featsIdx = getFeatsIdx(batch_word_info[:, 0])
-        wordprop = self.getWordprop(batch_input_idx, batch_word_info[:, :-1])
         word_sent = wordprop.index_select(0, featsIdx.view(-1)).view((*featsIdx.shape, -1))
         tag_sent = batch_word_info[:, -1].index_select(0, featsIdx.view(-1)).view(featsIdx.shape)
         return self.crf(word_sent, tag_sent, featsLen)
@@ -178,18 +172,18 @@ class GraphTrainer(nn.Module):
     def loss(self, batch_input_idx, batch_word_info, batch_graph):
         #batch_input_idx (batch*time_step)
         #batch_word_info(words_num*[bidx,s,e,tidx])
-        #batch_graph:batch*(bidx,bwidx_s,bwidx_e,wl_start,wl_end,bool)
+        #batch_graph:batch*(bidx,bwidx_s,bwidx_e,bool)
         word_embeds = self.predictor(batch_input_idx, batch_word_info)
         egeds_dists = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
         featsLen, featsIdx = getFeatsIdx(batch_graph[:, 0])
-        loses = torch.FloatTensor(0, device=batch_input_idx.device)
+        losses = torch.FloatTensor(0, device=batch_input_idx.device)
         for bidx in range(featsLen.shape[0]):
             nidxs = featsIdx[bidx][:featsLen[bidx]]
             edge_weight = egeds_dists[nidxs]
-            graph = batch_graph[nidxs][:, 3:]
-            loses += self.lossfunc(graph, edge_weight)
+            graph = batch_graph[nidxs][:, 1:]
+            losses += self.lossfunc(graph, edge_weight)
 
-        return loses / featsLen.shape[0]
+        return losses / featsLen.shape[0]
 
     def forward(self, batch_input_idx, batch_word_info, batch_graph):
         if torch.cuda.is_available():
