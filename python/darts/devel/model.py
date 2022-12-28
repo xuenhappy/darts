@@ -142,7 +142,7 @@ class CrfNer(nn.Module):
             return self.crf.viterbi_decode(prop)
 
         # args must same as forawrd
-        outfile = "lstm.encoder.onnx"
+        outfile = "crf.ner.onnx"
         inputdata = (sents_idx, word_info)
         inputnames = ['sents', 'wordinfo']
         dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
