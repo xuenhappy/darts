@@ -126,43 +126,34 @@ class GraphLoss(nn.Module):
         super(GraphLoss, self).__init__()
 
     @staticmethod
-    def _get_dep_order(graph):
+    def _get_step_state(graph, weight):
         with torch.no_grad():
-            nodex = graph.max() + 1
-            _trans = torch.zeros((nodex, nodex), dtype=torch.float, device=graph.device)
-            _trans[graph[:, 0], graph[:, 1]] = 1
-            flags = torch.zeros(nodex, dtype=torch.long, device=graph.device)
-            flags[nodex - 1] = 1
-            degree = _trans.sum(1)
+            node_num, edge_num = graph.max() + 1, graph.size(0)
+            _dense_idx = torch.zeros((node_num, node_num), dtype=torch.long, device=graph.device) - 1
+            _dense_idx[graph[:, 0], graph[:, 1]] = torch.arange(edge_num, dtype=torch.long, device=graph.device)
+            _advj = (_dense_idx > -1).to(weight)
+            idegree = _advj.sum(0)
+            vailed_node = (idegree != 0).to(weight)
+            weight_mask = torch.zeros((node_num, node_num), dtype=weight.dtype, device=weight.device)
+            weight_mask[(_dense_idx + (idegree == 0).long().view(1, -1)) < 0] = float('inf')
+            flags = torch.zeros(node_num, dtype=weight.dtype, device=weight.device)
+            flags[0] = 1
+            step_masks = []
             while flags.min() < 1:
-                passv = torch.matmul((flags > 0).float().view(1, -1), _trans.T)
-                flags += (passv == degree).long().view(-1)
-            return torch.argsort(flags), nodex
+                passv = torch.matmul(flags.view(1, -1), _advj)
+                used_mask = (passv == idegree).view(-1)
+                flags = used_mask.to(flags)
+                step_masks.append(flags * vailed_node)
+            step_masks = torch.stack(step_masks, 0)
 
-    @staticmethod
-    def _get_paths(graph):
-        with torch.no_grad():
-            paths = {}
-            for i, (s, e) in enumerate(graph):
-                e = int(e.data.cpu())
-                pth = paths.get(e, [])
-                pth.append((s, i))
-                paths[e] = pth
-            paths = {k: torch.LongTensor(v).to(graph.device) for k, v in paths.items()}
-            return paths
+        _dense_weight = weight[_dense_idx] + weight_mask
+        return _advj, _dense_weight, step_masks, node_num
 
     def _forward_alg(self, graph, weight):
-        dep_orders, node_nums = self._get_dep_order(graph)
-        paths = self._get_paths(graph)
-        # init data
-        esum = torch.zeros(node_nums, dtype=weight.dtype, device=weight.device)
-        index = torch.arange(node_nums, dtype=torch.long, device=weight.device)
-        # calculate the prob
-        for idx in dep_orders[1:]:
-            dep_points = paths[int(idx.data.cpu())]
-            idx_tensor = (index == idx).to(weight.dtype)
-            pre_esums = esum.index_select(0, dep_points[:, 0]) - weight.index_select(0, dep_points[:, 1])
-            esum += idx_tensor * torch.logsumexp(pre_esums, 0)
+        _advj, _dense_weight, step_masks, node_num = self._get_step_state(graph, weight)
+        esum = torch.zeros(node_num, dtype=weight.dtype, device=weight.device)
+        for mask in step_masks:
+            esum = torch.logsumexp(esum.view(-1, 1) * _advj - _dense_weight, 0) * mask
 
         return esum[-1]
 
