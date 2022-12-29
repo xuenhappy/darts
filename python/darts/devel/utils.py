@@ -138,23 +138,22 @@ class GraphLoss(nn.Module):
             weight_mask[(_dense_idx + (idegree == 0).long().view(1, -1)) < 0] = float('inf')
             flags = torch.zeros(node_num, dtype=weight.dtype, device=weight.device)
             flags[0] = 1
-            step_masks = []
+            inrc_step_masks = [flags * vailed_node]
             while flags.min() < 1:
                 passv = torch.matmul(flags.view(1, -1), _advj)
-                used_mask = (passv == idegree).view(-1)
-                flags = used_mask.to(flags)
-                step_masks.append(flags * vailed_node)
-            step_masks = torch.stack(step_masks, 0)
+                flags = (passv == idegree).view(-1).to(flags)
+                inrc_step_masks.append(flags * vailed_node)
+            inrc_step_masks = torch.stack(inrc_step_masks, 0)
+            inrc_step_masks = inrc_step_masks[1:] - inrc_step_masks[:-1]
 
         _dense_weight = weight[_dense_idx] + weight_mask
-        return _advj, _dense_weight, step_masks, node_num
+        return _advj, _dense_weight, inrc_step_masks, node_num
 
     def _forward_alg(self, graph, weight):
-        _advj, _dense_weight, step_masks, node_num = self._get_step_state(graph, weight)
+        _advj, _dense_weight, inrc_step_masks, node_num = self._get_step_state(graph, weight)
         esum = torch.zeros(node_num, dtype=weight.dtype, device=weight.device)
-        for mask in step_masks:
-            esum = torch.logsumexp(esum.view(-1, 1) * _advj - _dense_weight, 0) * mask
-
+        for mask in inrc_step_masks:
+            esum += torch.logsumexp(esum.view(-1, 1) * _advj - _dense_weight, 0) * mask
         return esum[-1]
 
     def forward(self, graph, weight):
