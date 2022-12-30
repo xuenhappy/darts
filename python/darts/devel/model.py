@@ -170,8 +170,8 @@ class GraphTrainer(nn.Module):
 
     def loss(self, batch_input_idx, batch_word_info, batch_graph):
         #batch_input_idx (batch*time_step)
-        #batch_word_info(words_num*[bidx,s,e,tidx])
-        #batch_graph:batch*(bidx,bwidx_s,bwidx_e,bool)
+        #batch_word_info(words_num*[word_bidx,input_s,input_e,wtype_idx])
+        #batch_graph:batch*(graph_bidx,bwidx_s,bwidx_e,bool)
         word_embeds = self.predictor(batch_input_idx, batch_word_info)
         egeds_dists = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
         featsLen, featsIdx = getFeatsIdx(batch_graph[:, 0])
