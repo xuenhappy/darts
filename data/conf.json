@@ -40,7 +40,7 @@
     "deciders": {
         "ngram.decider": {
             "type": "BigramDecider",
-            "dat.path": "data/models/bigram.mbs"
+            "dat.path": "data/models/ngram_dict.mbs"
         },
         "mini.decider": {
             "type": "MinCoverDecider"
