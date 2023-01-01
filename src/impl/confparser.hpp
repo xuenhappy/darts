@@ -12,6 +12,7 @@
 #ifndef SRC_IMPL_CONFPARSER_HPP_
 #define SRC_IMPL_CONFPARSER_HPP_
 
+#include <iostream>
 #include <map>
 #include <memory>
 #include <string>
@@ -130,7 +131,7 @@ inline std::shared_ptr<darts::CellRecognizer> loadRecognizer(
         return nullptr;
     }
     auto recognizer_node        = recognizers_node[name];
-    std::string recognizer_type = recognizers_node["type"].asString();
+    std::string recognizer_type = recognizer_node["type"].asString();
     std::map<std::string, std::string> params;
     getParams(recognizer_node, params);
     std::map<std::string, std::shared_ptr<darts::SegmentPlugin>> deps;
@@ -140,12 +141,12 @@ inline std::shared_ptr<darts::CellRecognizer> loadRecognizer(
     }
     darts::CellRecognizer* recognizer = darts::CellRecognizerRegisterer::GetInstanceByName(recognizer_type);
     if (!recognizer) {
-        std::cerr << "ERROR: create class [" << recognizer << "] CellRecognizer failed!" << std::endl;
+        std::cerr << "ERROR: create class [" << recognizer_type << "] CellRecognizer failed!" << std::endl;
         deps.clear();
         return nullptr;
     }
     if (recognizer->initalize(params, deps)) {
-        std::cerr << "ERROR: init class [" << recognizer << "] CellRecognizer obj failed!" << std::endl;
+        std::cerr << "ERROR: init class [" << recognizer_type << "] CellRecognizer obj failed!" << std::endl;
         deps.clear();
         return nullptr;
     }

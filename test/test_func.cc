@@ -47,30 +47,10 @@ void testAtomListSplit() {
     std::cout << darts::AtomList(ori) << std::endl;
 }
 
-
-
-void testDictWordRecongnizer() {
-    printf("----- test function %s-----------------\n", "testDictWordRecongnizer");
-    darts::DictWordRecongnizer dict("mini_dict.pb.gz");
-    std::cout << darts::CellRecognizerRegisterer::IsValid("DictWordRecongnizer") << std::endl;
-}
-
-void testBigramPersenterDictMake() {
-    printf("----- test function %s-----------------\n", "testBigramPersenterDictMake");
-    darts::BigramDict dict;
-    if (dict.loadDictFromTxt("SogouLabDic.txt", "/Users/xuen/Downloads/SogouR.txt")) {
-        if (dict.saveDict("bigram.bdf")) {
-            printf("----- test function %s-----------------\n", "testBigramPersenterDictMake success!");
-            return;
-        }
-    }
-    printf("----- test function %s-----------------\n", "testBigramPersenterDictMake failed!");
-}
-
 void testJsonConfLoad() {
     printf("----- test function %s-----------------\n", "testJsonConfLoad");
     darts::Segment* segment = NULL;
-    if (loadSegment(getResource("data/darts.conf.json").c_str(), &segment)) {
+    if (loadSegment(getResource("data/conf.json").c_str(), &segment)) {
         std::cout << "load segment error!" << std::endl;
     } else {
         std::cout << "load segment success!" << std::endl;
@@ -81,13 +61,12 @@ void testJsonConfLoad() {
 }
 
 int main(int argc, char* argv[]) {
+    std::locale::global(std::locale("en_US.UTF-8"));
+    setlocale(LC_ALL, "zh_CN.UTF-8");
     initUtils();
     testGetResource();
     testNormalization();
     testAtomListSplit();
-    testDregexRW();
-    testDictWordRecongnizer();
-    testBigramPersenterDictMake();
     testJsonConfLoad();
     google::protobuf::ShutdownProtobufLibrary();
     return 0;

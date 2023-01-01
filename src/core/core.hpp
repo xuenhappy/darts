@@ -129,7 +129,7 @@ class AtomList {
     std::shared_ptr<Atom> operator[](int index) const { return at(index); }
 
     friend std::ostream& operator<<(std::ostream& output, const AtomList& D) {
-        output << "AtomList[ ";
+        output << "AtomList[";
         for (auto a : D.data) {
             output << *a << ",";
         }
