@@ -49,10 +49,13 @@ def wordlist2graph(wordarr):
 
 class TokenNerSampleReader():
 
-    def __init__(self, filep, max_sent_asize=50):
+    def __init__(self, filep, labes, max_sent_asize=50, batch_nums=100, max_words_len=50):
         self.samplefile = filep
+        self.batch_nums = batch_nums
+        self.max_words_len = max_words_len
         self.aencoder = AtomCodec({"base.dir": "data/models/codex"})
         self.max_sent_asize = max_sent_asize
+        self.labes = [l.strip() for l in labes.split(",") if l.strip()]
 
     def decode(self, codes):
         return " ".join(self.aencoder.decode(l) for l in codes)
@@ -68,12 +71,9 @@ class TokenNerSampleReader():
                 yield line
 
     def getBio(self, line):
-        line = normalize(line).strip()
-        tokens = line.split(" ")
+        tokens = [l.strip() for l in line.split(" ") if l.strip()]
         line_str = [tokens[0]]
         for word in tokens[1:]:
-            if not word:
-                continue
             if ord(word[0]) < 255 and ord(line_str[-1][-1]) < 255:
                 line_str.append(" ")
             line_str.append(word)
@@ -105,27 +105,65 @@ class TokenNerSampleReader():
                 else:
                     abio.append('O')
         abio.append('O')  #appaned end
-        return alist, abio
+        return alist, [self.labes.index(l) for l in abio]
+
+    def toIndex(self, alist, bios, batch_idx):
+        codes = self.aencoder.encode(alist)
+        idxs = [code[0] for code in codes]
+        atom_code_s = [0] * len(bios)
+        atom_code_e = [0] * len(bios)
+        atom_code_s[-1] = len(codes) - 1
+        atom_code_e[-1] = len(codes) - 1
+        for i, code in enumerate(codes):
+            index = code[1]
+            if index < 0:
+                continue
+            index += 1
+            if atom_code_s[index] == 0:
+                atom_code_s[index] = i
+            atom_code_e[index] = i
+        return idxs, list(zip([batch_idx] * len(bios), atom_code_s, atom_code_e, bios))
+
+    def cutLines(self, line):
+        minLineLength = 10
+        if len(line) < self.max_words_len + minLineLength:
+            return [line]
+        rets = []
+        SENTENCE_POS = "!。,?;:！，？；："
+        pre, pos = 0, minLineLength - 1
+
+        while pos < len(line) - 1:
+            pos += 1
+            if pos - pre >= self.max_words_len:
+                rets.append(line[pre:pos + 1])
+                pre = pos + 1
+                continue
+            if (line[pos] not in SENTENCE_POS) or (pos - pre < minLineLength):
+                continue
+            rets.append(line[pre:pos + 1])
+            pre = pos + 1
+
+        if pre < len(line):
+            rets.append(line[pre:])
+
+        return rets
 
     def __iter__(self):
+        batch_word_index, batch_atom_infos = [], []
         for line in self._sample_iter():
-            alist, bios = self.getBio(line)
-            codes = self.aencoder.encode(alist)
-            idxs = [code[0] for code in codes]
-            atom_code_s = [0] * len(bios)
-            atom_code_e = [0] * len(bios)
-            atom_code_s[-1] = len(codes) - 1
-            atom_code_e[-1] = len(codes) - 1
-            for i, code in enumerate(codes):
-                index = code[1]
-                if index < 0:
-                    continue
-                index += 1
-                if atom_code_s[index] == 0:
-                    atom_code_s[index] = i
-                atom_code_e[index] = i
-            print("----------------------------------------------")
-            print(bios)
-            print(atom_code_s)
-            print(atom_code_e)
-            print(self.decode(idxs))
+            line = normalize(line).strip()
+            for line in self.cutLines(line):
+                alist, bios = self.getBio(line)
+                idexs, indexs = self.toIndex(alist, bios, len(batch_word_index))
+                batch_word_index.append(idexs)
+                batch_atom_infos.extend(indexs)
+                if len(batch_word_index) >= self.batch_nums:
+                    widxs, wlens = d2list2array(batch_word_index)
+                    atom_idxs = np.asarray(batch_atom_infos, dtype=np.int32)
+                    yield widxs, wlens, atom_idxs
+                    batch_word_index, batch_atom_infos = [], []
+
+        if len(batch_word_index) > 1:
+            widxs, wlens = d2list2array(batch_word_index)
+            atom_idxs = np.asarray(batch_atom_infos, dtype=np.int32)
+            yield widxs, wlens, atom_idxs
