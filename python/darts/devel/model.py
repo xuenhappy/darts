@@ -28,7 +28,8 @@ class WordEncoder(nn.Module):
     def forward(self, batch_input_idx, batch_word_info):
         #batch_input_idx (batch*time_step)
         #batch_word_info(words_num*[bidx,s,e,tidx])
-        sent_embeding = self.imner(self.encoder(self.vocab_embeding(batch_input_idx)))
+        rnnout, _ = self.encoder(self.vocab_embeding(batch_input_idx))
+        sent_embeding = self.imner(rnnout)
         word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
         word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
         word_sent_embeding = (word_head_embeding + word_tail_embeding) / 2.0
@@ -160,6 +161,19 @@ class CrfNer(nn.Module):
         return outfile
 
 
+class NerTrainer(nn.Module):
+
+    def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, tag_nums):
+        super().__init__()
+        self.ner = CrfNer(vocab_num, vocab_esize, hidden_size, word_esize, tag_nums)
+
+    def forward(self, batch_input_idx, batch_word_info):
+        if torch.cuda.is_available():
+            batch_input_idx = batch_input_idx.cuda()
+            batch_word_info = batch_word_info.cuda()
+        return self.ner(batch_input_idx, batch_word_info).mean()
+
+
 class GraphTrainer(nn.Module):
 
     def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, wtype_num):
@@ -189,4 +203,4 @@ class GraphTrainer(nn.Module):
             batch_input_idx = batch_input_idx.cuda()
             batch_word_info = batch_word_info.cuda()
             batch_graph = batch_graph.cuda()
-        return self.loss(self, batch_input_idx, batch_word_info, batch_graph)
+        return self.loss(batch_input_idx, batch_word_info, batch_graph)

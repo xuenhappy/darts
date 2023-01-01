@@ -13,6 +13,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from ..cdarts import *
+from torch.utils.data import Dataset, DataLoader, IterableDataset
 
 
 def d2list2array(d2list, fval=0, dtype=np.int32):
@@ -167,3 +168,20 @@ class TokenNerSampleReader():
             widxs, wlens = d2list2array(batch_word_index)
             atom_idxs = np.asarray(batch_atom_infos, dtype=np.int32)
             yield widxs, wlens, atom_idxs
+
+
+class TorchNerSampleReader(IterableDataset):
+
+    def __init__(self, filep, labes, max_sent_asize=50, batch_nums=100, max_words_len=50) -> None:
+        super().__init__()
+        self.dts = TokenNerSampleReader(filep, labes, max_sent_asize, batch_nums, max_words_len)
+
+    def wordsize(self):
+        return self.dts.aencoder.label_nums()
+
+    def labelsize(self):
+        return len(self.dts.labes)
+
+    def __iter__(self):
+        for widxs, _, atom_idxs in self.dts:
+            yield torch.from_numpy(widxs).long(), torch.from_numpy(atom_idxs).long()
