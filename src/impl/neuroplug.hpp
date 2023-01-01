@@ -166,13 +166,14 @@ class OnnxIndicator {
         // create alist tensor
         std::vector<int64_t> alist_tensor_values;
         alist_tensor_values.reserve(dstSrc.size() * 2 + 2);
-        std::vector<size_t> start_(dstSrc.size(), 1);
-        std::vector<size_t> ends_(dstSrc.size(), 1);
+        std::vector<size_t> start_(dstSrc.size(), 0);
+        std::vector<size_t> ends_(dstSrc.size(), 0);
         // set alist data
         wordpiece->encode(dstSrc, [&](int code, int atom_postion) {
             if (atom_postion >= 0) {
-                start_[atom_postion] = std::min(start_[atom_postion], alist_tensor_values.size());
-                ends_[atom_postion]  = std::max(ends_[atom_postion], alist_tensor_values.size());
+                auto sz = alist_tensor_values.size();
+                if (start_[atom_postion] < 1) start_[atom_postion] = sz;
+                ends_[atom_postion] = sz;
             }
             alist_tensor_values.push_back(code);
         });
@@ -510,9 +511,8 @@ class OnnxRecongnizer : public CellRecognizer {
             if (atom_postion >= 0) {
                 size_t idx   = atom_postion * 2 + 2;
                 int64_t aidx = alist_tensor_values.size();
-
-                words_tensor_values[idx]     = std::min(words_tensor_values[idx], aidx);
-                words_tensor_values[idx + 1] = std::max(words_tensor_values[idx + 1], aidx);
+                if (words_tensor_values[idx] < 1) words_tensor_values[idx] = aidx;
+                words_tensor_values[idx + 1] = aidx;
             }
             alist_tensor_values.push_back(code);
         });
