@@ -47,15 +47,7 @@ void testAtomListSplit() {
     std::cout << darts::AtomList(ori) << std::endl;
 }
 
-void testDregexRW() {
-    printf("----- test function %s-----------------\n", "testDregexRW");
-    dregex::Trie dat;
-    std::cout << "write pb file ..." << std::endl;
-    dat.writePb("test.pb.gz");
-    std::cout << "load pb file ..." << std::endl;
-    dregex::Trie newdat;
-    newdat.loadPb("test.pb.gz");
-}
+
 
 void testDictWordRecongnizer() {
     printf("----- test function %s-----------------\n", "testDictWordRecongnizer");
