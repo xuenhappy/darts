@@ -23,7 +23,7 @@ class WordEncoder(nn.Module):
             self.type_embeding = nn.Embedding(wtype_num, word_esize)
         self.imner = nn.Linear(hidden_size * 2, word_esize)
 
-        self.normal = nn.LayerNorm(hidden_size)
+        self.normal = nn.LayerNorm(word_esize)
 
     def forward(self, batch_input_idx, batch_word_info):
         #batch_input_idx (batch*time_step)

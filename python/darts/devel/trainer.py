@@ -11,7 +11,21 @@ if __name__ == "__main__":
 
     if 'ner' == sys.argv[1]:
         ner_sample = TorchNerSampleReader(sys.argv[2], "O,B-_HWORD,I-_HWORD")
-        ner_model = NerTrainer(ner_sample.wordsize(), 32, 64, 64, ner_sample.labelsize())
+        if showSample:
+            for widx, winfo in ner_sample:
+                winfo = winfo.numpy()
+                print("batch____________________**__")
+                for bidx, line in enumerate(widx):
+                    print(ner_sample.dts.decode(line.numpy()))
+                    labels = []
+                    for w in winfo:
+                        if w[0] == bidx:
+                            labels.append(w[-1])
+                    print(labels)
+
+            exit(0)
+
+        ner_model = NerTrainer(ner_sample.wordsize(), 64, 128, 84, ner_sample.labelsize())
         sover = TSolver(ner_model, ner_sample, {"model_outdir": 'model_bin', 'epoch_num': 6})
         sover.solve()
         exit(0)
