@@ -562,6 +562,17 @@ class OnnxRecongnizer : public CellRecognizer {
         // set head and tail
         words_tensor_values[0] = words_tensor_values[1] = 0;
         words_tensor_values[words_tensor_size - 2] = words_tensor_values[words_tensor_size - 1] = adim - 1;
+        // std::cout << "a[";
+        // for (size_t i = 0; i < alist_tensor_values.size(); ++i) {
+        //     std::cout << alist_tensor_values[i] << ",";
+        // }
+        // std::cout << "]" << std::endl;
+
+        // std::cout << "w[";
+        // for (size_t i = 0; i < words_tensor_values.size(); ++i) {
+        //     std::cout << words_tensor_values[i] << ",";
+        // }
+        // std::cout << "]" << std::endl;
         // push data
         Ort::Value alist_input_tensor =
             Ort::Value::CreateTensor<int64_t>(memory_info, alist_tensor_values.data(), adim, &adim, 1);
