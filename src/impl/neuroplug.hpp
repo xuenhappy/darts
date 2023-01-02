@@ -627,28 +627,46 @@ class OnnxRecongnizer : public CellRecognizer {
         decode(dstSrc, label_idx);
         Cursor cur = cmap.Head();
         size_t pos = 1;
+        bool flag  = false;
+        // std::cout << "[";
+        // for (size_t i = 1; i < label_idx.size() - 1; ++i) {
+        //     std::cout << labels[label_idx[i]] << ",";
+        // }
+        // std::cout << "]" << std::endl;
         for (size_t i = 1; i < label_idx.size() - 1; ++i) {
-            const std::string& nlabel  = labels[label_idx[i]];
-            const std::string& nxlabel = labels[label_idx[i + 1]];
-            if (nlabel == nxlabel) continue;
-            if (nlabel[0] == 'I') {
-                auto w = std::make_shared<Word>(dstSrc, pos, i + 1);
-                if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
-                cur = cmap.addNext(cur, w);
-                pos = i + 1;
+            const std::string& nlabel = labels[label_idx[i]];
+            if (nlabel[0] == 'B') {
+                if (flag && i - pos > 1) {
+                    const std::string& blabel = labels[label_idx[pos]];
+
+                    auto w = std::make_shared<Word>(dstSrc, pos - 1, i - 1);
+                    if (nlabel.size() > 2) w->addLabel(blabel.substr(2));
+                    std::cout << *w << std::endl;
+                    cur = cmap.addNext(cur, w);
+                }
+                pos  = i;
+                flag = true;
                 continue;
             }
-            if (nlabel.size() > 2 && nlabel.substr(1) == nxlabel.substr(1)) continue;
-            auto w = std::make_shared<Word>(dstSrc, pos, i + 1);
-            if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
-            cur = cmap.addNext(cur, w);
-            pos = i + 1;
+            if (nlabel[0] == 'O') {
+                if (flag && i - pos > 1) {
+                    const std::string& blabel = labels[label_idx[pos]];
+
+                    auto w = std::make_shared<Word>(dstSrc, pos - 1, i - 1);
+                    if (nlabel.size() > 2) w->addLabel(blabel.substr(2));
+                    std::cout << *w << std::endl;
+                    cur = cmap.addNext(cur, w);
+                }
+                flag = false;
+                continue;
+            }
         }
-        if (pos < label_idx.size() - 1) {
-            auto w = std::make_shared<Word>(dstSrc, pos, label_idx.size());
+        if (flag && pos < label_idx.size() - 1) {
+            auto w = std::make_shared<Word>(dstSrc, pos - 1, label_idx.size() - 1);
 
             const std::string& nlabel = labels[label_idx[pos]];
             if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
+            std::cout << *w << std::endl;
             cmap.addNext(cur, w);
         }
     }
