@@ -44,11 +44,17 @@ class WordEncoder(nn.Module):
         wtype_idx = torch.randint(0, self.wtype_num, (word_se.shape[0], 1))
         word_info = torch.concat((word_se, wtype_idx), dim=1)
 
-        def _script(sents, words):
-            sents = torch.unsqueeze(sents, 0)
-            bidx = torch.zeros((words.shape[0], 1), dtype=wtype_idx.dtype)
-            words = torch.concat((bidx, words), dim=1)
-            return self(sents, words)
+        class _script(nn.Module):
+
+            def __init__(self, obj) -> None:
+                super().__init__()
+                self.obj = obj
+
+            def forward(self, sents, words):
+                sents = torch.unsqueeze(sents, 0)
+                bidx = torch.zeros((words.shape[0], 1), dtype=wtype_idx.dtype)
+                words = torch.concat((bidx, words), dim=1)
+                return self.obj(sents, words)
 
         # args must same as forawrd
         outfile = "lstm.encoder.onnx"
@@ -57,7 +63,7 @@ class WordEncoder(nn.Module):
         dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
 
         torch.onnx.export(
-            _script,
+            _script(self),
             inputdata,
             outfile,
             export_params=True,  # store the trained parameter weights inside the model file
@@ -86,8 +92,14 @@ class Quantizer(nn.Module):
 
     def export2onnx(self):
 
-        def _script(x, y):
-            return self(torch.unsqueeze(x, 0), torch.unsqueeze(y, 0))
+        class _script(nn.Module):
+
+            def __init__(self, obj) -> None:
+                super().__init__()
+                self.obj = obj
+
+            def forward(self, x, y):
+                return self.obj(torch.unsqueeze(x, 0), torch.unsqueeze(y, 0))
 
         # args must same as forawrd
         outfile = "sample.quantizer.onnx"
@@ -96,7 +108,7 @@ class Quantizer(nn.Module):
         dynamic_axes = {}
 
         torch.onnx.export(
-            _script,
+            _script(self),
             inputdata,
             outfile,
             export_params=True,  # store the trained parameter weights inside the model file
@@ -132,15 +144,21 @@ class CrfNer(nn.Module):
         return self.crf(word_sent, tag_sent, featsLen)
 
     def export2onnx(self):
-        sents_idx = torch.randint(0, self.vocab_num, (11, ))
+        sents_idx = torch.randint(0, self.encoder.vocab_num, (11, ))
         word_info = torch.LongTensor([[0, 0], [1, 2], [3, 3], [4, 6], [7, 7], [8, 9], [10, 10]])
 
-        def _script(sents, words):
-            sents = torch.unsqueeze(sents, 0)
-            bidx = torch.zeros((words.shape[0], 1), dtype=words.dtype)
-            words = torch.concat((bidx, words), dim=1)
-            prop = self.getWordprop(sents, words)
-            return self.crf.viterbi_decode(prop)
+        class _script(nn.Module):
+
+            def __init__(self, obj) -> None:
+                super().__init__()
+                self.obj = obj
+
+            def forward(self, sents, words):
+                sents = torch.unsqueeze(sents, 0)
+                bidx = torch.zeros((words.shape[0], 1), dtype=words.dtype)
+                words = torch.concat((bidx, words), dim=1)
+                prop = self.obj.getWordprop(sents, words)
+                return self.obj.crf.viterbi_decode(prop)
 
         # args must same as forawrd
         outfile = "crf.ner.onnx"
@@ -149,7 +167,7 @@ class CrfNer(nn.Module):
         dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
 
         torch.onnx.export(
-            _script,
+            _script(self),
             inputdata,
             outfile,
             export_params=True,  # store the trained parameter weights inside the model file

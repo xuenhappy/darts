@@ -29,8 +29,8 @@
         },
         "hmm.new.finder": {
             "type": "OnnxRecongnizer",
-            "label.list": "",
-            "model.path": "",
+            "label.list": "O,B-_HWORD,I-_HWORD",
+            "model.path": "data/models/crf.ner.onnx",
             "deps": {
                 "wordpice.name": "wordpiece.dict"
             }
@@ -70,7 +70,8 @@
         "fast": {
             "decider": "ngram.decider",
             "recognizers": [
-                "inner.dict"
+                "inner.dict",
+                "hmm.new.finder"
             ]
         },
         "smart": {
