@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -51,8 +52,8 @@ class OnnxIndicator {
 
     size_t emdim;
     Ort::Session* session;
-    std::vector<const char*> input_name_;
-    std::vector<const char*> output_name_;
+    std::vector<char*> input_name_;
+    std::vector<char*> output_name_;
 
     std::shared_ptr<WordPice> wordpiece;
     std::shared_ptr<TypeEncoder> lencoder;
@@ -107,9 +108,14 @@ class OnnxIndicator {
         this->emdim   = emb_dims[1];
 
         Ort::AllocatorWithDefaultOptions ort_alloc;
-        input_name_.emplace_back(session->GetInputNameAllocated(0, ort_alloc).get());
-        input_name_.emplace_back(session->GetInputNameAllocated(1, ort_alloc).get());
-        output_name_.emplace_back(session->GetOutputNameAllocated(0, ort_alloc).get());
+        for (int i = 0; i < input_count; i++) {
+            auto name_ptr = session->GetInputNameAllocated(i, ort_alloc);
+            input_name_.push_back(strdup(name_ptr.get()));
+        }
+        for (int i = 0; i < out_count; i++) {
+            auto name_ptr = session->GetOutputNameAllocated(i, ort_alloc);
+            output_name_.push_back(strdup(name_ptr.get()));
+        }
 
         return EXIT_SUCCESS;
     }
@@ -236,6 +242,8 @@ class OnnxIndicator {
             delete this->session;
             this->session = nullptr;
         }
+        for (auto ptr : input_name_) free(ptr);
+        for (auto ptr : output_name_) free(ptr);
         input_name_.clear();
         output_name_.clear();
         wordpiece = nullptr;
@@ -249,11 +257,10 @@ const char* OnnxIndicator::TYPEENCODER_PARAM = "tencode.name";
 class OnnxQuantizer {
    private:
     static const char* MODEL_PATH_KEY;
-
     size_t emdim;
     Ort::Session* session;
-    std::vector<const char*> input_name_;
-    std::vector<const char*> output_name_;
+    std::vector<char*> input_name_;
+    std::vector<char*> output_name_;
 
     int validator(Ort::Session* session) {
         // check input tensor nums
@@ -312,11 +319,15 @@ class OnnxQuantizer {
             std::cerr << "This model is not supported by onnx quantizer. output dim is not 2!" << std::endl;
             return EXIT_FAILURE;
         }
-
         Ort::AllocatorWithDefaultOptions ort_alloc;
-        input_name_.emplace_back(session->GetInputNameAllocated(0, ort_alloc).get());
-        input_name_.emplace_back(session->GetInputNameAllocated(1, ort_alloc).get());
-        output_name_.emplace_back(session->GetOutputNameAllocated(0, ort_alloc).get());
+        for (int i = 0; i < input_count; i++) {
+            auto name_ptr = session->GetInputNameAllocated(i, ort_alloc);
+            input_name_.push_back(strdup(name_ptr.get()));
+        }
+        for (int i = 0; i < out_count; i++) {
+            auto name_ptr = session->GetOutputNameAllocated(i, ort_alloc);
+            output_name_.push_back(strdup(name_ptr.get()));
+        }
 
         return EXIT_SUCCESS;
     }
@@ -387,6 +398,8 @@ class OnnxQuantizer {
             delete this->session;
             this->session = nullptr;
         }
+        for (auto ptr : input_name_) free(ptr);
+        for (auto ptr : output_name_) free(ptr);
         input_name_.clear();
         output_name_.clear();
     }
@@ -452,8 +465,8 @@ class OnnxRecongnizer : public CellRecognizer {
     std::shared_ptr<WordPice> wordpiece;
 
     Ort::Session* session;
-    std::vector<const char*> input_name_;
-    std::vector<const char*> output_name_;
+    std::vector<char*> input_name_;
+    std::vector<char*> output_name_;
 
     int validator(Ort::Session* session) {
         // check input tensor nums
@@ -504,11 +517,15 @@ class OnnxRecongnizer : public CellRecognizer {
                       << std::endl;
             return EXIT_FAILURE;
         }
-
         Ort::AllocatorWithDefaultOptions ort_alloc;
-        input_name_.emplace_back(session->GetInputNameAllocated(0, ort_alloc).get());
-        input_name_.emplace_back(session->GetInputNameAllocated(1, ort_alloc).get());
-        output_name_.emplace_back(session->GetOutputNameAllocated(0, ort_alloc).get());
+        for (int i = 0; i < input_count; i++) {
+            auto name_ptr = session->GetInputNameAllocated(i, ort_alloc);
+            input_name_.push_back(strdup(name_ptr.get()));
+        }
+        for (int i = 0; i < out_count; i++) {
+            auto name_ptr = session->GetOutputNameAllocated(i, ort_alloc);
+            output_name_.push_back(strdup(name_ptr.get()));
+        }
 
         return EXIT_SUCCESS;
     }
@@ -606,10 +623,8 @@ class OnnxRecongnizer : public CellRecognizer {
     }
 
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
-        std::cout << "1------------" << std::endl;
         std::vector<size_t> label_idx;
         decode(dstSrc, label_idx);
-        std::cout << "2------------" << std::endl;
         Cursor cur = cmap.Head();
         size_t pos = 1;
         for (size_t i = 1; i < label_idx.size() - 1; ++i) {
@@ -642,6 +657,8 @@ class OnnxRecongnizer : public CellRecognizer {
             delete session;
             session = nullptr;
         }
+        for (auto ptr : input_name_) free(ptr);
+        for (auto ptr : output_name_) free(ptr);
         input_name_.clear();
         output_name_.clear();
         labels.clear();
