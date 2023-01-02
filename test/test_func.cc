@@ -64,7 +64,7 @@ void testJsonConfLoad() {
         std::vector<std::shared_ptr<darts::Word>> ret;
         segment->select(alist, ret, true);
         for (size_t i = 0; i < ret.size(); i++) {
-            std::cout << ret[i] << ",";
+            std::cout << *ret[i] << ",";
         }
         std::cout << std::endl;
         ret.clear();

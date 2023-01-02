@@ -197,7 +197,7 @@ class Word {
     const std::string& text() const { return this->image; }
 
     friend std::ostream& operator<<(std::ostream& output, const Word& D) {
-        output << "Word[ " << D.image << "(" << D.st << "," << D.et << ")]";
+        output << "Word[" << D.image << "(" << D.st << "," << D.et << ")]";
         return output;
     }
 
