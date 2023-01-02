@@ -288,9 +288,9 @@ class SegPath {
     size_t Column() const { return this->colums; }
 
     SegPath() {
-        this->head = makeCursor(nullptr, nullptr, nullptr);
         src_node   = std::make_shared<Word>("", -1, 0);
         end_node   = std::make_shared<Word>("", 0, -1);
+        this->head = makeCursor(src_node, nullptr, nullptr);
 
         this->head->idx = -1;
         this->rows = this->colums = this->size = 0;
@@ -302,9 +302,7 @@ class SegPath {
         auto node = head;
         while (node) {
             auto next = node->lack;
-            if (node->val) {
-                node->val = nullptr;
-            }
+            if (node->val) node->val = nullptr;
             delete node;
             node = next;
         }
@@ -457,15 +455,9 @@ class SegPath {
      * @return Cursor*
      */
     Cursor addCell(std::shared_ptr<Word> cell, Cursor cur) {
-        if (!cur) {
-            return addNext(this->head, cell);
-        }
-        if (cur->val->st < cell->st) {
-            return addNext(cur, cell);
-        }
-        if ((cur->val->st == cell->st) && (cur->val->et <= cell->et)) {
-            return addNext(cur, cell);
-        }
+        if (!cur) return addNext(this->head, cell);
+        if (cur->val->st < cell->st) return addNext(cur, cell);
+        if ((cur->val->st == cell->st) && (cur->val->et <= cell->et)) return addNext(cur, cell);
         return addPre(cur, cell);
     }
 };

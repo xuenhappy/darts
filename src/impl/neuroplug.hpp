@@ -606,8 +606,10 @@ class OnnxRecongnizer : public CellRecognizer {
     }
 
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
+        std::cout << "1------------" << std::endl;
         std::vector<size_t> label_idx;
         decode(dstSrc, label_idx);
+        std::cout << "2------------" << std::endl;
         Cursor cur = cmap.Head();
         size_t pos = 1;
         for (size_t i = 1; i < label_idx.size() - 1; ++i) {
