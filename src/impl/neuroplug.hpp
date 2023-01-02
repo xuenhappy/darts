@@ -61,21 +61,26 @@ class OnnxIndicator {
         // check input tensor nums
         size_t input_count = session->GetInputCount();
         if (input_count != 2) {
-            std::cerr << "This model is not supported by onnx indicator.  input nums must 2" << std::endl;
+            std::cerr << "This model is not supported by onnx indicator.  input nums must 2 not " << input_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         // check atomlist input tensor
-        auto alist_tensor_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        auto alist_tensor      = session->GetInputTypeInfo(0);
+        auto alist_tensor_info = alist_tensor.GetTensorTypeAndShapeInfo();
         size_t alist_dim_count = alist_tensor_info.GetDimensionsCount();
         if (alist_dim_count != 1) {  // timestep
-            std::cerr << "This model is not supported by onnx indicator. alist dim is not 1!" << std::endl;
+            std::cerr << "This model is not supported by onnx indicator. alist dim must 1 not " << alist_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         // check word input tensor
-        auto word_tensor_info = session->GetInputTypeInfo(1).GetTensorTypeAndShapeInfo();
+        auto word_tensor      = session->GetInputTypeInfo(1);
+        auto word_tensor_info = word_tensor.GetTensorTypeAndShapeInfo();
         size_t word_dim_count = word_tensor_info.GetDimensionsCount();
         if (word_dim_count != 2) {  // nums*idx
-            std::cerr << "This model is not supported by onnx indicator. word dim is not 2!" << std::endl;
+            std::cerr << "This model is not supported by onnx indicator. word dim must 2 not " << word_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         std::vector<int64_t> word_dims = word_tensor_info.GetShape();
@@ -90,10 +95,12 @@ class OnnxIndicator {
             return EXIT_FAILURE;
         }
         // check output tensor
-        auto emb_tensor_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        auto emb_tensor      = session->GetOutputTypeInfo(0);
+        auto emb_tensor_info = emb_tensor.GetTensorTypeAndShapeInfo();
         size_t emb_dim_count = emb_tensor_info.GetDimensionsCount();
         if (emb_dim_count != 2) {  // nums*dim
-            std::cerr << "This model is not supported by onnx indicator. output dim is not 2!" << std::endl;
+            std::cerr << "This model is not supported by onnx indicator. output dim must 2 not " << emb_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         auto emb_dims = emb_tensor_info.GetShape();
@@ -252,14 +259,17 @@ class OnnxQuantizer {
         // check input tensor nums
         size_t input_count = session->GetInputCount();
         if (input_count != 2) {
-            std::cerr << "This model is not supported by onnx quantizer.  input nums must 2" << std::endl;
+            std::cerr << "This model is not supported by onnx quantizer.  input nums must 2 not " << input_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         // check a1 input tensor
-        auto a1_tensor_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        auto a1_tensor      = session->GetInputTypeInfo(0);
+        auto a1_tensor_info = a1_tensor.GetTensorTypeAndShapeInfo();
         size_t a1_dim_count = a1_tensor_info.GetDimensionsCount();
         if (a1_dim_count != 1) {  // channel
-            std::cerr << "This model is not supported by onnx quantizer. a1 dim is not 1!" << std::endl;
+            std::cerr << "This model is not supported by onnx quantizer. a1 dim must 1 not " << a1_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         std::vector<int64_t> alist_dims = a1_tensor_info.GetShape();
@@ -268,10 +278,12 @@ class OnnxQuantizer {
             return EXIT_FAILURE;
         }
         // check a2 input tensor
-        auto a2_tensor_info = session->GetInputTypeInfo(1).GetTensorTypeAndShapeInfo();
+        auto a2_tensor      = session->GetInputTypeInfo(1);
+        auto a2_tensor_info = a2_tensor.GetTensorTypeAndShapeInfo();
         size_t a2_dim_count = a2_tensor_info.GetDimensionsCount();
         if (a2_dim_count != 1) {  // channel
-            std::cerr << "This model is not supported by onnx quantizer. a2 dim is not 1!" << std::endl;
+            std::cerr << "This model is not supported by onnx quantizer. a2 dim must 1 not " << a2_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         std::vector<int64_t> a2_dims = a2_tensor_info.GetShape();
@@ -282,14 +294,17 @@ class OnnxQuantizer {
         // check output tensor nums
         size_t out_count = session->GetOutputCount();
         if (out_count != 1) {
-            std::cerr << "This model is not supported by onnx quantizer. output nums must 1" << std::endl;
+            std::cerr << "This model is not supported by onnx quantizer. output nums must 1 not " << out_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         // check output tensor
-        auto out_tensor_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        auto out_tensor      = session->GetOutputTypeInfo(0);
+        auto out_tensor_info = out_tensor.GetTensorTypeAndShapeInfo();
         size_t out_dim_count = out_tensor_info.GetDimensionsCount();
         if (out_dim_count != 1) {  // nums*dim
-            std::cerr << "This model is not supported by onnx quantizer. output dim is not 2!" << std::endl;
+            std::cerr << "This model is not supported by onnx quantizer. output dim must 2 not " << out_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         auto out_dims = out_tensor_info.GetShape();
