@@ -444,20 +444,27 @@ class OnnxRecongnizer : public CellRecognizer {
         // check input tensor nums
         size_t input_count = session->GetInputCount();
         if (input_count != 2) {
-            std::cerr << "This model is not supported by onnx recongnizer.  input nums must 2" << std::endl;
+            std::cerr << "This model is not supported by onnx recongnizer.  input nums must 2 not " << input_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         // check a1 input tensor
-        auto a1_tensor_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
-        size_t a1_dim_count = a1_tensor_info.GetDimensionsCount();
+        auto a1_tensor      = session->GetInputTypeInfo(0);
+        auto a1_tensor_info = a1_tensor.GetTensorTypeAndShapeInfo();
+        auto a1_dim_count   = a1_tensor_info.GetDimensionsCount();
         if (a1_dim_count != 1) {  // channel
-            std::cerr << "This model is not supported by onnx recongnizer. a1 dim is not 1!" << std::endl;
+            std::cerr << "This model is not supported by onnx recongnizer. first dim must 1 not " << a1_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
-        auto word_tensor_info = session->GetInputTypeInfo(1).GetTensorTypeAndShapeInfo();
+
+        // check a2 input tensor
+        auto word_tensor      = session->GetInputTypeInfo(1);
+        auto word_tensor_info = word_tensor.GetTensorTypeAndShapeInfo();
         size_t word_dim_count = word_tensor_info.GetDimensionsCount();
         if (word_dim_count != 2) {  // nums*idx
-            std::cerr << "This model is not supported by onnx recongnizer. word dim is not 2!" << std::endl;
+            std::cerr << "This model is not supported by onnx recongnizer. word dim must 2 not " << word_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         std::vector<int64_t> word_dims = word_tensor_info.GetShape();
@@ -469,14 +476,17 @@ class OnnxRecongnizer : public CellRecognizer {
         // check output tensor nums
         size_t out_count = session->GetOutputCount();
         if (out_count != 1) {
-            std::cerr << "This model is not supported by onnx recongnizer. output nums must 1" << std::endl;
+            std::cerr << "This model is not supported by onnx recongnizer. output nums must 1 not " << out_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
         // check output tensor
-        auto out_tensor_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        auto out_tensor      = session->GetOutputTypeInfo(0);
+        auto out_tensor_info = out_tensor.GetTensorTypeAndShapeInfo();
         size_t out_dim_count = out_tensor_info.GetDimensionsCount();
         if (out_dim_count != 1) {  // timestep
-            std::cerr << "This model is not supported by onnx recongnizer. output dim is not 1!" << std::endl;
+            std::cerr << "This model is not supported by onnx recongnizer. output dim must 1 not " << out_dim_count
+                      << std::endl;
             return EXIT_FAILURE;
         }
 

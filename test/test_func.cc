@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstddef>
 #include <iostream>
 #include "core/segment.hpp"
 #include "impl/confparser.hpp"
@@ -56,6 +57,17 @@ void testJsonConfLoad() {
         std::cout << "load segment success!" << std::endl;
     }
     if (segment) {
+        std::string ori("目标检测 yolov5模型量化安装教程以及转ONXX，torchscript，engine和速度比较一栏表!");
+        std::cout << "ori: " << ori << std::endl;
+        darts::AtomList alist(ori);
+        std::cout << alist << std::endl;
+        std::vector<std::shared_ptr<darts::Word>> ret;
+        segment->select(alist, ret, true);
+        for (size_t i = 0; i < ret.size(); i++) {
+            std::cout << ret[i] << ",";
+        }
+        std::cout << std::endl;
+        ret.clear();
         delete segment;
     }
 }
