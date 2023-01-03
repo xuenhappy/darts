@@ -12,9 +12,10 @@ if __name__ == "__main__":
     if 'ner' == sys.argv[1]:
         ner_sample = TorchNerSampleReader(sys.argv[2], "O,B-_HWORD,I-_HWORD")
         if showSample:
-            for widx, winfo in ner_sample:
+            for widx, lens, winfo in ner_sample:
                 winfo = winfo.numpy()
                 print("batch____________________**__")
+                print(lens)
                 for bidx, line in enumerate(widx):
                     print(ner_sample.dts.decode(line.numpy()))
                     labels = []

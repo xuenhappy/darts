@@ -26,7 +26,7 @@ def run_rnn(input_tensors, batch_lengths, fw_rnn, bw_rnn):
     batch_lengths must be (N,)，this mothod support onnx export """
 
     fw_out, _ = fw_rnn(input_tensors)
-    with torch.no_grid():
+    with torch.no_grad():
         revidx = _revMatidx(input_tensors.shape[1], batch_lengths)
     rev_input = input_tensors.take_along_dim(revidx, 1)
     bw_out = bw_rnn(rev_input)[0].take_along_dim(revidx, 1)
