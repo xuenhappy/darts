@@ -183,5 +183,5 @@ class TorchNerSampleReader(IterableDataset):
         return len(self.dts.labes)
 
     def __iter__(self):
-        for widxs, _, atom_idxs in self.dts:
-            yield torch.from_numpy(widxs).long(), torch.from_numpy(atom_idxs).long()
+        for widxs, lens, atom_idxs in self.dts:
+            yield torch.from_numpy(widxs).long(), torch.from_numpy(lens).long(), torch.from_numpy(atom_idxs).long()

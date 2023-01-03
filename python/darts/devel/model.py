@@ -17,18 +17,23 @@ class WordEncoder(nn.Module):
         self.vocab_num = vocab_num
         self.wtype_num = wtype_num
         self.vocab_embeding = nn.Embedding(vocab_num, vocab_esize)
-        self.encoder = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=True)
+        self.emb_normal = nn.LayerNorm(vocab_esize)
+        self.dropx = nn.Dropout(0.4)
+        self.fw_rnn = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=False)
+        self.bw_rnn = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=False)
         if wtype_num > 0:
-            self.dropin = nn.Dropout(0.2)
+            self.dropin = nn.Dropout(0.1)
             self.type_embeding = nn.Embedding(wtype_num, word_esize)
         self.imner = nn.Linear(hidden_size * 2, word_esize)
 
         self.normal = nn.LayerNorm(word_esize)
 
-    def forward(self, batch_input_idx, batch_word_info):
+    def forward(self, batch_input_idx, batch_lengths, batch_word_info):
         #batch_input_idx (batch*time_step)
+        #batch_lengths (batch,)
         #batch_word_info(words_num*[bidx,s,e,tidx])
-        rnnout, _ = self.encoder(self.vocab_embeding(batch_input_idx))
+        vocab_emb = self.dropx(self.emb_normal(self.vocab_embeding(batch_input_idx)))
+        rnnout = run_rnn(vocab_emb, batch_lengths, self.fw_rnn, self.bw_rnn)
         sent_embeding = self.imner(rnnout)
         word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
         word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
@@ -51,10 +56,11 @@ class WordEncoder(nn.Module):
                 self.obj = obj
 
             def forward(self, sents, words):
-                sents = torch.unsqueeze(sents, 0)
+                lens = torch.LongTensor([sents.shape[0]]).to(sents)
+                bsents = torch.unsqueeze(sents, 0)
                 bidx = torch.zeros((words.shape[0], 1), dtype=wtype_idx.dtype)
                 words = torch.concat((bidx, words), dim=1)
-                return self.obj(sents, words)
+                return self.obj(bsents, lens, words)
 
         # args must same as forawrd
         outfile = "lstm.encoder.onnx"
@@ -126,18 +132,21 @@ class CrfNer(nn.Module):
         super().__init__()
         self.encoder = WordEncoder(vocab_num, vocab_esize, hidden_size, word_esize, -1)
         self.prop = nn.Linear(word_esize, tag_nums)
+        self.dropx = nn.Dropout(0.1)
         self.crf = CRFLoss(tag_nums)
 
-    def getWordprop(self, batch_input_idx, batch_word_info):
+    def getWordprop(self, batch_input_idx, batch_lengths, batch_word_info):
         #batch_input_idx (batch*time_step)
+        #batch_lengths (batch,)
         #batch_word_info(words_num*[bidx,s,e])
-        return self.prop(self.encoder(batch_input_idx, batch_word_info))
+        sents_emb = self.encoder(batch_input_idx, batch_lengths, batch_word_info)
+        return self.prop(self.dropx(sents_emb))
 
-    def forward(self, batch_input_idx, batch_word_info):
+    def forward(self, batch_input_idx, batch_lengths, batch_word_info):
         #batch_input_idx (batch*time_step)
+        #batch_lengths (batch,)
         #batch_word_info(words_num*[bidx,s,e,tagidx])
-        wordprop = self.getWordprop(batch_input_idx, batch_word_info)
-
+        wordprop = self.getWordprop(batch_input_idx, batch_lengths, batch_word_info)
         featsLen, featsIdx = getFeatsIdx(batch_word_info[:, 0])
         word_sent = wordprop.index_select(0, featsIdx.view(-1)).view((*featsIdx.shape, -1))
         tag_sent = batch_word_info[:, -1].index_select(0, featsIdx.view(-1)).view(featsIdx.shape)
@@ -154,10 +163,11 @@ class CrfNer(nn.Module):
                 self.obj = obj
 
             def forward(self, sents, words):
-                sents = torch.unsqueeze(sents, 0)
+                lens = torch.LongTensor([sents.shape[0]]).to(sents)
+                bsents = torch.unsqueeze(sents, 0)
                 bidx = torch.zeros((words.shape[0], 1), dtype=words.dtype)
-                words = torch.concat((bidx, words), dim=1)
-                prop = self.obj.getWordprop(sents, words)
+                bwords = torch.concat((bidx, words), dim=1)
+                prop = self.obj.getWordprop(bsents, lens, bwords)
                 return self.obj.crf.viterbi_decode(prop)
 
         # args must same as forawrd
@@ -185,11 +195,12 @@ class NerTrainer(nn.Module):
         super().__init__()
         self.ner = CrfNer(vocab_num, vocab_esize, hidden_size, word_esize, tag_nums)
 
-    def forward(self, batch_input_idx, batch_word_info):
+    def forward(self, batch_input_idx, batch_lengths, batch_word_info):
         if torch.cuda.is_available():
             batch_input_idx = batch_input_idx.cuda()
             batch_word_info = batch_word_info.cuda()
-        return self.ner(batch_input_idx, batch_word_info).mean()
+            batch_lengths = batch_lengths.cuda()
+        return self.ner(batch_input_idx, batch_lengths, batch_word_info).mean()
 
 
 class GraphTrainer(nn.Module):

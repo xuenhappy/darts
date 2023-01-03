@@ -13,6 +13,26 @@ import torch
 import torch.nn as nn
 
 
+def _revMatidx(max_time_len, batch_size):
+    base = torch.arange(0, max_time_len).to(batch_size)
+    base = base[None, :].expand(batch_size.shape[0], -1)
+    base = batch_size[:, None] - 1 - base
+    base[base < 0] = 0
+    return base.unsqueeze(-1)
+
+
+def run_rnn(input_tensors, batch_lengths, fw_rnn, bw_rnn):
+    """input_tensors must be batch first (N,T,C)
+    batch_lengths must be (N,)，this mothod support onnx export """
+
+    fw_out, _ = fw_rnn(input_tensors)
+    with torch.no_grid():
+        revidx = _revMatidx(input_tensors.shape[1], batch_lengths)
+    rev_input = input_tensors.take_along_dim(revidx, 1)
+    bw_out = bw_rnn(rev_input)[0].take_along_dim(revidx, 1)
+    return torch.concat((fw_out, bw_out), dim=2)
+
+
 def getFeatsIdx(postions):
     """postions shape is (N,)
     """
