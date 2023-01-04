@@ -12,36 +12,44 @@ from torch.nn import functional as F
 
 class WordEncoder(nn.Module):
 
-    def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, wtype_num):
+    def __init__(self, vocab_num, hidden_size, wtype_num):
         super().__init__()
         self.vocab_num = vocab_num
         self.wtype_num = wtype_num
-        self.vocab_embeding = nn.Embedding(vocab_num, vocab_esize)
-        self.emb_normal = nn.LayerNorm(vocab_esize)
-        self.dropx = nn.Dropout(0.4)
-        self.fw_rnn = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=False)
-        self.bw_rnn = nn.GRU(vocab_esize, hidden_size, batch_first=True, bidirectional=False)
-        if wtype_num > 0:
-            self.dropin = nn.Dropout(0.1)
-            self.type_embeding = nn.Embedding(wtype_num, word_esize)
-        self.imner = nn.Linear(hidden_size * 2, word_esize)
+        self.vocab_embeding = nn.Sequential(
+            nn.Embedding(vocab_num, hidden_size),
+            nn.LayerNorm(hidden_size, eps=1e-7),
+            nn.Dropout(0.3),
+        )
+        rnn_hidden_size = hidden_size * 3 // 2
+        self.fw_rnn = nn.GRU(hidden_size, rnn_hidden_size, batch_first=True, bidirectional=False)
+        self.bw_rnn = nn.GRU(hidden_size, rnn_hidden_size, batch_first=True, bidirectional=False)
+        self.imner = nn.Linear(rnn_hidden_size * 2, hidden_size)
+        self.sent_normal = nn.LayerNorm(hidden_size)
 
-        self.normal = nn.LayerNorm(word_esize)
+        if wtype_num > 0:
+            self.type_embeding = nn.Sequential(
+                nn.Embedding(wtype_num, hidden_size),
+                nn.LayerNorm(hidden_size, eps=1e-7),
+                nn.Dropout(0.1),
+            )
+            self.type_normal = nn.LayerNorm(hidden_size)
 
     def forward(self, batch_input_idx, batch_lengths, batch_word_info):
         #batch_input_idx (batch*time_step)
         #batch_lengths (batch,)
         #batch_word_info(words_num*[bidx,s,e,tidx])
-        vocab_emb = self.dropx(self.emb_normal(self.vocab_embeding(batch_input_idx)))
+        vocab_emb = self.vocab_embeding(batch_input_idx)
         rnnout = run_rnn(vocab_emb, batch_lengths, self.fw_rnn, self.bw_rnn)
-        sent_embeding = self.imner(rnnout)
+        sent_embeding = self.sent_normal(self.imner(rnnout) + vocab_emb)
+
         word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
         word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
         word_sent_embeding = (word_head_embeding + word_tail_embeding) / 2.0
         if self.wtype_num > 0:
             word_type_embeding = self.type_embeding(batch_word_info[:, 3])
-            return self.normal(self.dropin(word_type_embeding) + word_sent_embeding)
-        return self.normal(word_sent_embeding)
+            return self.type_normal(word_sent_embeding + word_type_embeding)
+        return word_sent_embeding
 
     def export2onnx(self):
         sents_idx = torch.randint(0, self.vocab_num, (11, ))
@@ -128,11 +136,15 @@ class Quantizer(nn.Module):
 
 class CrfNer(nn.Module):
 
-    def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, tag_nums):
+    def __init__(self, vocab_num, hidden_size, tag_nums):
         super().__init__()
-        self.encoder = WordEncoder(vocab_num, vocab_esize, hidden_size, word_esize, -1)
-        self.prop = nn.Linear(word_esize, tag_nums)
-        self.dropx = nn.Dropout(0.1)
+        self.encoder = WordEncoder(vocab_num, hidden_size, -1)
+        self.prop = nn.Sequential(
+            nn.Dropout(0.1),
+            nn.Linear(hidden_size, 32),
+            nn.ReLU(),
+            nn.Linear(32, tag_nums),
+        )
         self.crf = CRFLoss(tag_nums)
 
     def getWordprop(self, batch_input_idx, batch_lengths, batch_word_info):
@@ -140,7 +152,7 @@ class CrfNer(nn.Module):
         #batch_lengths (batch,)
         #batch_word_info(words_num*[bidx,s,e])
         sents_emb = self.encoder(batch_input_idx, batch_lengths, batch_word_info)
-        return self.prop(self.dropx(sents_emb))
+        return self.prop(sents_emb)
 
     def forward(self, batch_input_idx, batch_lengths, batch_word_info):
         #batch_input_idx (batch*time_step)
@@ -191,9 +203,9 @@ class CrfNer(nn.Module):
 
 class NerTrainer(nn.Module):
 
-    def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, tag_nums):
+    def __init__(self, vocab_num, hidden_size, tag_nums):
         super().__init__()
-        self.ner = CrfNer(vocab_num, vocab_esize, hidden_size, word_esize, tag_nums)
+        self.ner = CrfNer(vocab_num, hidden_size, tag_nums)
 
     def forward(self, batch_input_idx, batch_lengths, batch_word_info):
         if torch.cuda.is_available():
@@ -205,9 +217,9 @@ class NerTrainer(nn.Module):
 
 class GraphTrainer(nn.Module):
 
-    def __init__(self, vocab_num, vocab_esize, hidden_size, word_esize, wtype_num):
+    def __init__(self, vocab_num, hidden_size, wtype_num):
         super().__init__()
-        self.predictor = WordEncoder(vocab_num, vocab_esize, hidden_size, word_esize, wtype_num)
+        self.predictor = WordEncoder(vocab_num, hidden_size, wtype_num)
         self.quantizer = Quantizer(hidden_size, 32)
         self.lossfunc = GraphLoss()
 

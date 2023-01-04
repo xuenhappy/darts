@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
             exit(0)
 
-        ner_model = NerTrainer(ner_sample.wordsize(), 64, 128, 84, ner_sample.labelsize())
+        ner_model = NerTrainer(ner_sample.wordsize(), 128, ner_sample.labelsize())
         sover = TSolver(ner_model, ner_sample, {"model_outdir": 'model_bin', 'epoch_num': 6})
         sover.solve()
         exit(0)
