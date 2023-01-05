@@ -10,7 +10,7 @@ if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
 endif
 extra_compile_args = ['-Wno-sign-compare','-Wno-deprecated-declarations']
-extra_link_args=['-static','-w']
+extra_link_args=['-w']
 
 if get_option('debug-memory')
     message('compile with dmalloc!')
@@ -47,13 +47,13 @@ if not onnxrt_dep.found()
     )
 endif
 
-zlib_dep = dependency('zlib', version : '>=1.2.11',method: 'cmake', required : true,static: enable_static)
+zlib_dep = dependency('zlib', version : '>=1.2.11', required : true,static: enable_static)
 jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: enable_static)
 proto_dep = dependency('protobuf', version : '>=3.17.3',
     method: 'pkg-config', required : true,
     static: enable_static,modules: ['protobuf::libprotobuf-lite']
 )
-base_deps=[zlib_dep,jsoncpp_dep,jsoncpp_dep,proto_dep,onnxrt_dep,fmt_dep]
+base_deps=[zlib_dep,jsoncpp_dep,proto_dep,onnxrt_dep,fmt_dep]
 
 message('building proto source.....')
 protoc = find_program('protoc', required : false)
