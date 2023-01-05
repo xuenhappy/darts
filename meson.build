@@ -10,7 +10,7 @@ if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
 endif
 extra_compile_args = ['-Wno-sign-compare','-Wno-deprecated-declarations']
-extra_link_args=['-w']
+extra_link_args=['-static','-w']
 
 if get_option('debug-memory')
     message('compile with dmalloc!')
