@@ -19,13 +19,15 @@ class WordEncoder(nn.Module):
         self.vocab_embeding = nn.Sequential(
             nn.Embedding(vocab_num, hidden_size),
             nn.LayerNorm(hidden_size, eps=1e-7),
-            nn.Dropout(0.3),
+            nn.Dropout(0.1),
         )
         rnn_hidden_size = hidden_size * 3 // 2
         self.fw_rnn = nn.GRU(hidden_size, rnn_hidden_size, batch_first=True, bidirectional=False)
         self.bw_rnn = nn.GRU(hidden_size, rnn_hidden_size, batch_first=True, bidirectional=False)
-        self.imner = nn.Linear(rnn_hidden_size * 2, hidden_size)
-        self.sent_normal = nn.LayerNorm(hidden_size)
+        self.imner = nn.Sequential(
+            nn.Linear(rnn_hidden_size * 2, hidden_size),
+            nn.LayerNorm(hidden_size),
+        )
 
         if wtype_num > 0:
             self.type_embeding = nn.Sequential(
@@ -40,8 +42,7 @@ class WordEncoder(nn.Module):
         #batch_lengths (batch,)
         #batch_word_info(words_num*[bidx,s,e,tidx])
         vocab_emb = self.vocab_embeding(batch_input_idx)
-        rnnout = run_rnn(vocab_emb, batch_lengths, self.fw_rnn, self.bw_rnn)
-        sent_embeding = self.sent_normal(self.imner(rnnout) + vocab_emb)
+        sent_embeding = self.imner(run_rnn(vocab_emb, batch_lengths, self.fw_rnn, self.bw_rnn))
 
         word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
         word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
