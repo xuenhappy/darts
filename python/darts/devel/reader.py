@@ -59,7 +59,7 @@ class TokenNerSampleReader():
         self.labes = [l.strip() for l in labes.split(",") if l.strip()]
 
     def decode(self, codes):
-        return " ".join(self.aencoder.decode(l) for l in codes)
+        return [self.aencoder.decode(l) for l in codes]
 
     def _sample_iter(self):
         with open(self.samplefile, encoding="utf-8") as fd:

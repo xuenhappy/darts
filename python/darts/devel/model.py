@@ -141,9 +141,7 @@ class CrfNer(nn.Module):
         self.encoder = WordEncoder(vocab_num, hidden_size, -1)
         self.prop = nn.Sequential(
             nn.Dropout(0.1),
-            nn.Linear(hidden_size, 32),
-            nn.ReLU(),
-            nn.Linear(32, tag_nums),
+            nn.Linear(hidden_size, tag_nums),
         )
         self.crf = CRFLoss(tag_nums)
 

@@ -17,12 +17,14 @@ if __name__ == "__main__":
                 print("batch____________________**__")
                 print(lens)
                 for bidx, line in enumerate(widx):
-                    print(ner_sample.dts.decode(line.numpy()))
+                    lines = ner_sample.dts.decode(line.numpy())
                     labels = []
                     for w in winfo:
                         if w[0] == bidx:
-                            labels.append(w[-1])
-                    print(labels)
+                            labels.append(w)
+
+                    labels = ["%s/%s" % ("".join(lines[l[1]:l[2] + 1]), ner_sample.dts.labes[l[3]]) for l in labels]
+                    print(" ".join(labels))
 
             exit(0)
 
