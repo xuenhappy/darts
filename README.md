@@ -604,6 +604,34 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 
 不要在不了解格式的情况下修改 `data/kernel/`。模型、词典、编码表和配置必须保持版本一致，否则可能出现模型输入维度、标签编号或 Trie 标签不匹配。
 
+## 开发工具
+
+统一开发入口为 `scripts/devel.py`：
+
+```bash
+# 将 LABELS:WORD 文本编译为紧凑 v2 词典
+python scripts/devel.py dict-compile data/demo/dregex_pattern_file.txt /tmp/demo.pbs
+
+# 无需原始文本，将旧词典转换为 v2；先执行一次 Meson 构建
+python scripts/devel.py dict-repack data/models/panda.pbs /tmp/panda-v2.pbs
+
+# 测量词典加载和匹配吞吐
+python scripts/devel.py dict-benchmark /tmp/panda-v2.pbs --repeat 10000
+
+# 训练 Transformer CRF 序列识别模型
+python scripts/devel.py model-train samples.txt --epochs 6 --output-dir model_bin
+
+# 将训练检查点导出为 opset 17 ONNX
+python scripts/devel.py model-export model_bin/checkpoint.pt data/models/transformer.crf.onnx
+
+# 执行纯 Meson 构建和 wheel 回归
+python scripts/devel.py build --test
+```
+
+词典 v2 使用差分 ZigZag 状态数组和最高级别 Deflate 压缩，同时保留旧 `.pbs` 的读取兼容。最高压缩会增加词典生成时间，但不影响运行时识别速度。`darts-dict-repack` 要求输入和输出路径不同，以免损坏原文件。
+
+`DictWordRecongnizer` 对连续 Atom 使用专用 Aho-Corasick 扫描，不再构造位置环形缓冲或经过虚函数回调；ASCII 大写仅在确实需要时执行大小写折叠。通用 C/Python `Dregex.parse()` 接口继续保留原迭代器语义。
+
 ## 自定义模式示例
 
 只使用自定义词典和最小覆盖策略：

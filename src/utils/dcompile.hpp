@@ -17,6 +17,7 @@
 #include <queue>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include "dregex.hpp"
@@ -26,7 +27,7 @@ struct State {
     int depth;                          // the string length
     State* failure;                     // match failed use
     std::vector<int64_t> emits;         // emits
-    std::map<int64_t, State*> success;  // go map
+    std::unordered_map<int64_t, State*> success;  // go map
     int64_t index;                      // index of the struct
     bool fake;                          // this node is fake
 };
@@ -52,7 +53,10 @@ inline void freeState(State* state) {
 }
 
 // insert sort a sort to keep it order
-inline void insertSorted(std::vector<int64_t>& s, int64_t e) { s.insert(std::upper_bound(s.begin(), s.end(), e), e); }
+inline void insertSorted(std::vector<int64_t>& values, int64_t value) {
+    auto position = std::lower_bound(values.begin(), values.end(), value);
+    if (position == values.end() || *position != value) values.insert(position, value);
+}
 
 // add emit
 inline void addEmit(State* s, int64_t keyword) {
@@ -106,7 +110,7 @@ class KvPairsIter {
 class Builder {
    private:
     // cache labels idx
-    std::map<std::string, int64_t> labels;
+    std::unordered_map<std::string, int64_t> labels;
     // root
     State* rootState;
     Trie* trie;
@@ -133,20 +137,14 @@ class Builder {
         this->trie->Base.resize(msize);
         this->trie->Check.resize(msize);
     }
-    std::vector<int64_t>* dumpTrans(State* state, std::set<int64_t>& lcache) {
-        lcache.clear();
-        lcache.insert(state->emits.begin(), state->emits.end());
-        auto dt = new std::vector<int64_t>();
-        dt->reserve(lcache.size());
-        dt->insert(dt->end(), lcache.begin(), lcache.end());
-        return dt;
+    std::vector<int64_t>* dumpTrans(const State* state) {
+        return new std::vector<int64_t>(state->emits);
     }
 
     void constructFailureStates() {
         this->trie->Fail.resize(this->size + 1, 0);
         this->trie->OutPut.resize(this->size + 1, nullptr);
         std::queue<State*> queue;
-        std::set<int64_t> lcache;
 
         for (auto& kv : this->rootState->success) {
             auto depthOneState = kv.second;
@@ -154,7 +152,7 @@ class Builder {
             queue.push(depthOneState);
 
             if (!depthOneState->emits.empty())
-                this->trie->OutPut[depthOneState->index] = dumpTrans(depthOneState, lcache);
+                this->trie->OutPut[depthOneState->index] = dumpTrans(depthOneState);
         }
         while (!queue.empty()) {
             auto currentState = queue.front();
@@ -173,7 +171,7 @@ class Builder {
                 for (auto e : newFailureState->emits) {
                     addEmit(targetState, e);
                 }
-                this->trie->OutPut[targetState->index] = dumpTrans(targetState, lcache);
+                this->trie->OutPut[targetState->index] = dumpTrans(targetState);
             }
         }
     }
@@ -234,6 +232,8 @@ class Builder {
         for (auto& kv : parent->success) {
             siblings->push_back(std::pair<int64_t, State*>(kv.first + 1, kv.second));
         }
+        std::sort(siblings->begin(), siblings->end(),
+                  [](const auto& left, const auto& right) { return left.first < right.first; });
         return siblings;
     }
 

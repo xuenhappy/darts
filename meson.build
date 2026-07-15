@@ -29,8 +29,7 @@ message('check the deps libray.....')
 cc = meson.get_compiler('cpp')
 fmt_pkg_dep=dependency('fmt', method: 'pkg-config', required:false,version:'>=9.1.0')
 if enable_static and fmt_pkg_dep.found()
-    fmt_include_dir = fmt_pkg_dep.get_variable(pkgconfig: 'includedir')
-    fmt_dep = declare_dependency(compile_args: ['-I' + fmt_include_dir, '-DFMT_HEADER_ONLY'])
+    fmt_dep = declare_dependency(dependencies: [fmt_pkg_dep], compile_args: ['-DFMT_HEADER_ONLY'])
 elif fmt_pkg_dep.found()
     fmt_dep = fmt_pkg_dep
 else
@@ -63,6 +62,12 @@ base_deps=[zlib_dep,jsoncpp_dep,proto_dep,onnxrt_dep,fmt_dep]
 
 message('building proto source.....')
 protoc = find_program('protoc', required : false)
+if not protoc.found()
+    protoc = find_program(
+        join_paths(meson.project_build_root(), '..', 'deps', 'sysroot', 'usr', 'bin', 'protoc'),
+        required : false,
+    )
+endif
 if not protoc.found()
   error('MESON_SKIP_TEST: protoc tool and/or protobuf pkg-config dependency not found')
 endif
@@ -101,6 +106,14 @@ darts_lib=both_libraries('darts', 'src/main/darts.cxx',
     dependencies:base_deps,include_directories : incdir,
     cpp_args : extra_compile_args,c_args : extra_compile_args,
     pic:true
+)
+darts_dict_repack = executable(
+    'darts-dict-repack',
+    'src/main/dict_repack.cxx',
+    dependencies : [zlib_dep, proto_dep, my_proto_deb],
+    include_directories : incdir,
+    cpp_args : extra_compile_args,
+    install : false,
 )
 if enable_tests
     message('buiding darts test....')

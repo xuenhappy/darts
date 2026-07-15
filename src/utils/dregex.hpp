@@ -13,6 +13,7 @@
 #define SRC_UTILS_DREGEX_HPP_
 
 #include <darts.pb.h>
+#include <cctype>
 #include <fstream>
 #include <map>
 #include <queue>
@@ -68,26 +69,32 @@ class Trie {
     int writePb(std::ostream& out) const {
         darts::DRegexDat dat;
         dat.set_maxlen(this->MaxLen);
+        dat.set_formatversion(2);
         dat.mutable_labels()->Add(this->Labels.begin(), this->Labels.end());
-        dat.mutable_check()->Add(this->Check.begin(), this->Check.end());
-        dat.mutable_base()->Add(this->Base.begin(), this->Base.end());
-        dat.mutable_fail()->Add(this->Fail.begin(), this->Fail.end());
-        dat.mutable_l()->Add(this->L.begin(), this->L.end());
-
-        for (auto s : this->V) {
-            if (!s) {
-                dat.add_v();
-                continue;
-            }
-            dat.add_v()->mutable_item()->Add(s->begin(), s->end());
+        int64_t previous = 0;
+        for (auto value : this->Check) {
+            dat.add_checkcompact(static_cast<int32_t>(value - previous));
+            previous = value;
         }
+        previous = 0;
+        for (auto value : this->Base) {
+            dat.add_basecompact(static_cast<int32_t>(value - previous));
+            previous = value;
+        }
+        previous = 0;
+        for (auto value : this->Fail) {
+            dat.add_failcompact(static_cast<int32_t>(value - previous));
+            previous = value;
+        }
+        for (auto value : this->L) dat.add_lengthcompact(static_cast<uint32_t>(value));
 
-        for (auto s : this->OutPut) {
-            if (!s) {
-                dat.add_output();
-                continue;
-            }
-            dat.add_output()->mutable_item()->Add(s->begin(), s->end());
+        for (const auto* values : this->V) {
+            auto* item = dat.add_v();
+            if (values) item->mutable_item()->Add(values->begin(), values->end());
+        }
+        for (const auto* outputs : this->OutPut) {
+            auto* item = dat.add_output();
+            if (outputs) item->mutable_item()->Add(outputs->begin(), outputs->end());
         }
 
         auto cmap = dat.mutable_codemap();
@@ -109,38 +116,52 @@ class Trie {
         this->MaxLen = dat.maxlen();
         auto& labels = dat.labels();
         this->Labels.insert(this->Labels.end(), labels.begin(), labels.end());
-        auto& check = dat.check();
-        this->Check.insert(this->Check.end(), check.begin(), check.end());
-
-        auto& base = dat.base();
-        this->Base.insert(this->Base.end(), base.begin(), base.end());
-
-        auto& fail = dat.fail();
-        this->Fail.insert(this->Fail.end(), fail.begin(), fail.end());
-
-        auto& l = dat.l();
-        this->L.insert(this->L.end(), l.begin(), l.end());
-        auto size = dat.v_size();
-        this->V.assign(size, nullptr);
-        for (size_t i = 0; i < size; i++) {
-            if (dat.v(i).item_size() < 1) {
-                this->V[i] = nullptr;
-                continue;
+        if (dat.checkcompact_size() > 0) {
+            int64_t value = 0;
+            this->Check.reserve(dat.checkcompact_size());
+            for (auto delta : dat.checkcompact()) {
+                value += delta;
+                this->Check.push_back(value);
             }
-            auto& vlist = dat.v(i).item();
-            this->V[i]  = new std::vector<int64_t>(vlist.begin(), vlist.end());
-        }
-        size = dat.output_size();
-        this->OutPut.assign(size, nullptr);
-        for (size_t i = 0; i < size; i++) {
-            if (dat.output(i).item_size() < 1) {
-                this->OutPut[i] = nullptr;
-                continue;
+            value = 0;
+            this->Base.reserve(dat.basecompact_size());
+            for (auto delta : dat.basecompact()) {
+                value += delta;
+                this->Base.push_back(value);
             }
-            auto& vlist = dat.output(i).item();
-            auto lbs    = new std::vector<int64_t>(vlist.size(), 0);
-            for (size_t idx = 0; idx < vlist.size(); ++idx) (*lbs)[idx] = vlist.at(idx);
-            this->OutPut[i] = lbs;
+            value = 0;
+            this->Fail.reserve(dat.failcompact_size());
+            for (auto delta : dat.failcompact()) {
+                value += delta;
+                this->Fail.push_back(value);
+            }
+            this->L.assign(dat.lengthcompact().begin(), dat.lengthcompact().end());
+
+            this->V.assign(dat.v_size(), nullptr);
+            for (size_t i = 0; i < this->V.size(); ++i) {
+                const auto& values = dat.v(i).item();
+                if (!values.empty()) this->V[i] = new std::vector<int64_t>(values.begin(), values.end());
+            }
+            this->OutPut.assign(dat.output_size(), nullptr);
+            for (size_t i = 0; i < this->OutPut.size(); ++i) {
+                const auto& outputs = dat.output(i).item();
+                if (!outputs.empty()) this->OutPut[i] = new std::vector<int64_t>(outputs.begin(), outputs.end());
+            }
+        } else {
+            this->Check.assign(dat.check().begin(), dat.check().end());
+            this->Base.assign(dat.base().begin(), dat.base().end());
+            this->Fail.assign(dat.fail().begin(), dat.fail().end());
+            this->L.assign(dat.l().begin(), dat.l().end());
+            this->V.assign(dat.v_size(), nullptr);
+            for (size_t i = 0; i < this->V.size(); ++i) {
+                const auto& values = dat.v(i).item();
+                if (!values.empty()) this->V[i] = new std::vector<int64_t>(values.begin(), values.end());
+            }
+            this->OutPut.assign(dat.output_size(), nullptr);
+            for (size_t i = 0; i < this->OutPut.size(); ++i) {
+                const auto& outputs = dat.output(i).item();
+                if (!outputs.empty()) this->OutPut[i] = new std::vector<int64_t>(outputs.begin(), outputs.end());
+            }
         }
         auto& cmap = dat.codemap();
         this->CodeMap.reserve(cmap.size());
@@ -184,6 +205,42 @@ class Trie {
         auto it = this->CodeMap.find(word);
         if (it == this->CodeMap.end()) return this->CodeMap.size() + 1;
         return it->second;
+    }
+
+    int64_t getCodeCaseFolded(const std::string& word) const {
+        bool has_upper = false;
+        for (unsigned char value : word) {
+            if (value >= 'A' && value <= 'Z') {
+                has_upper = true;
+                break;
+            }
+        }
+        if (!has_upper) return getCode(word);
+        std::string folded(word);
+        for (char& value : folded) {
+            auto byte = static_cast<unsigned char>(value);
+            if (byte >= 'A' && byte <= 'Z') value = static_cast<char>(byte + ('a' - 'A'));
+        }
+        return getCode(folded);
+    }
+
+    template <typename TokenAt, typename Hit>
+    void parseContiguous(size_t count, TokenAt&& token_at, Hit&& hit) const {
+        if (this->MaxLen < 1 || this->V.empty()) return;
+        int64_t current_state = 0;
+        for (size_t position = 0; position < count; ++position) {
+            current_state = getstate(current_state, getCodeCaseFolded(token_at(position)));
+            if (current_state < 0 || static_cast<size_t>(current_state) >= this->OutPut.size()) continue;
+            const auto* outputs = this->OutPut[current_state];
+            if (!outputs) continue;
+            for (auto keyword : *outputs) {
+                if (keyword < 0 || static_cast<size_t>(keyword) >= this->L.size() ||
+                    static_cast<size_t>(keyword) >= this->V.size())
+                    continue;
+                const auto length = static_cast<size_t>(this->L[keyword]);
+                if (length <= position + 1 && hit(position + 1 - length, position + 1, this->V[keyword])) return;
+            }
+        }
     }
     /**
      * @brief match a gvie word list
@@ -237,7 +294,7 @@ class Trie {
      */
     int writePb(const std::string& path) const {
         zipfile::ZipFileWriter zipf(path);
-        std::ostream* zstream = zipf.Add_File("dregex.pb");
+        std::ostream* zstream = zipf.Add_File("dregex.pb", true);
         if (!zstream) {
             std::cerr << "ERROE: write trie file failed:" << path << std::endl;
             return EXIT_FAILURE;

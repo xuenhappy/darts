@@ -80,15 +80,15 @@ class DictWordRecongnizer : public CellRecognizer {
     }
 
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
-        AtomListIterator iter(dstSrc);
         auto cur = cmap.Head();
+        auto token_at = [&dstSrc](size_t index) -> const std::string& { return dstSrc.at(index)->image; };
         if (atom_mode) {
             auto hit = [&](size_t s, size_t e, const std::vector<int64_t>* labels) -> bool {
                 if (!labels) return false;
                 int feat = -1;
                 for (auto tidx : *labels) {
                     auto tag = this->trie.getLabel(tidx);
-                    if (tag) {
+                    if (tag && *tag) {
                         auto word = std::make_shared<Word>(dstSrc, s, e);
                         word->addLabel(tag);
                         word->feat = feat;
@@ -98,19 +98,19 @@ class DictWordRecongnizer : public CellRecognizer {
                 }
                 return false;
             };
-            this->trie.parse(iter, hit);
+            this->trie.parseContiguous(dstSrc.size(), token_at, hit);
         } else {
             auto hit = [&](size_t s, size_t e, const std::vector<int64_t>* labels) -> bool {
                 auto word = std::make_shared<Word>(dstSrc, s, e);
                 if (labels)
                     for (auto tidx : *labels) {
                         auto tag = this->trie.getLabel(tidx);
-                        if (tag) word->addLabel(tag);
+                        if (tag && *tag) word->addLabel(tag);
                     }
                 cur = cmap.addCell(word, cur);
                 return false;
             };
-            this->trie.parse(iter, hit);
+            this->trie.parseContiguous(dstSrc.size(), token_at, hit);
         }
     }
 };

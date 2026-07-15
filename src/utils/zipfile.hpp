@@ -54,7 +54,7 @@ class ZipFileWriter {
    public:
     explicit ZipFileWriter(const std::string& filename);
     virtual ~ZipFileWriter();
-    std::ostream* Add_File(const std::string& filename, const bool binary = true);
+    std::ostream* Add_File(const std::string& filename, bool best_compression = false);
 };
 
 // Class ZipFileReader
@@ -411,11 +411,12 @@ class ZipStreambufCompress : public std::streambuf {
     bool valid;
 
    public:
-    ZipStreambufCompress(ZipFileHeader* header, std::ostream& stream) : ostream(stream), header(header), valid(true) {
+    ZipStreambufCompress(ZipFileHeader* header, std::ostream& stream, int level = Z_DEFAULT_COMPRESSION)
+        : ostream(stream), header(header), valid(true) {
         strm.zalloc = Z_NULL;
         strm.zfree  = Z_NULL;
         strm.opaque = Z_NULL;
-        int ret     = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -MAX_WBITS, 8, Z_DEFAULT_STRATEGY);
+        int ret     = deflateInit2(&strm, level, Z_DEFLATED, -MAX_WBITS, 8, Z_DEFAULT_STRATEGY);
         if (ret != Z_OK) {
             std::cerr << "libz: failed to deflateInit" << std::endl;
             valid = false;
@@ -523,7 +524,8 @@ class ZIP_FILE_OSTREAM : public std::ostream {
     ZipStreambufCompress buf;
 
    public:
-    ZIP_FILE_OSTREAM(ZipFileHeader* header, std::ostream& ostream) : std::ostream(&buf), buf(header, ostream) {}
+    ZIP_FILE_OSTREAM(ZipFileHeader* header, std::ostream& ostream, int level = Z_DEFAULT_COMPRESSION)
+        : std::ostream(&buf), buf(header, ostream, level) {}
 
     virtual ~ZIP_FILE_OSTREAM() {}
 };
@@ -558,9 +560,9 @@ ZipFileWriter::~ZipFileWriter() {
 
 // Function ZipFileWriter
 
-std::ostream* ZipFileWriter::Add_File(const std::string& filename, const bool) {
+std::ostream* ZipFileWriter::Add_File(const std::string& filename, bool best_compression) {
     files.push_back(new ZipFileHeader(filename));
-    return new ZIP_FILE_OSTREAM(files.back(), ostream);
+    return new ZIP_FILE_OSTREAM(files.back(), ostream, best_compression ? Z_BEST_COMPRESSION : Z_DEFAULT_COMPRESSION);
 }
 
 // Function ZipFileReader

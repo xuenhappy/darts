@@ -14,6 +14,14 @@ message DRegexDat{
     repeated AItem OutPut=7;              
     map<string,int32> CodeMap=8;
     repeated string Labels=9;
+
+    // Compact v2 representation. Readers fall back to fields 2-7 for legacy files.
+    repeated sint32 CheckCompact=10 [packed=true];
+    repeated sint32 BaseCompact=11 [packed=true];
+    repeated sint32 FailCompact=12 [packed=true];
+    repeated uint32 LengthCompact=13 [packed=true];
+    reserved 14 to 17;
+    uint32 FormatVersion=18;
 }
 
 
