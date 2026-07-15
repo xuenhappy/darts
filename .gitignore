@@ -32,6 +32,9 @@ buiddir
 *.out
 *.app
 build/*
+python/build/
+python/dist/
+python/*.egg-info/
 .vscode/*
 
 .DS_Store

@@ -42,6 +42,10 @@ def wordlist2graph(wordarr):
         rowidx = node_index.reshape(-1, 1).repeat(lens, 1)
         colidx = node_index.reshape(1, -1).repeat(lens, 0)
         idxes = np.stack((rowidx, colidx, best_), 2)[advj_]
+        if idxes.size > 0:
+            # Keep edges grouped by dst first and src second so the sparse loss can scan them linearly.
+            order = np.lexsort((idxes[:, 0], idxes[:, 1]))
+            idxes = idxes[order]
         bidxs = np.ones(idxes.shape[0]).reshape(-1, 1) * gidx
         graphs.append(np.concatenate((bidxs, idxes), 1))
         s = e

@@ -1,3 +1,6 @@
-option('build-python', type : 'boolean', value : true)
+option('build-python', type : 'boolean', value : false)
+option('build-tests', type : 'boolean', value : false)
 option('link-static', type : 'boolean', value : true)
 option('debug-memory',type:'boolean',value:false)
+option('onnxruntime-dir', type : 'string', value : '', description : 'Fallback ONNX Runtime prefix when pkg-config is unavailable')
+option('python-include-dir', type : 'string', value : '', description : 'Python include directory when using a dependency sysroot')

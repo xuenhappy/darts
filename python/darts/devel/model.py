@@ -244,3 +244,30 @@ class GraphTrainer(nn.Module):
             batch_word_info = batch_word_info.cuda()
             batch_graph = batch_graph.cuda()
         return self.loss(batch_input_idx, batch_word_info, batch_graph)
+
+
+class GraphTrainerV2(nn.Module):
+    """
+    Sparse batched graph trainer.
+
+    batch_graph is expected to be a flat edge table:
+    [batch_id, src_node, dst_node, gold_mask]
+    where src/dst are flattened node ids aligned with batch_word_info.
+    """
+
+    def __init__(self, vocab_num, hidden_size, wtype_num, edge_chunk_size=65536, strict_path=True):
+        super().__init__()
+        self.predictor = WordEncoder(vocab_num, hidden_size, wtype_num)
+        self.quantizer = Quantizer(hidden_size, 32)
+        self.lossfunc = GraphLossSparse(edge_chunk_size=edge_chunk_size, strict_path=strict_path)
+
+    def forward(self, batch_input_idx, batch_lengths, batch_word_info, batch_graph):
+        if torch.cuda.is_available():
+            batch_input_idx = batch_input_idx.cuda()
+            batch_lengths = batch_lengths.cuda()
+            batch_word_info = batch_word_info.cuda()
+            batch_graph = batch_graph.cuda()
+
+        word_embeds = self.predictor(batch_input_idx, batch_lengths, batch_word_info)
+        edge_weight = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
+        return self.lossfunc(batch_word_info, batch_graph, edge_weight)

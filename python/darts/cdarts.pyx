@@ -144,7 +144,7 @@ cdef class Dregex:
     cdef dreg reg 
 
     @staticmethod
-    cdef inline bool atomiter_func(void* user_data,atomiter_buffer *ret):
+    cdef inline bool atomiter_func(void* user_data,atomiter_buffer *ret) noexcept:
         tuple_data=<tuple>user_data
         cdef list bytes_cache=<list>(tuple_data[1])
         try:
@@ -160,7 +160,7 @@ cdef class Dregex:
     
     
     @staticmethod
-    cdef inline bool dregex_hit_callback(void* user_data, dhit_buffer* buf):
+    cdef inline bool dregex_hit_callback(void* user_data, dhit_buffer* buf) noexcept:
         py_hit=(<tuple>user_data)[2]
         ret_labels=[]
         if buf.labels_size>0 and buf.labels:
@@ -173,7 +173,7 @@ cdef class Dregex:
 
 
     @staticmethod
-    cdef inline bool kviter_func(void* user_data, kviter_buffer* buf):
+    cdef inline bool kviter_func(void* user_data, kviter_buffer* buf) noexcept:
         tuple_data=<tuple>user_data
         cdef list kcache=<list>(tuple_data[1])
         cdef list vcache=<list>(tuple_data[2])
@@ -246,7 +246,7 @@ cdef class PyAtomList:
     cdef atomlist alist
 
     @staticmethod
-    cdef inline bool alist_hit_func(void* user_data, atom_buffer* buf):
+    cdef inline bool alist_hit_func(void* user_data, atom_buffer* buf) noexcept:
         cdef list ret=<list>user_data
         cdef str py_str=buf.image[:].decode("utf-8","ignore")
         atm=PyAtom(py_str,buf.st,buf.et);
@@ -313,7 +313,7 @@ cdef class PyWordList:
         self.wlist=NULL
 
     @staticmethod
-    cdef inline bool wlist_hit_func(void* user_data, word_buffer* buf):
+    cdef inline bool wlist_hit_func(void* user_data, word_buffer* buf) noexcept:
         cdef list ret=<list>user_data
         cdef str py_str=buf.image[:].decode("utf-8","ignore") if buf.image!=NULL else ""
         word=PyWord(py_str,buf.atom_s,buf.atom_e);

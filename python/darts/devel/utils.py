@@ -186,3 +186,191 @@ class GraphLoss(nn.Module):
         graph = graph[:, :2] - graph[:, :2].min()
         forward_score = self._forward_alg(graph, weight)
         return gold_score + forward_score
+
+
+class GraphLossV2(nn.Module):
+    """
+    Batched DAG loss for segmentation graphs.
+
+    Input graph format:
+    [batch_id, src_node, dst_node, gold_mask]
+    """
+
+    def __init__(self):
+        super(GraphLossV2, self).__init__()
+
+    @staticmethod
+    def _batch_layout(word_info):
+        if word_info is None or word_info.numel() < 1:
+            return None
+
+        batch_ids = word_info[:, 0].long()
+        starts = word_info[:, 1].long()
+        ends = word_info[:, 2].long()
+
+        batch_num = int(batch_ids.max().item()) + 1
+        counts = torch.bincount(batch_ids, minlength=batch_num)
+        offsets = torch.zeros_like(counts)
+        if counts.numel() > 1:
+            offsets[1:] = torch.cumsum(counts[:-1], 0)
+
+        end_base = int(ends.max().item()) + 1
+        start_base = int(starts.max().item()) + 1
+        # Keep each graph contiguous and topologically ordered by start/end span.
+        key = batch_ids * (start_base * (end_base + 1) + 1) + starts * (end_base + 1) + ends
+        order = torch.argsort(key)
+        inv_order = torch.empty_like(order)
+        inv_order[order] = torch.arange(order.numel(), device=order.device)
+        return counts, offsets, inv_order
+
+    def forward(self, word_info, graph, weight):
+        if weight is None:
+            return torch.zeros(())
+        if word_info is None or graph is None or word_info.numel() < 1 or graph.numel() < 1 or weight.numel() < 1:
+            return torch.zeros((), device=weight.device, dtype=weight.dtype)
+
+        layout = self._batch_layout(word_info)
+        if layout is None:
+            return torch.zeros((), device=weight.device, dtype=weight.dtype)
+
+        counts, offsets, inv_order = layout
+        device = weight.device
+        dtype = weight.dtype
+
+        batch_ids = graph[:, 0].long()
+        src = inv_order[graph[:, 1].long()] - offsets[batch_ids]
+        dst = inv_order[graph[:, 2].long()] - offsets[batch_ids]
+
+        batch_num = counts.numel()
+        max_nodes = int(counts.max().item())
+        if max_nodes < 1:
+            return torch.zeros((), device=device, dtype=dtype)
+
+        inf = torch.tensor(float("inf"), device=device, dtype=dtype)
+        dense_cost = torch.full((batch_num, max_nodes, max_nodes), inf, device=device, dtype=dtype)
+
+        dense_cost[batch_ids, src, dst] = weight
+
+        # Layered forward dynamic programming over the whole batch.
+        dp = torch.full((batch_num, max_nodes), inf, device=device, dtype=dtype)
+        dp[:, 0] = 0.0
+        for j in range(1, max_nodes):
+            valid = counts > j
+            if not torch.any(valid):
+                break
+            prev = dp[valid, :j]
+            step = dense_cost[valid, :j, j]
+            dp[valid, j] = torch.logsumexp(prev - step, dim=1)
+
+        end_idx = counts.clamp_min(1) - 1
+        log_z = dp[torch.arange(batch_num, device=device), end_idx]
+        gold_cost = (weight * graph[:, 3].to(dtype)).sum()
+        return gold_cost + log_z.sum()
+
+
+class GraphLossSparse(nn.Module):
+    """
+    Sparse DAG loss in O(E) memory and O(E + V) time per graph.
+
+    Expected graph format:
+    [batch_id, src_node, dst_node, gold_mask]
+
+    The reader should pre-sort edges by (batch_id, dst_node, src_node).
+    """
+
+    def __init__(self, edge_chunk_size=65536, strict_path=True):
+        super(GraphLossSparse, self).__init__()
+        self.edge_chunk_size = int(edge_chunk_size) if edge_chunk_size else 0
+        self.strict_path = strict_path
+
+    @staticmethod
+    def _chunked_logsumexp(values, chunk_size):
+        if values.numel() == 0:
+            return values.new_tensor(float("-inf"))
+        if chunk_size <= 0 or values.numel() <= chunk_size:
+            return torch.logsumexp(values, dim=0)
+
+        acc = None
+        for chunk in values.split(chunk_size):
+            chunk_lse = torch.logsumexp(chunk, dim=0)
+            acc = chunk_lse if acc is None else torch.logaddexp(acc, chunk_lse)
+        return acc
+
+    def forward(self, word_info, graph, weight):
+        if weight is None:
+            return torch.zeros(())
+        if word_info is None or graph is None or word_info.numel() < 1 or graph.numel() < 1 or weight.numel() < 1:
+            return torch.zeros((), device=weight.device, dtype=weight.dtype)
+
+        device = weight.device
+        dtype = weight.dtype
+        batch_ids = word_info[:, 0].long()
+        batch_num = int(batch_ids.max().item()) + 1
+        counts = torch.bincount(batch_ids, minlength=batch_num)
+        offsets = torch.zeros_like(counts)
+        if counts.numel() > 1:
+            offsets[1:] = torch.cumsum(counts[:-1], 0)
+
+        total_loss = torch.zeros((), device=device, dtype=dtype)
+        valid_graphs = 0
+
+        for b in range(batch_num):
+            node_num = int(counts[b].item())
+            if node_num <= 0:
+                continue
+
+            node_offset = int(offsets[b].item())
+            edge_mask = graph[:, 0].long() == b
+            if not torch.any(edge_mask):
+                # No edges means there is no usable path; skip or fail depending on strict mode.
+                if self.strict_path and node_num > 1:
+                    raise RuntimeError("graph has nodes but no edges for batch %d" % b)
+                continue
+
+            edges = graph[edge_mask]
+            edge_weight = weight[edge_mask]
+            gold_mask = edges[:, 3].to(dtype)
+            local_src = edges[:, 1].long() - node_offset
+            local_dst = edges[:, 2].long() - node_offset
+
+            if local_src.numel() == 0:
+                continue
+
+            # If the reader already sorted edges this becomes a linear scan.
+            if torch.any(local_dst[1:] < local_dst[:-1]):
+                order = torch.argsort(local_dst * max(node_num, 1) + local_src)
+                local_src = local_src[order]
+                local_dst = local_dst[order]
+                edge_weight = edge_weight[order]
+                gold_mask = gold_mask[order]
+
+            dp = torch.full((node_num,), float("-inf"), device=device, dtype=dtype)
+            dp[0] = 0.0
+
+            pos = 0
+            edge_num = local_dst.numel()
+            while pos < edge_num:
+                dst = int(local_dst[pos].item())
+                if dst < 0 or dst >= node_num:
+                    pos += 1
+                    continue
+                end = pos + 1
+                while end < edge_num and int(local_dst[end].item()) == dst:
+                    end += 1
+                cand = dp[local_src[pos:end]] - edge_weight[pos:end]
+                dp[dst] = self._chunked_logsumexp(cand, self.edge_chunk_size)
+                pos = end
+
+            log_z = dp[node_num - 1]
+            if not torch.isfinite(log_z):
+                if self.strict_path:
+                    raise RuntimeError("no valid path found for batch %d" % b)
+                continue
+
+            gold_cost = (edge_weight * gold_mask).sum()
+            total_loss = total_loss + gold_cost + log_z
+            valid_graphs += 1
+
+        if valid_graphs == 0:
+            return torch.zeros((), device=device, dtype=dtype)
+        return total_loss / valid_graphs

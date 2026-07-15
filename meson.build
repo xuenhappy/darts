@@ -1,10 +1,9 @@
 project('cdarts','c','cpp','cython',default_options: ['cpp_std=c++17'],version:'1.0.0')
-#useage:like blow
-#CC=gcc CXX=g++ meson setup directory -Dcmake_prefix_path=<Path1> -Dpkg_config_path=<Path1> -Dbuild-python=false
-#CC=clang CXX=clang++ meson setup directory
-#meson compile -C directory
-#meson install -C directory
 enable_static=get_option('link-static')
+enable_python=get_option('build-python')
+enable_tests=get_option('build-tests')
+onnxruntime_dir=get_option('onnxruntime-dir')
+python_include_dir=get_option('python-include-dir')
 # Validate the c++ Standard
 if get_option('cpp_std') != 'c++17'
     error('This project requires c++17 support')
@@ -28,8 +27,13 @@ endif
 
 message('check the deps libray.....')
 cc = meson.get_compiler('cpp')
-fmt_dep=dependency('fmt',required:false,static: enable_static,version:'>=9.1.0')
-if not fmt_dep.found()
+fmt_pkg_dep=dependency('fmt', method: 'pkg-config', required:false,version:'>=9.1.0')
+if enable_static and fmt_pkg_dep.found()
+    fmt_include_dir = fmt_pkg_dep.get_variable(pkgconfig: 'includedir')
+    fmt_dep = declare_dependency(compile_args: ['-I' + fmt_include_dir, '-DFMT_HEADER_ONLY'])
+elif fmt_pkg_dep.found()
+    fmt_dep = fmt_pkg_dep
+else
     fmt_dep = cc.find_library(
         'fmt', required: true,
         has_headers: ['fmt/core.h'],
@@ -37,21 +41,23 @@ if not fmt_dep.found()
     )
 endif
 
-onnxrt_dep=dependency('onnxruntime',version:'>=1.12.1',required:false)
+onnxrt_dep=dependency('onnxruntime', method: 'pkg-config', version:'>=1.12.1',required:false)
 if not onnxrt_dep.found()
-    onnx_dir='/opt/onnxruntime'
+    if onnxruntime_dir == ''
+        error('onnxruntime dependency not found. Install pkg-config metadata or pass -Donnxruntime-dir=/path/to/onnxruntime')
+    endif
     onnxrt_dep = declare_dependency(
-        link_args : [f'-L@onnx_dir@/lib', '-lonnxruntime' ],
-        include_directories : [f'@onnx_dir@/include'],
+        link_args : ['-L' + join_paths(onnxruntime_dir, 'lib'), '-lonnxruntime'],
+        compile_args : ['-I' + join_paths(onnxruntime_dir, 'include')],
         version:'1.12.1'
     )
 endif
 
-zlib_dep = dependency('zlib', version : '>=1.2.11', required : true,static: enable_static)
-jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: enable_static)
+zlib_dep = dependency('zlib', version : '>=1.2.11', required : true,static: false)
+jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: false)
 proto_dep = dependency('protobuf', version : '>=3.17.3',
     method: 'pkg-config', required : true,
-    static: enable_static,modules: ['protobuf::libprotobuf-lite']
+    static: false,modules: ['protobuf::libprotobuf-lite']
 )
 base_deps=[zlib_dep,jsoncpp_dep,proto_dep,onnxrt_dep,fmt_dep]
 
@@ -72,8 +78,8 @@ foreach pfile : files('src/utils/darts.proto')
         input : pfile,
         command : [protoc, '--proto_path=@CURRENT_SOURCE_DIR@/'+proto_path, '--cpp_out=@OUTDIR@','@PLAINNAME@'],
     )
-    proto_headers+=proto_list[1]
-    proto_sources+=proto_list
+    proto_sources += proto_list[0]
+    proto_headers += proto_list[1]
 endforeach
 
 my_proto_deb=declare_dependency(
@@ -89,7 +95,6 @@ my_proto_deb=declare_dependency(
 base_deps+=my_proto_deb
 
 message('buiding darts lib....')
-cur_dir=meson.current_source_dir()
 incdir = include_directories('src')
 darts_lib=both_libraries('darts', 'src/main/darts.cxx', 
     version : '1.2.3', soversion : '0',
@@ -97,26 +102,35 @@ darts_lib=both_libraries('darts', 'src/main/darts.cxx',
     cpp_args : extra_compile_args,c_args : extra_compile_args,
     pic:true
 )
-message('buiding darts test....')
-darts_test_exe = executable('darts_test','test/test_func.cc',
-    dependencies:base_deps,include_directories : incdir,
-    cpp_args : extra_compile_args,c_args : extra_compile_args,
-    build_rpath:'/opt/onnxruntime/lib'
-)
+if enable_tests
+    message('buiding darts test....')
+    test_rpath = ''
+    if onnxruntime_dir != ''
+        test_rpath = join_paths(onnxruntime_dir, 'lib')
+    endif
+    darts_test_exe = executable('darts_test','test/test_func.cc',
+        dependencies:base_deps,include_directories : incdir,
+        cpp_args : extra_compile_args,c_args : extra_compile_args,
+        build_rpath: test_rpath
+    )
+endif
 
-if get_option('build-python')
+if enable_python
     message('building cython so...')
     py = import('python').find_installation('python3')
-    dep_py = py.dependency(required:true)
+    python_compile_args = []
+    if python_include_dir != ''
+        python_compile_args += ['-I' + python_include_dir]
+    endif
     pylib=py.extension_module(
         'cdarts',
         'python/darts/cdarts.pyx',
         override_options : ['cython_language=cpp'],
-        dependencies : [dep_py],
         include_directories : [include_directories('src/main/')],
         link_with : darts_lib.get_static_lib(),
-        install : true, install_dir : cur_dir/'python/darts',
-        cpp_args : extra_compile_args,c_args : extra_compile_args,
+        install : true, install_dir : join_paths(py.get_install_dir(), 'darts'),
+        cpp_args : extra_compile_args + python_compile_args,
+        c_args : extra_compile_args + python_compile_args,
         link_args: extra_link_args,
         install_rpath:'$ORIGIN'
     )
