@@ -53,7 +53,7 @@ python scripts/data_pipeline.py evaluate data/generated/cws-test.txt --mode fast
 | `kernel/` | 字符类型、归一化和拼音等运行时核心数据 |
 | `licenses/` | 随运行时衍生数据分发的上游许可证 |
 | `codes/` | 模型编码资源 |
-| `demo/` | 格式与编译命令演示，不作为默认模型训练集 |
+| `demo/` | 神经训练格式与词典编译命令演示，不作为默认生产训练集 |
 
 CC BY-SA 数据的再分发和衍生使用必须保留署名及相同方式共享；具体版权文本由流水线下载到对应来源目录。
 

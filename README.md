@@ -665,7 +665,7 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 | `data/models/neural/quantizer.onnx` | 相邻词关联概率负对数模型，由开发脚本生成 |
 | `data/models/codex/engpiece.mbs` | 英文子词词典 |
 | `data/models/codex/table.vocab` | WordPiece 词表 |
-| `data/demo/` | 词典和模式编译示例数据 |
+| `data/demo/` | 神经训练、词典和模式编译示例数据 |
 
 不要在不了解格式的情况下修改 `data/kernel/`。模型、词典、编码表和配置必须保持版本一致，否则可能出现模型输入维度、标签编号或 Trie 标签不匹配。
 
