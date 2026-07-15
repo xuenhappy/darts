@@ -171,7 +171,7 @@ else:  # pragma: no cover
 setup_kwargs = dict(
     name="darts",
     author="Xu En",
-    author_email="xuen@mokahr.com",
+    author_email="nanhangxuen@163.com",
     description="darts python wrapper",
     long_description=long_description(),
     long_description_content_type="text/markdown",

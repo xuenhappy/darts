@@ -6,7 +6,7 @@
  * this module is use for word pice and new word regnizer
  * -----
  * Last Modified: Saturday, 24th September 2022 3:17:39 pm
- * Modified By: dell (xuen@mokahr.com)
+ * Modified By: dell (nanhangxuen@163.com)
  * -----
  * Copyright 2021 - 2022 Your Company, Moka
  */
