@@ -376,6 +376,24 @@ atoms = [a.image for a in PyAtomList("北京大学自然语言处理").tolist()]
 regex.parse(atoms, lambda start, end, labels: print(start, end, labels))
 ```
 
+### 句子级拼音标注
+
+```python
+from darts import PinyinAnnotator, sentence_pinyin
+
+annotator = PinyinAnnotator("data/conf.json")
+for token in annotator.annotate("重庆音乐ABC"):
+    print(token.text, token.pinyin, token.start, token.end)
+
+# 重庆 chóng qìng 0 2
+# 音乐 yīn yuè 2 4
+# ABC None 4 7
+print(sentence_pinyin("银行行长前往上海"))
+# yín háng háng zhǎng qián wǎng shàng hǎi
+```
+
+`PinyinAnnotator` 复用已加载的词典，适合连续处理句子。拼音模式优先使用词级短语读音消除多音字歧义，再回退到单字读音。非中文的 `pinyin` 默认是 `None`；可向 `annotate/readings` 传入 `non_cjk="<NO_PINYIN>"` 生成对齐占位符，或使用 `format(..., preserve_non_cjk=True)` 在格式化文本中保留原文。
+
 ## C API
 
 公共 C API 位于 `src/main/darts.h`，主要生命周期如下：

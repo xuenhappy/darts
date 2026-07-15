@@ -3,6 +3,7 @@ from .cdarts import (DSegment, Dregex, PyAtom, PyAtomList, PyWord, PyWordList, b
 
 from typing import Iterator, Tuple
 from .tokenizer import Token, Tokenizer, cut, lcut, tokenize
+from .pinyin import PinyinAnnotator, PinyinToken, annotate, sentence_pinyin
 
 
 def compileDregex(kvPiars: Iterator[Tuple[str, str]], outfile: str):

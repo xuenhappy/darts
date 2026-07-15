@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from darts import Dregex, DSegment, PyAtomList, Tokenizer
+from darts import Dregex, DSegment, PinyinAnnotator, PyAtomList, Tokenizer, sentence_pinyin
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +94,41 @@ class SegmentTests(unittest.TestCase):
     def test_missing_mode_fails(self):
         with self.assertRaises(OSError):
             DSegment(str(CONFIG), "missing-mode")
+
+
+class PinyinTests(unittest.TestCase):
+    def setUp(self):
+        self.annotator = PinyinAnnotator(str(CONFIG))
+
+    def test_sentence_annotation_disambiguates_polyphonic_words(self):
+        sentence = "重庆音乐ABC"
+        tokens = self.annotator.annotate(sentence)
+        self.assertEqual([token.text for token in tokens], ["重庆", "音乐", "ABC"])
+        self.assertEqual([token.pinyin for token in tokens], ["chóng qìng", "yīn yuè", None])
+        self.assertEqual([(token.start, token.end) for token in tokens], [(0, 2), (2, 4), (4, 7)])
+        self.assertTrue(all(sentence[token.start:token.end] == token.text for token in tokens))
+
+        readings = self.annotator.readings("银行行长")
+        self.assertEqual(readings, ["yín háng", "háng zhǎng"])
+
+    def test_non_cjk_policy_and_sentence_format(self):
+        self.assertEqual(
+            self.annotator.readings("中国AI2026", non_cjk="<NO_PINYIN>"),
+            ["zhōng guó", "<NO_PINYIN>", "<NO_PINYIN>"],
+        )
+        self.assertEqual(self.annotator.format("重庆ABC"), "chóng qìng ABC")
+        self.assertEqual(
+            self.annotator.format("重庆ABC", preserve_non_cjk=False),
+            "chóng qìng",
+        )
+        self.assertEqual(sentence_pinyin("中"), "zhōng")
+
+    def test_empty_and_invalid_sentence(self):
+        self.assertEqual(self.annotator.annotate(""), [])
+        with self.assertRaises(TypeError):
+            self.annotator.annotate(None)
+        with self.assertRaises(TypeError):
+            self.annotator.annotate("中文", non_cjk=1)
 
 
 class TokenizerTests(unittest.TestCase):
