@@ -65,9 +65,9 @@ const char* chtype(const char* word) {
 
 // convert a text to a alist
 atomlist asplit(const char* txt, size_t textlen, bool skip_space, bool normal_before) {
-    if (!txt || textlen < 0) return nullptr;
+    if (!txt) return nullptr;
     atomlist alist = new struct _atomlist;
-    alist->alist   = new darts::AtomList(txt, skip_space, normal_before);
+    alist->alist   = new darts::AtomList(std::string(txt, textlen), skip_space, normal_before);
     return alist;
 }
 // free the atomlist
@@ -219,14 +219,14 @@ segment load_segment(const char* conffile, const char* mode, bool isdevel) {
     if (!conffile) return nullptr;
     darts::Segment* sgemnet = nullptr;
     if (loadSegment(conffile, &sgemnet, mode, isdevel)) {
-        if (!sgemnet) delete sgemnet;
+        if (sgemnet) delete sgemnet;
         return nullptr;
     }
     if (!sgemnet) return nullptr;
     segment sg = new struct _segment;
 
     sg->segment = sgemnet;
-    return EXIT_SUCCESS;
+    return sg;
 }
 // free segment
 void free_segment(segment sg) {
@@ -253,7 +253,7 @@ void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data) {
                 ptrs.emplace_back(s.c_str());
             }
         }
-        buf.labels = &ptrs[0];
+        buf.labels = ptrs.empty() ? nullptr : ptrs.data();
         if (hit(user_data, &buf)) break;
     }
     ptrs.clear();
@@ -276,7 +276,7 @@ int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer) {
             ptrs->emplace_back(s.c_str());
         }
     }
-    buffer->labels = &(*ptrs)[0];
+    buffer->labels = ptrs->empty() ? nullptr : ptrs->data();
 
     return EXIT_SUCCESS;
 }

@@ -61,8 +61,8 @@ class DictWordRecongnizer : public CellRecognizer {
     bool atom_mode;
 
    public:
-    DictWordRecongnizer() {}
-    explicit DictWordRecongnizer(const std::string& pbfile) { this->trie.loadPb(pbfile); }
+    DictWordRecongnizer() : atom_mode(false) {}
+    explicit DictWordRecongnizer(const std::string& pbfile) : atom_mode(false) { this->trie.loadPb(pbfile); }
 
     int initalize(const std::map<std::string, std::string>& param,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& dicts) {
@@ -166,7 +166,7 @@ class PinyinRecongnizer : public CellRecognizer {
             adds.clear();
         }
     }
-    bool exclusive() { return true; }
+    bool exclusive() const override { return true; }
 };
 
 const char* PinyinRecongnizer::ENCODER_PARAM = "pyin.encoder";
@@ -185,7 +185,9 @@ class RuleRecongnizer : public CellRecognizer {
         std::vector<std::shared_ptr<Word>> buffer;
         buffer.reserve(dstSrc.size() / 2 + 1);
         seek(dstSrc, buffer);
-        auto comp = [](std::shared_ptr<Word> i1, std::shared_ptr<Word> i2) -> bool { return (i1->st < i2->st); };
+        auto comp = [](const std::shared_ptr<Word>& i1, const std::shared_ptr<Word>& i2) {
+            return i1->st == i2->st ? i1->et < i2->et : i1->st < i2->st;
+        };
         std::sort(buffer.begin(), buffer.end(), comp);
         Cursor cur = cmap.Head();
         for (auto x : buffer) {

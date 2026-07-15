@@ -53,6 +53,12 @@ class Decider : public SegmentPlugin {
     virtual void embed(const AtomList& dstSrc, SegPath& cmap) const = 0;
     // calculate the two word distance
     virtual double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const = 0;
+    virtual void rangingBatch(
+        const std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>>& pairs,
+        std::vector<double>& weights) const {
+        weights.reserve(weights.size() + pairs.size());
+        for (const auto& pair : pairs) weights.push_back(ranging(pair.first, pair.second));
+    }
 };
 
 /**
@@ -64,7 +70,7 @@ class CellRecognizer : public SegmentPlugin {
     // recognizer all possable word in the atomlist
     virtual void addWords(const AtomList& dstSrc, SegPath& cmap) const = 0;
     // is this plugin exclusive other plugin
-    bool exclusive() { return false; }
+    virtual bool exclusive() const { return false; }
     virtual ~CellRecognizer() {}
 };
 
@@ -77,27 +83,18 @@ REGISTER_REGISTERER(Decider);
 #define REGISTER_Decider(name) REGISTER_CLASS(Decider, name)
 // end defined
 
-typedef struct _GraphEdge {
+struct GraphEdge {
     int et;
     double weight;
-}* GraphEdge;
+};
 
 class SegGraph {
    private:
-    std::map<int, std::vector<GraphEdge>*> graph;
+    std::vector<std::vector<GraphEdge>> graph;
+    size_t candidate_count;
 
    public:
-    SegGraph() {}
-    ~SegGraph() {
-        for (auto p : graph) {
-            for (auto v : *(p.second)) {
-                delete v;
-            }
-            p.second->clear();
-            delete p.second;
-        }
-        graph.clear();
-    }
+    explicit SegGraph(size_t candidates) : graph(candidates + 1), candidate_count(candidates) {}
 
     /**
      * @brief put edges
@@ -105,7 +102,7 @@ class SegGraph {
      * @param st
      * @param edges
      */
-    void putEdges(int st, std::vector<GraphEdge>* edges) { graph.insert(std::make_pair(st, edges)); }
+    void addEdge(int st, int et, double weight) { graph[st + 1].push_back(GraphEdge{et, weight}); }
 
     /**
      * @brief select best path
@@ -114,26 +111,20 @@ class SegGraph {
      * @param bestPaths
      */
     void selectPath(std::vector<int>& bestPaths) {
-        auto sz = graph.size() + 1;
+        auto sz = candidate_count + 2;
         std::vector<double> dist(sz, std::numeric_limits<double>::max());
         std::vector<int> prev(sz, -2);
-        using iPair = std::pair<double, int>;
-        std::priority_queue<iPair, std::vector<iPair>, std::greater<iPair>> pq;
-        // init var
-        pq.push(std::make_pair(0.0, -1));
         dist[0] = 0;
 
-        // dijkstra
-        while (!pq.empty()) {
-            int u = pq.top().second;
-            pq.pop();
-            for (auto nw : *graph[u]) {
-                int v             = nw->et;
-                double new_weight = dist[u + 1] + nw->weight;
+        // Candidate ids follow start/end order, so the segmentation graph is a DAG.
+        for (int u = -1; u < static_cast<int>(candidate_count); ++u) {
+            if (dist[u + 1] == std::numeric_limits<double>::max()) continue;
+            for (const auto& edge : graph[u + 1]) {
+                int v = edge.et;
+                double new_weight = dist[u + 1] + edge.weight;
                 if (dist[v + 1] > new_weight) {
                     dist[v + 1] = new_weight;
                     prev[v + 1] = u;
-                    pq.push(std::make_pair(new_weight, v));
                 }
             }
         }
@@ -179,34 +170,43 @@ class Segment {
     void buildGraph(const AtomList& context, SegPath& cmap, SegGraph& graph) {
         cmap.indexIt();
         this->decider->embed(context, cmap);
+        struct PendingEdge {
+            int from;
+            int to;
+            std::shared_ptr<Word> pre;
+            std::shared_ptr<Word> next;
+        };
+        std::vector<PendingEdge> pending;
         // add head
-        std::vector<GraphEdge>* head_tmp = new std::vector<GraphEdge>();
-
         auto dfunc_head = [&](Cursor pre) {
-            auto dist = decider->ranging(cmap.SrcNode(), pre->val);
-            assert(dist >= 0);
-            head_tmp->push_back(new _GraphEdge{pre->idx, dist});
+            pending.push_back(PendingEdge{-1, pre->idx, cmap.SrcNode(), pre->val});
         };
         cmap.iterRow(nullptr, 0, dfunc_head);
-        graph.putEdges(-1, head_tmp);
 
         auto dfunc = [&](Cursor pre) {
-            std::vector<GraphEdge>* tmp = new std::vector<GraphEdge>();
+            bool has_next = false;
             cmap.iterRow(pre, pre->val->et, [&](Cursor next) {
-                auto dist = decider->ranging(pre->val, next->val);
-                assert(dist >= 0);
-                tmp->push_back(new _GraphEdge{next->idx, dist});
+                pending.push_back(PendingEdge{pre->idx, next->idx, pre->val, next->val});
+                has_next = true;
             });
             // add tail
-            if (tmp->empty()) {
-                auto dist = decider->ranging(pre->val, cmap.EndNode());
-                assert(dist >= 0);
+            if (!has_next) {
                 int cidx = cmap.Size();
-                tmp->push_back(new _GraphEdge{cidx, dist});
+                pending.push_back(PendingEdge{pre->idx, cidx, pre->val, cmap.EndNode()});
             }
-            graph.putEdges(pre->idx, tmp);
         };
         cmap.iterRow(nullptr, -1, dfunc);
+
+        std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>> pairs;
+        pairs.reserve(pending.size());
+        for (const auto& edge : pending) pairs.emplace_back(edge.pre, edge.next);
+        std::vector<double> weights;
+        decider->rangingBatch(pairs, weights);
+        assert(weights.size() == pending.size());
+        for (size_t i = 0; i < pending.size(); ++i) {
+            assert(weights[i] >= 0);
+            graph.addEdge(pending[i].from, pending[i].to, weights[i]);
+        }
     }
 
     /**
@@ -219,7 +219,7 @@ class Segment {
     void splitContent(const AtomList& context, SegPath& cmap, std::vector<std::shared_ptr<Word>>& ret,
                       int atom_start_pos = 0) {
         // get best path
-        SegGraph graph;
+        SegGraph graph(cmap.Size());
         buildGraph(context, cmap, graph);
         std::vector<int> bestPaths;
         graph.selectPath(bestPaths);

@@ -33,11 +33,11 @@
 namespace darts {
 
 inline Ort::Session* loadmodel(const char* model_path) {
-    Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "darts");
+    static Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "darts");
     Ort::SessionOptions session_options;
-    session_options.DisableMemPattern();
-    session_options.DisableCpuMemArena();
-    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+    session_options.EnableMemPattern();
+    session_options.EnableCpuMemArena();
+    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     return new Ort::Session(env, model_path, session_options);
 }
 /**
@@ -227,14 +227,13 @@ class OnnxIndicator {
                      output_name_.data(), &output_tensor, output_name_.size());
 
         // set cmap data
-        const float* floatarr = output_tensor.GetTensorMutableData<float>();
-        cmap.SrcNode()->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(floatarr, floatarr + emdim)));
-        cmap.iterRow(nullptr, -1, [this, floatarr](Cursor cur) {
-            const float* arr = floatarr + (cur->idx + 1) * emdim;
-            cur->val->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(arr, arr + emdim)));
+        const float* floatarr = output_tensor.GetTensorData<float>();
+        auto embeddings = std::make_shared<std::vector<float>>(floatarr, floatarr + words_size * emdim);
+        cmap.SrcNode()->setAttView(embeddings, 0, emdim);
+        cmap.iterRow(nullptr, -1, [this, &embeddings](Cursor cur) {
+            cur->val->setAttView(embeddings, (cur->idx + 1) * emdim, emdim);
         });
-        const float* endarr = floatarr + (words_size - 1) * emdim;
-        cmap.EndNode()->setAtt(std::shared_ptr<std::vector<float>>(new std::vector<float>(endarr, endarr + emdim)));
+        cmap.EndNode()->setAttView(embeddings, (words_size - 1) * emdim, emdim);
     }
 
     ~OnnxIndicator() {
@@ -261,6 +260,7 @@ class OnnxQuantizer {
     Ort::Session* session;
     std::vector<char*> input_name_;
     std::vector<char*> output_name_;
+    bool batched_input = false;
 
     int validator(Ort::Session* session) {
         // check input tensor nums
@@ -274,13 +274,13 @@ class OnnxQuantizer {
         auto a1_tensor      = session->GetInputTypeInfo(0);
         auto a1_tensor_info = a1_tensor.GetTensorTypeAndShapeInfo();
         size_t a1_dim_count = a1_tensor_info.GetDimensionsCount();
-        if (a1_dim_count != 1) {  // channel
-            std::cerr << "This model is not supported by onnx quantizer. a1 dim must 1 not " << a1_dim_count
+        if (a1_dim_count != 1 && a1_dim_count != 2) {
+            std::cerr << "This model is not supported by onnx quantizer. a1 dim must 1 or 2 not " << a1_dim_count
                       << std::endl;
             return EXIT_FAILURE;
         }
         std::vector<int64_t> alist_dims = a1_tensor_info.GetShape();
-        if (alist_dims[0] != emdim) {
+        if (alist_dims.back() != static_cast<int64_t>(emdim)) {
             std::cerr << "This model is not supported by onnx quantizer. a1 need be in C format" << std::endl;
             return EXIT_FAILURE;
         }
@@ -288,13 +288,13 @@ class OnnxQuantizer {
         auto a2_tensor      = session->GetInputTypeInfo(1);
         auto a2_tensor_info = a2_tensor.GetTensorTypeAndShapeInfo();
         size_t a2_dim_count = a2_tensor_info.GetDimensionsCount();
-        if (a2_dim_count != 1) {  // channel
-            std::cerr << "This model is not supported by onnx quantizer. a2 dim must 1 not " << a2_dim_count
+        if (a2_dim_count != a1_dim_count) {
+            std::cerr << "This model is not supported by onnx quantizer. input ranks differ: " << a1_dim_count << " and " << a2_dim_count
                       << std::endl;
             return EXIT_FAILURE;
         }
         std::vector<int64_t> a2_dims = a2_tensor_info.GetShape();
-        if (a2_dims[0] != emdim) {
+        if (a2_dims.back() != static_cast<int64_t>(emdim)) {
             std::cerr << "This model is not supported by onnx quantizer. a2 need be in C format" << std::endl;
             return EXIT_FAILURE;
         }
@@ -315,10 +315,11 @@ class OnnxQuantizer {
             return EXIT_FAILURE;
         }
         auto out_dims = out_tensor_info.GetShape();
-        if (out_dims[0] != 1) {
+        if (a1_dim_count == 1 && out_dims[0] != 1) {
             std::cerr << "This model is not supported by onnx quantizer. output dim is not 2!" << std::endl;
             return EXIT_FAILURE;
         }
+        batched_input = a1_dim_count == 2;
         Ort::AllocatorWithDefaultOptions ort_alloc;
         for (int i = 0; i < input_count; i++) {
             auto name_ptr = session->GetInputNameAllocated(i, ort_alloc);
@@ -367,7 +368,7 @@ class OnnxQuantizer {
      */
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
         if (pre == nullptr || next == nullptr) return 0.0;
-        if (pre->getAtt() == nullptr || next->getAtt() == nullptr) {
+        if (pre->getAttData() == nullptr || next->getAttData() == nullptr) {
             return 0.0;
         }
         // create inputs
@@ -376,13 +377,15 @@ class OnnxQuantizer {
         int64_t adim     = static_cast<int64_t>(this->emdim);
 
         // set data
-        auto x1              = pre->getAtt();
-        Ort::Value a1_tensor = Ort::Value::CreateTensor<float>(memory_info, x1->data(), this->emdim, &adim, 1);
+        const float* x1 = pre->getAttData();
+        Ort::Value a1_tensor = Ort::Value::CreateTensor<float>(
+            memory_info, const_cast<float*>(x1), this->emdim, &adim, 1);
         assert(a1_tensor.IsTensor());
         ort_inputs.push_back(std::move(a1_tensor));
 
-        auto x2              = next->getAtt();
-        Ort::Value a2_tensor = Ort::Value::CreateTensor<float>(memory_info, x2->data(), this->emdim, &adim, 1);
+        const float* x2 = next->getAttData();
+        Ort::Value a2_tensor = Ort::Value::CreateTensor<float>(
+            memory_info, const_cast<float*>(x2), this->emdim, &adim, 1);
         assert(a2_tensor.IsTensor());
         ort_inputs.push_back(std::move(a2_tensor));
         // run model
@@ -391,6 +394,42 @@ class OnnxQuantizer {
                      output_name_.data(), &output_tensor, output_name_.size());
         // Get pointer to output tensor float values
         return output_tensor.GetTensorMutableData<float>()[0];
+    }
+
+    void rangingBatch(
+        const std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>>& pairs,
+        std::vector<double>& weights) const {
+        if (!batched_input) {
+            weights.reserve(weights.size() + pairs.size());
+            for (const auto& pair : pairs) weights.push_back(ranging(pair.first, pair.second));
+            return;
+        }
+
+        const size_t edge_count = pairs.size();
+        if (edge_count == 0) return;
+        thread_local std::vector<float> first;
+        thread_local std::vector<float> second;
+        first.assign(edge_count * emdim, 0.0f);
+        second.assign(edge_count * emdim, 0.0f);
+        for (size_t i = 0; i < edge_count; ++i) {
+            const float* a = pairs[i].first ? pairs[i].first->getAttData() : nullptr;
+            const float* b = pairs[i].second ? pairs[i].second->getAttData() : nullptr;
+            if (a) std::copy_n(a, emdim, first.data() + i * emdim);
+            if (b) std::copy_n(b, emdim, second.data() + i * emdim);
+        }
+
+        auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        std::vector<int64_t> dims = {static_cast<int64_t>(edge_count), static_cast<int64_t>(emdim)};
+        std::vector<Ort::Value> inputs;
+        inputs.reserve(2);
+        inputs.push_back(Ort::Value::CreateTensor<float>(memory_info, first.data(), first.size(), dims.data(), dims.size()));
+        inputs.push_back(Ort::Value::CreateTensor<float>(memory_info, second.data(), second.size(), dims.data(), dims.size()));
+        Ort::Value output{nullptr};
+        session->Run(Ort::RunOptions{nullptr}, input_name_.data(), inputs.data(), inputs.size(),
+                     output_name_.data(), &output, output_name_.size());
+        const float* values = output.GetTensorData<float>();
+        weights.reserve(weights.size() + edge_count);
+        for (size_t i = 0; i < edge_count; ++i) weights.push_back(values[i]);
     }
 
     ~OnnxQuantizer() {
@@ -444,6 +483,12 @@ class OnnxDecider : public Decider {
      */
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
         return quantizer.ranging(pre, next);
+    }
+
+    void rangingBatch(
+        const std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>>& pairs,
+        std::vector<double>& weights) const override {
+        quantizer.rangingBatch(pairs, weights);
     }
 
     ~OnnxDecider() {}
@@ -588,9 +633,10 @@ class OnnxRecongnizer : public CellRecognizer {
         session->Run(Ort::RunOptions{nullptr}, input_name_.data(), ort_inputs.data(), ort_inputs.size(),
                      output_name_.data(), &output_tensor, output_name_.size());
 
-        // Get pointer to output tensor float values
-        int64_t* arr = output_tensor.GetTensorMutableData<int64_t>();
-        seq.insert(seq.end(), arr, arr + dstSrc.size());
+        const auto output_info = output_tensor.GetTensorTypeAndShapeInfo();
+        const size_t output_size = output_info.GetElementCount();
+        const int64_t* arr = output_tensor.GetTensorData<int64_t>();
+        seq.assign(arr, arr + output_size);
     }
 
    public:
@@ -636,23 +682,32 @@ class OnnxRecongnizer : public CellRecognizer {
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
         std::vector<size_t> label_idx;
         decode(dstSrc, label_idx);
+        if (label_idx.size() < dstSrc.size() + 2) {
+            std::cerr << "ERROR: ONNX recognizer returned too few labels" << std::endl;
+            return;
+        }
         Cursor cur = cmap.Head();
         size_t pos = 1;
         bool flag  = false;
+        const size_t sequence_end = std::min(label_idx.size() - 1, dstSrc.size() + 1);
         // std::cout << "[";
         // for (size_t i = 1; i < label_idx.size() - 1; ++i) {
         //     std::cout << labels[label_idx[i]] << ",";
         // }
         // std::cout << "]" << std::endl;
-        for (size_t i = 1; i < label_idx.size() - 1; ++i) {
+        for (size_t i = 1; i < sequence_end; ++i) {
+            if (label_idx[i] >= labels.size()) {
+                flag = false;
+                continue;
+            }
             const std::string& nlabel = labels[label_idx[i]];
+            if (nlabel.empty()) continue;
             if (nlabel[0] == 'B') {
                 if (flag && i - pos > 1) {
                     const std::string& blabel = labels[label_idx[pos]];
 
                     auto w = std::make_shared<Word>(dstSrc, pos - 1, i - 1);
-                    if (nlabel.size() > 2) w->addLabel(blabel.substr(2));
-                    std::cout << *w << std::endl;
+                    if (blabel.size() > 2) w->addLabel(blabel.substr(2));
                     cur = cmap.addNext(cur, w);
                 }
                 pos  = i;
@@ -665,19 +720,17 @@ class OnnxRecongnizer : public CellRecognizer {
 
                     auto w = std::make_shared<Word>(dstSrc, pos - 1, i - 1);
                     if (nlabel.size() > 2) w->addLabel(blabel.substr(2));
-                    std::cout << *w << std::endl;
                     cur = cmap.addNext(cur, w);
                 }
                 flag = false;
                 continue;
             }
         }
-        if (flag && pos < label_idx.size() - 1) {
-            auto w = std::make_shared<Word>(dstSrc, pos - 1, label_idx.size() - 1);
+        if (flag && pos < sequence_end) {
+            auto w = std::make_shared<Word>(dstSrc, pos - 1, dstSrc.size());
 
             const std::string& nlabel = labels[label_idx[pos]];
             if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
-            std::cout << *w << std::endl;
             cmap.addNext(cur, w);
         }
     }

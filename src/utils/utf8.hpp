@@ -247,7 +247,7 @@ inline uint32_t utf8_converter(const char* character, uint8_t size) {
     if (character == nullptr) return 0;
     if (character[0] == 0) return 0;
 
-    static uint32_t codepoint = 0;
+    uint32_t codepoint = 0;
 
     if (size == 1) {
         return character[0];
@@ -287,7 +287,7 @@ inline uint8_t unicode_charsize(uint32_t codepoint) {
 static const uint8_t table_utf8[] = {0, 0, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC};
 
 inline const char* unicode_converter(uint32_t codepoint, uint8_t size) {
-    static char str[10];
+    static thread_local char str[10];
     memset(str, '\0', sizeof(str));
     if (size == 0) return str;
 

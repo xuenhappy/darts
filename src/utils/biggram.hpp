@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "./cedar.hpp"
 #include "./filetool.hpp"
@@ -27,16 +28,6 @@
 
 namespace darts {
 
-struct bigram_key {
-    size_t i, j;  // words - indexes of the words in a dictionary
-    // a constructor to be easily constructible
-    bigram_key(size_t a_i, size_t a_j) : i(a_i), j(a_j) {}
-
-    // you need to sort keys to be used in a map container
-    bool operator<(bigram_key const& other) const { return i < other.i || (i == other.i && j < other.j); }
-
-    bool operator==(const bigram_key& rhs) { return i == rhs.i && j == rhs.j; }
-};
 struct bigram_data {
     size_t count;  // n(ij)
     bigram_data() : count(0) {}
@@ -49,12 +40,16 @@ class BigramDict {
     static const char* TABLE_FILE;
 
     cedar::da<int> idx;
-    std::map<bigram_key, bigram_data> bigrams;
-    std::map<size_t, size_t> freqs;
+    std::unordered_map<uint64_t, bigram_data> bigrams;
+    std::vector<size_t> freqs;
 
     size_t avg_single_freq = 0;
     size_t max_single_freq = 0;
     size_t avg_union_freq  = 0;
+
+    static uint64_t makeBigramKey(uint32_t first, uint32_t second) {
+        return (static_cast<uint64_t>(first) << 32) | second;
+    }
 
     double getSingleNlogProp(int widx) const {
         if (widx < 0) return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq * 1.0 / 2));
@@ -83,7 +78,7 @@ class BigramDict {
             n_ij = std::min(std::min(a, b), double(avg_union_freq)) / 2.0;
         } else {
             a = freqs.at(a_widx), b = freqs.at(b_widx);
-            bigram_key key(a_widx, b_widx);
+            uint64_t key = makeBigramKey(a_widx, b_widx);
             auto it = bigrams.find(key);
             if (it == bigrams.end()) {
                 n_ij = std::min(std::min(a, b), double(avg_union_freq)) / 2.0;
@@ -120,13 +115,17 @@ class BigramDict {
         this->avg_union_freq  = dat.avg_union_freq();
         this->max_single_freq = dat.max_single_freq();
 
-        auto freq = dat.freq();
-        this->freqs.insert(freq.begin(), freq.end());
+        const auto& freq = dat.freq();
+        size_t max_index = 0;
+        for (const auto& entry : freq) max_index = std::max(max_index, static_cast<size_t>(entry.first));
+        this->freqs.assign(freq.empty() ? 0 : max_index + 1, 0);
+        for (const auto& entry : freq) this->freqs[entry.first] = entry.second;
 
         auto size = dat.table_size();
+        this->bigrams.reserve(size);
         for (size_t i = 0; i < size; i++) {
             auto tuple                                      = dat.table(i);
-            this->bigrams[bigram_key(tuple.x(), tuple.y())] = bigram_data(tuple.freq());
+            this->bigrams[makeBigramKey(tuple.x(), tuple.y())] = bigram_data(tuple.freq());
         }
         return EXIT_SUCCESS;
     }
@@ -144,11 +143,11 @@ class BigramDict {
         dat.set_max_single_freq(this->max_single_freq);
 
         auto freq = dat.mutable_freq();
-        freq->insert(this->freqs.begin(), this->freqs.end());
+        for (size_t i = 0; i < this->freqs.size(); ++i) (*freq)[i] = this->freqs[i];
         for (auto& kv : this->bigrams) {
             auto table = dat.add_table();
-            table->set_x(kv.first.i);
-            table->set_y(kv.first.j);
+            table->set_x(kv.first >> 32);
+            table->set_y(kv.first & 0xffffffffu);
             table->set_freq(kv.second.count);
         }
         if (!dat.SerializePartialToOstream(&os)) return EXIT_FAILURE;
@@ -260,7 +259,7 @@ class BigramDict {
             freq_sum += freq;
             if (freq > max_freq) max_freq = freq;
             this->idx.update(word.c_str(), word.length(), n++);
-            this->freqs[n - 1] = freq;
+            this->freqs.push_back(freq);
         }
         idx_in.close();
 
@@ -309,7 +308,7 @@ class BigramDict {
                           << std::endl;
                 continue;
             }
-            this->bigrams[bigram_key(pidx, nidx)] = bigram_data(freq);
+            this->bigrams[makeBigramKey(pidx, nidx)] = bigram_data(freq);
             union_freq_sum += freq;
             unum++;
         }

@@ -91,9 +91,9 @@ class AtomList {
      * @param e
      */
     AtomList(const AtomList& other, int s, int e) {
-        if (s >= e) return;
-        auto st = data[s]->st;
-        auto et = data[e - 1]->et;
+        if (s < 0 || e > static_cast<int>(other.data.size()) || s >= e) return;
+        auto st = other.data[s]->st;
+        auto et = other.data[e - 1]->et;
 
         this->str = other.str.substr(st, et - st);
         this->data.insert(data.end(), other.data.begin() + s, other.data.begin() + e);
@@ -108,9 +108,12 @@ class AtomList {
 
     std::string subAtom(size_t start, size_t end) const {
         if (start < 0 || end > data.size() || start >= end) return "";
-        auto st = data[start]->st;
-        auto et = data[end - 1]->et;
-        return to_utf8(str.substr(st, et - st));
+        size_t bytes = 0;
+        for (size_t i = start; i < end; ++i) bytes += data[i]->image.size();
+        std::string result;
+        result.reserve(bytes);
+        for (size_t i = start; i < end; ++i) result.append(data[i]->image);
+        return result;
     }
 
     /**
@@ -144,6 +147,8 @@ class AtomList {
 class Word {
    private:
     std::shared_ptr<std::vector<float>> att;  // att data
+    size_t att_offset = 0;
+    size_t att_size = 0;
     std::set<std::string> labels;
     std::string image;
 
@@ -151,6 +156,7 @@ class Word {
     int st;    // the word in atomlist start
     int et;    // the words in atom list end
     int feat;  // this word other type
+    int vocab_id;
 
     bool isStSpecial() { return st < 0; }
 
@@ -165,14 +171,14 @@ class Word {
      * @param start  start of postion in atom list
      * @param end  end of postion in atom list
      */
-    Word(const std::string& image, int start, int end) : feat(-1) {
+    Word(const std::string& image, int start, int end) : feat(-1), vocab_id(-1) {
         this->image = image;
         this->st    = start;
         this->et    = end;
         this->att   = nullptr;
     }
 
-    Word(const AtomList& alist, int start, int end) : feat(-1) {
+    Word(const AtomList& alist, int start, int end) : feat(-1), vocab_id(-1) {
         this->image = alist.subAtom(start, end);
         this->st    = start;
         this->et    = end;
@@ -183,7 +189,10 @@ class Word {
         this->st   = wd.st;
         this->et   = wd.et;
         this->feat = wd.feat;
+        this->vocab_id = wd.vocab_id;
         this->att  = wd.att;
+        this->att_offset = wd.att_offset;
+        this->att_size = wd.att_size;
         labels.insert(wd.labels.begin(), wd.labels.end());
     }
 
@@ -201,8 +210,21 @@ class Word {
         return output;
     }
 
-    void setAtt(std::shared_ptr<std::vector<float>> att) { this->att = att; }
+    void setAtt(std::shared_ptr<std::vector<float>> value) {
+        this->att = std::move(value);
+        this->att_offset = 0;
+        this->att_size = this->att ? this->att->size() : 0;
+    }
+    void setAttView(const std::shared_ptr<std::vector<float>>& value, size_t offset, size_t size) {
+        this->att = value;
+        this->att_offset = offset;
+        this->att_size = size;
+    }
     std::shared_ptr<std::vector<float>> getAtt() { return this->att; }
+    const float* getAttData() const {
+        return att && att_offset + att_size <= att->size() ? att->data() + att_offset : nullptr;
+    }
+    size_t getAttSize() const { return att_size; }
 
     void addLabel(const std::string& tag) { labels.insert(tag); }
     void addLabels(const std::set<std::string>* tags) {
@@ -271,6 +293,9 @@ class SegPath {
    private:
     Cursor head;
     size_t rows, colums, size;
+    bool indexed;
+    std::vector<Cursor> indexed_nodes;
+    std::vector<std::vector<Cursor>> indexed_rows;
 
     std::shared_ptr<Word> src_node;
     std::shared_ptr<Word> end_node;
@@ -294,6 +319,7 @@ class SegPath {
 
         this->head->idx = -1;
         this->rows = this->colums = this->size = 0;
+        this->indexed = false;
     }
 
     ~SegPath() {
@@ -317,11 +343,20 @@ class SegPath {
         auto node = this->head;
         node->idx = -1;
         int index = node->idx;
+        indexed_nodes.clear();
+        indexed_nodes.reserve(size);
+        indexed_rows.clear();
+        indexed_rows.resize(rows + 1);
         while (node->lack) {
             node = node->lack;
             index++;
             node->idx = index;
+            indexed_nodes.push_back(node);
+            auto row = static_cast<size_t>(node->val->st);
+            if (row >= indexed_rows.size()) indexed_rows.resize(row + 1);
+            indexed_rows[row].push_back(node);
         }
+        indexed = true;
     }
 
     /**
@@ -338,9 +373,21 @@ class SegPath {
 
         if (row < 0) {
             // Iter all if row is negtive
+            if (indexed) {
+                for (auto node : indexed_nodes) dfunc(node);
+                return;
+            }
             while (cur->lack) {
                 dfunc(cur->lack);
                 cur = cur->lack;
+            }
+            return;
+        }
+
+        if (indexed) {
+            auto index = static_cast<size_t>(row);
+            if (index < indexed_rows.size()) {
+                for (auto node : indexed_rows[index]) dfunc(node);
             }
             return;
         }
@@ -395,12 +442,14 @@ class SegPath {
             }
             auto m = makeCursor(cell, cur, n);
             this->size++;
+            this->indexed = false;
             cur->lack = m;
             n->prev   = m;
             return m;
         }
         cur->lack = makeCursor(cell, cur, nullptr);
         this->size++;
+        this->indexed = false;
         return cur->lack;
     }
 
@@ -438,12 +487,14 @@ class SegPath {
             }
             auto m = makeCursor(cell, n, cur);
             this->size++;
+            this->indexed = false;
             cur->prev = m;
             n->lack   = m;
             return m;
         }
         cur->prev = makeCursor(cell, this->head, cur);
         this->size++;
+        this->indexed = false;
         return cur->prev;
     }
 

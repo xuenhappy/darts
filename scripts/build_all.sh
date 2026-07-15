@@ -60,7 +60,8 @@ if [[ ! -x "$BUILD_VENV/bin/python" ]]; then
   "$PYTHON_BIN" -m venv "$BUILD_VENV"
 fi
 BUILD_PYTHON="$BUILD_VENV/bin/python"
-"$BUILD_PYTHON" -m pip install -U pip build "Cython>=3.0" "meson>=1.3" "ninja>=1.11" >/dev/null
+"$BUILD_PYTHON" -m pip install -U pip build "setuptools>=68" wheel \
+  "Cython>=3.0" "meson>=1.3" "ninja>=1.11" >/dev/null
 export PATH="$BUILD_VENV/bin:$PATH"
 PYTHON_INCLUDE_DIR="$("$BUILD_PYTHON" -c 'import sysconfig; print(sysconfig.get_paths()["include"])')"
 
@@ -71,7 +72,7 @@ meson compile -C "$BUILD_DIR"
 popd >/dev/null
 
 pushd "$PY_DIR" >/dev/null
-"$BUILD_PYTHON" -m build --wheel
+"$BUILD_PYTHON" -m build --wheel --no-isolation
 popd >/dev/null
 
 if [[ $run_test -eq 1 ]]; then

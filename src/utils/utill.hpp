@@ -17,30 +17,14 @@
 #include "chspliter.hpp"
 #include "pinyin.hpp"
 
-static std::mutex lmtx;
-static bool loaded = false;
+static std::once_flag init_flag;
+static int init_result = EXIT_SUCCESS;
 
 inline int initUtils() {
-    if (loaded) {
-        return 0;
-    }
-    lmtx.try_lock();
-    if (loaded) {
-        lmtx.unlock();
-        return 0;
-    }
-    if (loadCharMap()) {
-        exit(1);
-    }
-    if (loadPinyin()) {
-        exit(1);
-    }
-    if (initializeMap()) {
-        exit(1);
-    }
-    loaded = true;
-    lmtx.unlock();
-    return 0;
+    std::call_once(init_flag, []() {
+        if (loadCharMap() || loadPinyin() || initializeMap()) init_result = EXIT_FAILURE;
+    });
+    return init_result;
 }
 
 #endif  // SRC_UTILS_UTILS_BASE_HPP_

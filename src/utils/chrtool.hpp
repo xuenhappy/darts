@@ -29,34 +29,34 @@
  * @brief  字符串规范化使用的工具
  *
  */
-static std::unordered_map<std::string, std::string> _WordMap;
+static std::unordered_map<uint32_t, std::string> _WordMap;
 /**
  * @brief add some special words map
  *
  */
 
-inline void _addWordMap() {
+inline void _addWordMap(std::unordered_map<std::string, std::string>& word_map) {
     // basic chars
     for (uint32_t i = 0; i < 0x20 + 1; i++) {
-        _WordMap[u32str(i)] = ' ';
+        word_map[u32str(i)] = ' ';
     }
-    _WordMap[u32str(0x7F)] = ' ';
+    word_map[u32str(0x7F)] = ' ';
     for (uint32_t i = 8198; i < 8208; i++) {
-        _WordMap[u32str(i)] = ' ';
+        word_map[u32str(i)] = ' ';
     }
     for (uint32_t i = 8232; i < 8240; i++) {
-        _WordMap[u32str(i)] = ' ';
+        word_map[u32str(i)] = ' ';
     }
     for (uint32_t i = 8287; i < 8304; i++) {
-        _WordMap[u32str(i)] = ' ';
+        word_map[u32str(i)] = ' ';
     }
     for (uint32_t i = 0xFE00; i < 0xFE0F + 1; i++) {
-        _WordMap[u32str(i)] = ' ';
+        word_map[u32str(i)] = ' ';
     }
     for (uint32_t i = 65281; i < 65374 + 1; i++) {
-        _WordMap[u32str(i)] = u32str(i - 65248);
+        word_map[u32str(i)] = u32str(i - 65248);
     }
-    _WordMap[u32str(12288)] = u32str(32);
+    word_map[u32str(12288)] = u32str(32);
 
     // special map
     std::map<std::string, std::string> special = {
@@ -68,12 +68,12 @@ inline void _addWordMap() {
         {"〛", "》"}, {"〉", "》"}, {"《", "《"}, {"》", "》"}, {"「", "《"}, {"」", "》"}, {"『", "《"},
         {"』", "》"}, {"【", "《"}, {"】", "》"}, {"〔", "《"}, {"〕", "》"}, {"〖", "《"}, {"〗", "》"}};
     for (auto& kv : special) {
-        _WordMap[kv.first] = kv.second;
+        word_map[kv.first] = kv.second;
     }
 
     // check wordmap and fix it
     std::map<std::string, std::string> _TMP;
-    for (auto& kv : _WordMap) {
+    for (auto& kv : word_map) {
         if (kv.first != kv.second) {
             _TMP[kv.first] = kv.second;
         }
@@ -85,12 +85,15 @@ inline void _addWordMap() {
     _TMP.erase(" ");
 
     _WordMap.clear();
+    _WordMap.reserve(_TMP.size());
     for (auto& kv : _TMP) {
+        std::string normalized;
         if (_TMP.find(kv.second) != _TMP.end()) {
-            _WordMap[kv.first] = _TMP[kv.second];
+            normalized = _TMP[kv.second];
         } else {
-            _WordMap[kv.first] = kv.second;
+            normalized = kv.second;
         }
+        _WordMap[utf8_to_unicode(kv.first.c_str())] = std::move(normalized);
     }
 }
 
@@ -111,6 +114,7 @@ inline int initializeMap() {
         std::cerr << "ERROR: parse json data " << dat << " file failed " << std::endl;
         return EXIT_FAILURE;
     }
+    std::unordered_map<std::string, std::string> word_map;
     auto mem = root.getMemberNames();
     for (auto iter = mem.begin(); iter != mem.end(); iter++) {
         if (root[*iter].type() == Json::arrayValue) {
@@ -118,7 +122,7 @@ inline int initializeMap() {
             std::string key(*iter);
             for (auto i = 0; i < cnt; i++) {
                 std::string val = root[*iter][i].asString();
-                _WordMap[val]   = *iter;
+                word_map[val] = *iter;
             }
         } else {
             std::cerr << "ERROR: open json data " << dat << "key:" << *iter << "  failed " << std::endl;
@@ -126,24 +130,23 @@ inline int initializeMap() {
         }
     }
 
-    _addWordMap();
+    _addWordMap(word_map);
     return EXIT_SUCCESS;
 }
 
 inline std::string& normalize(const char* str, size_t lens, std::string& ret) {
+    ret.clear();
     ret.reserve(lens + 2);
     utf8_iter ITER;
     utf8_initEx(&ITER, str, lens);
-    const char* tmps;
-    std::unordered_map<std::string, std::string>::const_iterator it;
+    std::unordered_map<uint32_t, std::string>::const_iterator it;
     while (utf8_next(&ITER)) {
-        tmps = utf8_getchar(&ITER);
-        it   = _WordMap.find(tmps);
+        it = _WordMap.find(ITER.codepoint);
         if (it != _WordMap.end()) {
             ret.append(it->second);
             continue;
         }
-        ret.append(tmps);
+        ret.append(utf8_getchar(&ITER));
     }
     return ret;
 }

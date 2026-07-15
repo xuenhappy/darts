@@ -299,6 +299,7 @@ cdef class PyWord:
         self.image=image
         self.atom_s=a_s
         self.atom_e=a_e
+        self.labels=set()
 
     def __repr__(self) -> str:
         return "%s[%d,%d]"%(self.image,self.atom_s,self.atom_e)

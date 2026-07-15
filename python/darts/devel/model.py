@@ -12,22 +12,30 @@ from torch.nn import functional as F
 
 class WordEncoder(nn.Module):
 
-    def __init__(self, vocab_num, hidden_size, wtype_num):
+    def __init__(self, vocab_num, hidden_size, wtype_num, num_layers=2, num_heads=4, max_positions=4096):
         super().__init__()
+        if hidden_size % num_heads:
+            raise ValueError("hidden_size must be divisible by num_heads")
         self.vocab_num = vocab_num
         self.wtype_num = wtype_num
+        self.max_positions = max_positions
         self.vocab_embeding = nn.Sequential(
             nn.Embedding(vocab_num, hidden_size),
             nn.LayerNorm(hidden_size, eps=1e-7),
             nn.Dropout(0.1),
         )
-        rnn_hidden_size = hidden_size * 3 // 2
-        self.fw_rnn = nn.GRU(hidden_size, rnn_hidden_size, batch_first=True, bidirectional=False)
-        self.bw_rnn = nn.GRU(hidden_size, rnn_hidden_size, batch_first=True, bidirectional=False)
-        self.imner = nn.Sequential(
-            nn.Linear(rnn_hidden_size * 2, hidden_size),
-            nn.LayerNorm(hidden_size),
+        self.position_embeding = nn.Embedding(max_positions, hidden_size)
+        layer = nn.TransformerEncoderLayer(
+            d_model=hidden_size,
+            nhead=num_heads,
+            dim_feedforward=hidden_size * 4,
+            dropout=0.1,
+            activation="gelu",
+            batch_first=True,
+            norm_first=False,
         )
+        self.transformer = nn.TransformerEncoder(layer, num_layers=num_layers,
+                                                 norm=nn.LayerNorm(hidden_size))
 
         if wtype_num > 0:
             self.type_embeding = nn.Sequential(
@@ -41,8 +49,11 @@ class WordEncoder(nn.Module):
         #batch_input_idx (batch*time_step)
         #batch_lengths (batch,)
         #batch_word_info(words_num*[bidx,s,e,tidx])
-        vocab_emb = self.vocab_embeding(batch_input_idx)
-        sent_embeding = self.imner(run_rnn(vocab_emb, batch_lengths, self.fw_rnn, self.bw_rnn))
+        steps = batch_input_idx.shape[1]
+        positions = torch.arange(steps, device=batch_input_idx.device).clamp_max(self.max_positions - 1)
+        vocab_emb = self.vocab_embeding(batch_input_idx) + self.position_embeding(positions).unsqueeze(0)
+        padding_mask = positions.unsqueeze(0) >= batch_lengths.unsqueeze(1)
+        sent_embeding = self.transformer(vocab_emb, src_key_padding_mask=padding_mask)
 
         word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
         word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
@@ -72,7 +83,7 @@ class WordEncoder(nn.Module):
                 return self.obj(bsents, lens, words)
 
         # args must same as forawrd
-        outfile = "lstm.encoder.onnx"
+        outfile = "transformer.encoder.onnx"
         inputdata = (sents_idx, word_info)
         inputnames = ['sents', 'wordinfo']
         dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
@@ -82,7 +93,7 @@ class WordEncoder(nn.Module):
             inputdata,
             outfile,
             export_params=True,  # store the trained parameter weights inside the model file
-            opset_version=12,  # the ONNX version to export the model to
+            opset_version=17,  # Transformer attention export requires a modern opset.
             do_constant_folding=True,  # whether to execute constant folding for optimization
             input_names=inputnames,  # the model's input names
             output_names=['wordemb'],  # the model's output names
@@ -98,36 +109,27 @@ class Quantizer(nn.Module):
         self.hidden_size = hidden_size
         self.Kmap = nn.Linear(input_size, hidden_size)
         self.Qmap = nn.Linear(input_size, hidden_size)
-        self.alpha = np.sqrt(hidden_size)
+        self.logit_scale = nn.Parameter(torch.tensor(np.log(1.0 / np.sqrt(hidden_size)), dtype=torch.float32))
 
     def forward(self, x, y):
-        K, Q = self.Kmap(x), self.Qmap(y)
-        dist = torch.einsum('ij,ij->i', K, Q) / self.alpha
-        return F.softplus(dist).view(-1)
+        keys = F.normalize(self.Kmap(x), dim=-1)
+        queries = F.normalize(self.Qmap(y), dim=-1)
+        scale = self.logit_scale.exp().clamp(max=100.0)
+        similarity = torch.sum(keys * queries, dim=-1) * scale
+        return F.softplus(-similarity).view(-1)
 
     def export2onnx(self):
-
-        class _script(nn.Module):
-
-            def __init__(self, obj) -> None:
-                super().__init__()
-                self.obj = obj
-
-            def forward(self, x, y):
-                return self.obj(torch.unsqueeze(x, 0), torch.unsqueeze(y, 0))
-
-        # args must same as forawrd
         outfile = "sample.quantizer.onnx"
-        inputdata = (torch.randn((self.input_size, )), torch.randn((self.input_size, )))
+        inputdata = (torch.randn((1, self.input_size)), torch.randn((1, self.input_size)))
         inputnames = ['a', 'b']
-        dynamic_axes = {}
+        dynamic_axes = {'a': {0: 'edges'}, 'b': {0: 'edges'}, 'distance': {0: 'edges'}}
 
         torch.onnx.export(
-            _script(self),
+            self,
             inputdata,
             outfile,
             export_params=True,  # store the trained parameter weights inside the model file
-            opset_version=12,  # the ONNX version to export the model to
+            opset_version=17,
             do_constant_folding=True,  # whether to execute constant folding for optimization
             input_names=inputnames,  # the model's input names
             output_names=['distance'],  # the model's output names
@@ -192,7 +194,7 @@ class CrfNer(nn.Module):
             inputdata,
             outfile,
             export_params=True,  # store the trained parameter weights inside the model file
-            opset_version=12,  # the ONNX version to export the model to
+            opset_version=17,
             do_constant_folding=True,  # whether to execute constant folding for optimization
             input_names=inputnames,  # the model's input names
             output_names=['wordemb'],  # the model's output names

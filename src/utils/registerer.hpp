@@ -13,8 +13,8 @@
 #ifndef SRC_UTILS_REGISTERER_HPP_
 #define SRC_UTILS_REGISTERER_HPP_
 
-#include <map>
 #include <string>
+#include <unordered_map>
 
 namespace registerer {
 
@@ -65,8 +65,8 @@ class ObjectFactory {
    private:
 };
 
-typedef std::map<std::string, ObjectFactory*> FactoryMap;
-typedef std::map<std::string, FactoryMap> BaseClassMap;
+typedef std::unordered_map<std::string, ObjectFactory*> FactoryMap;
+typedef std::unordered_map<std::string, FactoryMap> BaseClassMap;
 
 BaseClassMap& global_factory_map() {
     static BaseClassMap* factory_map = new BaseClassMap();

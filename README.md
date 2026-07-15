@@ -279,11 +279,6 @@ print(charDtype("中"))
 
 ### 加载分词器
 
-> 当前源码的 `src/main/darts.cxx::load_segment()` 在成功分支错误地返回了
-> `EXIT_SUCCESS`，而不是新建的 `segment` 句柄。因此本节展示的是该返回值缺陷修复后的
-> API 用法；当前版本直接构造 `DSegment` 会抛出 `OSError`。AtomList、字符类型和编码等
-> 不经过该入口的 API 不受影响。
-
 ```python
 from darts import DSegment
 
@@ -382,7 +377,7 @@ Atom 是候选词图的最小覆盖单位。
 `Segment::buildSegPath` 先为每个 Atom 添加一个单原子 Word，再顺序调用模式中配置的 Recognizer：
 
 - `DictWordRecongnizer` 使用 Trie/双数组词典匹配连续 Atom，添加词典候选和标签。
-- `OnnxRecongnizer` 使用 WordPiece 编码输入 ONNX 序列标注模型，根据 `B/I/O` 标签合并新词候选。
+- `OnnxRecongnizer` 使用 WordPiece 编码输入 ONNX 序列标注模型，根据 `B/I/O` 标签合并新词候选。开发模块使用带位置嵌入和 padding mask 的轻量 Transformer 编码器，不再生成 LSTM/GRU 模型。
 - `PinyinRecongnizer` 为候选添加拼音标签和编码；该插件设计为独占识别器。
 
 候选可能重叠，例如“南京”“南京市”“市长”“长江”可以同时存在，后续决策器负责选择完整路径。
@@ -402,11 +397,11 @@ Decider 分为嵌入和距离两个阶段：
 
 - `MinCoverDecider`：代价与词长成反比，偏向更长、数量更少的候选覆盖。
 - `BigramDecider`：优先使用词文本查询 Bigram 索引，未登录词退化到词类型标签，再查询相邻词代价。
-- `OnnxDecider`：使用 ONNX indicator 生成候选嵌入，再由 quantizer 模型计算边代价。
+- `OnnxDecider`：使用 Transformer indicator 生成候选嵌入，再由归一化双塔 quantizer 批量计算边代价。候选 embedding 共享连续缓冲区，避免逐词分配和复制。
 
 ### 5. 最优路径
 
-核心使用 Dijkstra 算法计算从图起点到终点的最小总代价路径。由于 `ranging()` 要求返回非负值，Dijkstra 的假设成立。最终按路径中的候选索引输出 `WordList`。
+候选按起点排序后构成 DAG，核心按拓扑顺序执行动态规划，在线性 `O(V + E)` 时间内计算从图起点到终点的最小总代价路径。最终按路径中的候选索引输出 `WordList`。
 
 长文本会按标点和最大长度切成较短片段后分别解码，避免候选图无限增长。
 
@@ -468,6 +463,8 @@ Decider 分为嵌入和距离两个阶段：
 ```
 
 配置解析器接受字符串参数。插件节点中的普通字符串字段会传给 `initalize()`；`deps` 中的值引用另一个插件实例，键则是当前插件期望的依赖参数名。
+
+加载器会在三个插件区段中统一查找类型，通过注册工厂构造实例，并缓存共享依赖。空类型、错误依赖类型和循环依赖会在初始化阶段直接失败；依赖字段必须统一写作 `deps`。
 
 ### `dservices`
 
@@ -532,6 +529,12 @@ Decider 分为嵌入和距离两个阶段：
 
 `MinCoverDecider` 不需要模型，适合验证词典候选；`BigramDecider` 是默认 `fast` 模式使用的稳定决策器。
 
+### Transformer 模型迁移
+
+`python/darts/devel/model.py` 中的 `WordEncoder` 已改为 Transformer，ONNX 导出使用 opset 17，编码器默认输出 `transformer.encoder.onnx`。`Quantizer` 使用归一化 Key/Query、可学习温度和 `softplus(-similarity)` 产生非负边代价。
+
+仓库现有 `data/models/crf.ner.onnx` 是历史兼容模型，二进制中仍包含 GRU 权重。它只能用于旧配置回归，不能通过代码修改原位转换为 Transformer。生产迁移需要用原训练集重新训练 `CrfNer`，导出新 ONNX 文件后更新 `recognizers.*.model.path`；不要把随机初始化导出的模型用于分词。
+
 ### `modes`
 
 模式把一个 Decider 和一组 Recognizer 组合为可加载流水线：
@@ -567,7 +570,7 @@ C API 的 `load_segment(..., isdevel=true)` 或 Python 的 `DSegment(..., isdev=
 3. 动态库父目录下的相对路径。
 4. `DARTS_CONF_PATH` 指向目录下的相对路径。
 
-wheel 已将 `data/` 放入 `darts/` 包目录。修复上述 `load_segment()` 返回值缺陷后，默认的 `data/conf.json` 可由资源定位器从包目录解析。自定义部署可以这样组织：
+wheel 已将 `data/` 放入 `darts/` 包目录。默认的 `data/conf.json` 可由资源定位器从包目录解析。自定义部署可以这样组织：
 
 ```text
 /srv/darts-runtime/
@@ -691,11 +694,16 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 - `deps` 的值是否指向已定义插件。
 - `type` 是否与源码注册名称完全一致，包括现有拼写。
 - 模型和词典路径是否能由资源定位器找到。
-- 当前版本是否已经修复 `src/main/darts.cxx` 中 `load_segment()` 成功分支返回 `EXIT_SUCCESS` 的问题。
 
-### `DSegment` 总是抛出 `OSError`
+### 性能验证
 
-当前版本存在一个已确认的 C API 返回值缺陷：`load_segment()` 创建句柄后返回了空值。修复时应将成功分支末尾的返回值改为新建的 `sg` 句柄，并重新构建 wheel。该问题不代表 JSON 或模型一定加载失败。
+完成构建并安装 wheel 后，可运行可重复基准：
+
+```bash
+python scripts/benchmark_runtime.py --iterations 1000
+```
+
+脚本分别测量原子化及 `faster`、`fast` 两种分词模式，输出总耗时、每次调用耗时和吞吐量。候选词在识别完成后按起点建立索引；分词图使用连续邻接表和 DAG 动态规划；支持批量接口的 ONNX 决策器会一次计算全部候选边，旧版一维 ONNX 模型则自动回退到逐边推理。
 
 ## 构建验证状态
 
@@ -710,9 +718,8 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 - 从清理、依赖下载、原生编译到 wheel 生成。
 - 在全新虚拟环境安装 wheel。
 - `import darts`、`PyAtomList` 和 AtomList 基础调用。
+- `faster`、`fast` 模式的完整 `DSegment` 推理。
 - wheel 内动态库通过 `$ORIGIN` 加载。
-
-完整 `DSegment` 推理尚未通过验证，原因是上文记录的 `load_segment()` 返回值缺陷。
 
 其他 Python 版本原则上受 `python_requires >= 3.8` 支持，但应在目标版本上单独构建并执行 `./scripts/build_all.sh --test`。
 

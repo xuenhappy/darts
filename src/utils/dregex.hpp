@@ -18,6 +18,7 @@
 #include <queue>
 #include <string>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 #include "zipfile.hpp"
 
@@ -35,7 +36,7 @@ class Trie {
     std::vector<int64_t> Check, Base, Fail, L;
     std::vector<std::vector<int64_t>*> V, OutPut;
     size_t MaxLen;
-    std::map<std::string, int> CodeMap;
+    std::unordered_map<std::string, int> CodeMap;
 
     Trie() : MaxLen(0) {}
 
@@ -142,6 +143,7 @@ class Trie {
             this->OutPut[i] = lbs;
         }
         auto& cmap = dat.codemap();
+        this->CodeMap.reserve(cmap.size());
         this->CodeMap.insert(cmap.begin(), cmap.end());
         return EXIT_SUCCESS;
     }
