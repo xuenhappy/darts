@@ -14,7 +14,7 @@ import random
 import numpy as np
 import torch
 
-from darts.devel.model import GraphTrainerV2
+from darts.devel.model import GraphQuantizerTrainer
 from darts.devel.reader import GraphSampleReader
 
 
@@ -49,7 +49,8 @@ def train(args):
     metadata = {"vocab_num": train_reader.wordsize(), "hidden_size": args.hidden_size,
                 "wtype_num": train_reader.typesize(), "architecture": "transformer-graph-quantizer",
                 "seed": args.seed}
-    model = GraphTrainerV2(metadata["vocab_num"], metadata["hidden_size"], metadata["wtype_num"]).to(device)
+    model = GraphQuantizerTrainer(metadata["vocab_num"], metadata["hidden_size"],
+                                  metadata["wtype_num"]).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs), eta_min=1e-6)
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
@@ -88,7 +89,7 @@ def train(args):
 def export(args):
     saved = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
     metadata = saved["metadata"]
-    model = GraphTrainerV2(metadata["vocab_num"], metadata["hidden_size"], metadata["wtype_num"])
+    model = GraphQuantizerTrainer(metadata["vocab_num"], metadata["hidden_size"], metadata["wtype_num"])
     model.load_state_dict(saved["state_dict"])
     model.eval()
     output = Path(args.output_dir)

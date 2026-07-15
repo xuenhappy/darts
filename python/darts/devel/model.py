@@ -214,7 +214,7 @@ class SpanRecognizer(nn.Module):
         return outfile
 
 
-class GraphTrainerV2(nn.Module):
+class GraphQuantizerTrainer(nn.Module):
     """
     Sparse batched graph trainer.
 

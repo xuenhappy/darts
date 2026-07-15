@@ -11,10 +11,9 @@ Copyright 2021 - 2022 Your Company, Moka
 '''
 import torch
 import numpy as np
-import torch.nn as nn
 import random
 from ..cdarts import *
-from torch.utils.data import Dataset, DataLoader, IterableDataset
+from torch.utils.data import IterableDataset
 
 
 def d2list2array(d2list, fval=0, dtype=np.int32):

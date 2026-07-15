@@ -487,6 +487,19 @@ Decider 分为嵌入和距离两个阶段：
 
 开发模块依赖 PyTorch、NumPy 等训练库，这些大体积依赖不会随运行时 wheel 自动安装。
 
+GPU 训练建议使用独立 Python 3.12 环境，并根据驱动和显卡选择 PyTorch 官方 CUDA wheel。当前 RTX A2000（`sm_86`）验证环境固定为 CUDA 12.8 构建：
+
+```bash
+python3.12 -m venv build/train-venv
+build/train-venv/bin/pip install --index-url https://download.pytorch.org/whl/cu128 \
+  "torch==2.7.1"
+build/train-venv/bin/pip install numpy onnx
+build/train-venv/bin/python -c \
+  'import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name())'
+```
+
+不要仅按本机安装的 CUDA Toolkit 版本选 wheel；以 NVIDIA 驱动兼容范围、PyTorch wheel 自带 CUDA runtime 和 GPU Compute Capability 为准。训练前必须确认 `torch.cuda.is_available()` 为真。
+
 ## 配置文件
 
 默认配置位于 `data/conf.json`。配置由四部分组成：服务、识别器、决策器、运行模式。
