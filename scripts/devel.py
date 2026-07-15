@@ -101,6 +101,20 @@ def quantizer_export(args):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def joint_train(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/train_joint.py", "train",
+               "--train", args.train, "--dev", args.dev, "--epochs", str(args.epochs),
+               "--output-dir", args.output_dir, "--max-span", str(args.max_span),
+               "--hidden-size", str(args.hidden_size), "--device", args.device]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def joint_export(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/train_joint.py", "export",
+               args.checkpoint, args.output_dir]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
 def build(args):
     command = ["bash", "scripts/build_all.sh"]
     if args.test:
@@ -165,6 +179,21 @@ def main():
     command.add_argument("checkpoint")
     command.add_argument("output_dir")
     command.set_defaults(func=quantizer_export)
+
+    command = commands.add_parser("joint-train", help="jointly train one encoder for both neural tasks")
+    command.add_argument("--train", default="data/generated/cws-train.txt")
+    command.add_argument("--dev", default="data/generated/cws-dev.txt")
+    command.add_argument("--output-dir", default="model_bin/joint")
+    command.add_argument("--epochs", type=int, default=20)
+    command.add_argument("--max-span", type=int, default=5)
+    command.add_argument("--hidden-size", type=int, default=128)
+    command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.set_defaults(func=joint_train)
+
+    command = commands.add_parser("joint-export", help="export both tasks from a joint checkpoint")
+    command.add_argument("checkpoint")
+    command.add_argument("output_dir")
+    command.set_defaults(func=joint_export)
 
     command = commands.add_parser("build", help="run the Meson-only build workflow")
     command.add_argument("--test", action="store_true")

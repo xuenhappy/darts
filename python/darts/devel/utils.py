@@ -79,15 +79,16 @@ class GraphLossSparse(nn.Module):
             # A tensor list avoids in-place updates of an autograd-tracked DP
             # array. Each value is the log partition of paths ending at a node.
             sources = local_src.tolist()
+            destinations = local_dst.tolist()
             neg_inf = association_nll.new_tensor(float("-inf"))
             partition = [neg_inf for _ in range(node_num)]
             partition[0] = association_nll.new_zeros(())
             position = 0
             edge_num = local_dst.numel()
             while position < edge_num:
-                destination = int(local_dst[position].item())
+                destination = destinations[position]
                 end = position + 1
-                while end < edge_num and int(local_dst[end].item()) == destination:
+                while end < edge_num and destinations[end] == destination:
                     end += 1
                 if 0 <= destination < node_num:
                     previous = torch.stack([partition[src] for src in sources[position:end]])

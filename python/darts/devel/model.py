@@ -83,7 +83,10 @@ class WordEncoder(nn.Module):
         attention = torch.softmax(attention_logits, dim=1)
         word_sent_embeding = torch.bmm(attention.unsqueeze(1), sent_embeding[word_batches]).squeeze(1)
         word_sent_embeding = self.word_pool_normal(word_sent_embeding)
-        if self.wtype_num > 0:
+        # In joint training recognizer spans omit the optional type column,
+        # while graph nodes include it. The contextual/position parameters are
+        # shared in both cases; only graph calls add the type representation.
+        if self.wtype_num > 0 and batch_word_info.shape[1] > 3:
             word_type_embeding = self.type_embeding(batch_word_info[:, 3])
             return self.type_normal(word_sent_embeding + word_type_embeding)
         return word_sent_embeding
@@ -171,9 +174,9 @@ class SpanRecognizer(nn.Module):
     span tensor.
     """
 
-    def __init__(self, vocab_num, hidden_size):
+    def __init__(self, vocab_num, hidden_size, encoder=None):
         super().__init__()
-        self.encoder = WordEncoder(vocab_num, hidden_size, -1)
+        self.encoder = encoder or WordEncoder(vocab_num, hidden_size, -1)
         self.probability_head = nn.Sequential(nn.Dropout(0.1), nn.Linear(hidden_size, 1))
 
     def logits(self, batch_input_idx, batch_lengths, batch_span_info):
@@ -227,9 +230,10 @@ class GraphQuantizerTrainer(nn.Module):
     where src/dst are flattened node ids aligned with batch_word_info.
     """
 
-    def __init__(self, vocab_num, hidden_size, wtype_num, edge_chunk_size=65536, strict_path=True):
+    def __init__(self, vocab_num, hidden_size, wtype_num, edge_chunk_size=65536,
+                 strict_path=True, encoder=None):
         super().__init__()
-        self.predictor = WordEncoder(vocab_num, hidden_size, wtype_num)
+        self.predictor = encoder or WordEncoder(vocab_num, hidden_size, wtype_num)
         self.quantizer = Quantizer(hidden_size, 32)
         self.lossfunc = GraphLossSparse(edge_chunk_size=edge_chunk_size, strict_path=strict_path)
 
@@ -243,3 +247,19 @@ class GraphQuantizerTrainer(nn.Module):
         word_embeds = self.predictor(batch_input_idx, batch_lengths, batch_word_info)
         association_nll = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
         return self.lossfunc(batch_word_info, batch_graph, association_nll)
+
+
+class JointSegmentationTrainer(nn.Module):
+    """One shared WordEncoder with independent recognizer/quantizer heads."""
+
+    def __init__(self, vocab_num, hidden_size, wtype_num):
+        super().__init__()
+        encoder = WordEncoder(vocab_num, hidden_size, wtype_num)
+        self.recognizer = SpanRecognizer(vocab_num, hidden_size, encoder=encoder)
+        self.graph_quantizer = GraphQuantizerTrainer(
+            vocab_num, hidden_size, wtype_num, encoder=encoder
+        )
+
+    @property
+    def encoder(self):
+        return self.recognizer.encoder

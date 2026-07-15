@@ -484,6 +484,7 @@ Decider 分为嵌入和距离两个阶段：
 | `utils.py` | `GraphLossSparse` 条件路径负对数似然 |
 | `scripts/train_recognizer.py` | 独立训练和导出可重叠 span 识别器 |
 | `scripts/train_quantizer.py` | 使用 `GraphLossSparse` 独立训练和导出图量化器 |
+| `scripts/train_joint.py` | 推荐的共享 encoder 多任务训练与三个 ONNX 导出 |
 
 开发模块依赖 PyTorch、NumPy 等训练库，这些大体积依赖不会随运行时 wheel 自动安装。
 
@@ -592,7 +593,7 @@ build/train-venv/bin/python -c \
 
 ### Transformer 神经模型
 
-识别器与量化器共享 `WordEncoder` 架构定义，但分别初始化、训练和导出，不共享权重文件。编码器先生成带句内位置的上下文字表示，再用内容注意力和词内相对位置偏置对 span 内所有 WordPiece 加权组合，不采用简单首尾或平均池化。
+识别器与量化器共享 `WordEncoder` 架构。推荐的联合训练让两个损失共同更新同一份 encoder 参数，识别概率头与关联 NLL 头保持独立；独立训练脚本仍用于消融。导出时共享参数分别固化到 `recognizer.onnx` 和 `indicator.onnx`，运行时不要求跨 ONNX 会话共享内存。编码器先生成带句内位置的上下文字表示，再用内容注意力和词内相对位置偏置对 span 内所有 WordPiece 加权组合，不采用简单首尾或平均池化。
 
 识别器输出独立的 `word_probability`，允许同时召回交叠词。量化器输出 `association_nll = -log P(next | previous)`，使用 `GraphLossSparse` 在完整候选 DAG 上优化金标路径条件负对数似然。ONNX 使用 opset 17；项目不提供 CRF/BIO 兼容模型。
 
@@ -693,6 +694,10 @@ python scripts/devel.py model-export model_bin/recognizer/best.pt \
 # 独立训练 GraphLossSparse 量化器并导出词表示网络和关联 NLL 网络
 python scripts/devel.py quantizer-train --epochs 20 --output-dir model_bin/quantizer
 python scripts/devel.py quantizer-export model_bin/quantizer/best.pt data/models/neural
+
+# 推荐：一次多任务训练共享 encoder，仍分别导出三个运行时 ONNX
+python scripts/devel.py joint-train --epochs 20 --output-dir model_bin/joint
+python scripts/devel.py joint-export model_bin/joint/best.pt data/models/neural
 
 # 下载开放数据、生成训练切分并重建词典/Bigram 模型
 python scripts/devel.py data download

@@ -13,13 +13,14 @@ class NeuralModelTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from darts.devel.model import Quantizer, SpanRecognizer, WordEncoder
+        from darts.devel.model import JointSegmentationTrainer, Quantizer, SpanRecognizer, WordEncoder
         from darts.devel.utils import GraphLossSparse
 
         cls.Quantizer = Quantizer
         cls.SpanRecognizer = SpanRecognizer
         cls.WordEncoder = WordEncoder
         cls.GraphLossSparse = GraphLossSparse
+        cls.JointSegmentationTrainer = JointSegmentationTrainer
 
     def test_quantizer_returns_association_negative_log_probability(self):
         model = self.Quantizer(4, 2)
@@ -71,6 +72,11 @@ class NeuralModelTests(unittest.TestCase):
         loss.backward()
         self.assertTrue(torch.isfinite(loss))
         self.assertTrue(torch.all(torch.isfinite(association_nll.grad)))
+
+    def test_joint_tasks_reference_one_encoder(self):
+        model = self.JointSegmentationTrainer(vocab_num=32, hidden_size=16, wtype_num=4)
+        self.assertIs(model.recognizer.encoder, model.graph_quantizer.predictor)
+        self.assertIs(model.encoder, model.recognizer.encoder)
 
 
 if __name__ == "__main__":
