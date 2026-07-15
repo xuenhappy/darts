@@ -126,6 +126,12 @@ if enable_tests
         cpp_args : extra_compile_args,c_args : extra_compile_args,
         build_rpath: test_rpath
     )
+    test(
+        'darts-core',
+        darts_test_exe,
+        workdir : meson.project_source_root(),
+        timeout : 120,
+    )
 endif
 
 if enable_python

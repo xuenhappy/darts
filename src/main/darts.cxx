@@ -162,7 +162,7 @@ void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data) {
         }
         buf.s = s, buf.e = e;
         buf.labels_size = tmpl.size();
-        buf.labels      = &tmpl[0];
+        buf.labels      = tmpl.empty() ? nullptr : tmpl.data();
         return hit(user_data, &buf);
     };
     dat->parse(alist, hitfunc);

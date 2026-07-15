@@ -60,15 +60,24 @@ if [[ ! -x "$BUILD_VENV/bin/python" ]]; then
   "$PYTHON_BIN" -m venv "$BUILD_VENV"
 fi
 BUILD_PYTHON="$BUILD_VENV/bin/python"
-"$BUILD_PYTHON" -m pip install -U pip build "setuptools>=68" wheel \
-  "Cython>=3.0" "meson>=1.3" "ninja>=1.11" >/dev/null
+if ! "$BUILD_PYTHON" -c 'import build, Cython, mesonbuild, ninja, setuptools, wheel' >/dev/null 2>&1; then
+  "$BUILD_PYTHON" -m pip install -U pip build "setuptools>=68" wheel \
+    "Cython>=3.0" "meson>=1.3" "ninja>=1.11" >/dev/null
+fi
 export PATH="$BUILD_VENV/bin:$PATH"
 PYTHON_INCLUDE_DIR="$("$BUILD_PYTHON" -c 'import sysconfig; print(sysconfig.get_paths()["include"])')"
 
 pushd "$ROOT_DIR" >/dev/null
-meson setup "$BUILD_DIR" . -Dbuild-python=true -Dbuild-tests=false -Dlink-static=true \
+build_tests=false
+if [[ $run_test -eq 1 ]]; then
+  build_tests=true
+fi
+meson setup "$BUILD_DIR" . -Dbuild-python=true -Dbuild-tests="$build_tests" -Dlink-static=true \
   -Donnxruntime-dir="$ONNXRUNTIME_DIR" -Dpython-include-dir="$PYTHON_INCLUDE_DIR"
 meson compile -C "$BUILD_DIR"
+if [[ $run_test -eq 1 ]]; then
+  meson test -C "$BUILD_DIR" --print-errorlogs
+fi
 popd >/dev/null
 
 pushd "$PY_DIR" >/dev/null
@@ -81,15 +90,7 @@ if [[ $run_test -eq 1 ]]; then
   "$PYTHON_BIN" -m venv "$venv_dir"
   # shellcheck disable=SC1091
   source "$venv_dir/bin/activate"
-  python -m pip install -U pip >/dev/null
   python -m pip install --force-reinstall --ignore-requires-python "$wheel_path"
-  python - <<'PY'
-import darts
-from darts import DSegment, PyAtomList
-print("darts import ok")
-alist = PyAtomList("中文分词测试")
-print("atoms:", len(alist))
-print("package:", darts.__file__)
-PY
+  python -m unittest discover -s "$ROOT_DIR/test" -p 'test_python.py' -v
   deactivate
 fi

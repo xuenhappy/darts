@@ -259,7 +259,7 @@ class Trie {
         text.walks([&](const std::string& seq, size_t position) -> bool {
             indexBufer[indexBufferPos % this->MaxLen] = position;
             indexBufferPos++;
-            currentState = this->getstate(currentState, this->getCode(seq));
+            currentState = this->getstate(currentState, this->getCodeCaseFolded(seq));
             if (currentState >= this->OutPut.size()) return false;
             auto hitArray = this->OutPut[currentState];
             if (!hitArray) return false;

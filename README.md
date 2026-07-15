@@ -238,6 +238,29 @@ Meson 选项：
 
 项目代码和生成的 protobuf 代码会静态合入 Python 扩展。发行版提供的 zlib、jsoncpp 和 protobuf 静态库通常没有启用 PIC，不能直接链接到 `.so`，因此 wheel 流程会动态链接并把对应运行库复制到 `darts/` 包目录。扩展的 RUNPATH 为 `$ORIGIN`，运行时会优先从自身目录加载这些库。
 
+## 测试
+
+推荐使用完整测试入口：
+
+```bash
+bash scripts/build_all.sh --test
+```
+
+该命令会启用 `build-tests=true`，依次运行：
+
+- Meson 注册的 C++ 核心测试：AtomList、归一化、DAG 路径、词典编译/加载/匹配和配置分词。
+- wheel 构建及隔离虚拟环境强制重装。
+- Python `unittest` 黑盒测试：原子边界、归一化、词典标签及大小写、`faster`/`fast`、长文本、错误模式和多线程安全。
+
+单独运行测试：
+
+```bash
+meson test -C build/meson --print-errorlogs
+build/test-venv/bin/python -m unittest discover -s test -p 'test_python.py' -v
+```
+
+已有构建虚拟环境依赖完整时，测试流程不会重复访问 Python 包索引，可离线重复执行。
+
 ## 安装 wheel
 
 ```bash
