@@ -89,6 +89,7 @@ int compile_regex(const char* outpath, kviter kvs, void* user_data);
 
 typedef struct {
     void* label_cache;
+    void* image_cache;
     size_t atom_s, atom_e;
     const char** labels;
     size_t label_nums;
@@ -118,12 +119,14 @@ void encode_wlist_type(wtype_encoder encoder, wordlist wlist, void* int_vector_b
 void free_wtype_encoder(wtype_encoder encoder);
 size_t max_wtype_nums(wtype_encoder encoder);
 const char* decode_wtype(wtype_encoder encoder, int wtype);
+void decode_wtype_to(wtype_encoder encoder, int wtype, void* string_buffer);
 // wlist encoder
 alist_encoder get_alist_encoder(void* map_param, const char* type_cls_name);
 void encode_alist(alist_encoder encoder, atomlist alist, void* int_pair_vector_buf);
 void free_alist_encoder(alist_encoder encoder);
 size_t max_acode_nums(alist_encoder encoder);
 const char* decode_atype(alist_encoder encoder, int atype);
+void decode_atype_to(alist_encoder encoder, int atype, void* string_buffer);
 
 #ifdef __cplusplus
 }

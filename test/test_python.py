@@ -16,6 +16,18 @@ class AtomListTests(unittest.TestCase):
         self.assertEqual([atom.image for atom in atoms], ["中", "文", "ABC", "123"])
         self.assertEqual([(atom.st, atom.et) for atom in atoms], [(0, 1), (1, 2), (2, 5), (5, 8)])
 
+    def test_native_lists_support_safe_indexing(self):
+        atom_list = PyAtomList("中文ABC123")
+        self.assertEqual(atom_list[0].image, "中")
+        self.assertEqual(atom_list[0].chtype, "CJK")
+        with self.assertRaises(IndexError):
+            _ = atom_list[len(atom_list)]
+
+        _atoms, words = DSegment(str(CONFIG), "hybrid").cut("中文分词")
+        self.assertEqual(words[0].image, words.tolist()[0].image)
+        with self.assertRaises(IndexError):
+            _ = words[len(words)]
+
     def test_normalization_and_spaces(self):
         atoms = PyAtomList("ＡＢＣ １２３", skip_space=True, normal_before=True).tolist()
         self.assertEqual([atom.image for atom in atoms], ["ABC", "123"])

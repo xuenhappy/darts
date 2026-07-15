@@ -46,8 +46,8 @@ cdef extern from 'darts.h':
     size_t alist_len(atomlist alist)
 
     
-    dreg load_dregex(const char* path)
-    void free_dregex(dreg regex)
+    dreg load_dregex(const char* path) nogil
+    void free_dregex(dreg regex) nogil
 
     ctypedef struct atomiter_buffer:
         const char* word
@@ -72,11 +72,12 @@ cdef extern from 'darts.h':
     void parse(dreg regex, atomiter atomlist, dhit hit, void* user_data)
     int compile_regex(const char* outpath, kviter kvs, void* user_data)
 
-    int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir)
+    int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir) nogil
 
 
     ctypedef struct word_buffer:
         void* label_cache
+        void* image_cache
         size_t atom_s, atom_e
         const char** labels
         size_t label_nums
@@ -85,8 +86,8 @@ cdef extern from 'darts.h':
 
     ctypedef bool (*walk_wlist_hit)(void* , word_buffer* )
     void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data)
-    segment load_segment(const char* conffile, const char* mode, bool isdevel)
-    void free_segment(segment sg)
+    segment load_segment(const char* conffile, const char* mode, bool isdevel) nogil
+    void free_segment(segment sg) nogil
 
     size_t wlist_len(wordlist wlist)
     int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer)
@@ -98,12 +99,14 @@ cdef extern from 'darts.h':
     void free_wtype_encoder(wtype_encoder encoder)
     size_t max_wtype_nums(wtype_encoder encoder)
     const char* decode_wtype(wtype_encoder encoder,int wtype)
+    void decode_wtype_to(wtype_encoder encoder, int wtype, void* string_buffer) nogil
 
     alist_encoder get_alist_encoder(void* map_param,const char* type_cls_name)
     void encode_alist(alist_encoder encoder, atomlist alist, void* int_pair_vector_buf) nogil
     void free_alist_encoder(alist_encoder encoder)
     size_t max_acode_nums(alist_encoder encoder) 
     const char* decode_atype(alist_encoder encoder,int atype)
+    void decode_atype_to(alist_encoder encoder, int atype, void* string_buffer) nogil
 
 ctypedef const char* cstr
 ctypedef vector[cstr]* ctsr_list
@@ -133,7 +136,13 @@ def build_gramdict_fromfile(str single_freq_dict not None, str union_freq_dict n
     single_pbytes=single_freq_dict.encode('utf-8','ignore')
     union_pbytes=union_freq_dict.encode('utf-8','ignore')
     outdir_pbytes=outdir.encode('utf-8','ignore')
-    if build_biggram_dict(single_pbytes,union_pbytes,outdir_pbytes):
+    cdef const char* single_path=single_pbytes
+    cdef const char* union_path=union_pbytes
+    cdef const char* output_path=outdir_pbytes
+    cdef int status
+    with nogil:
+        status=build_biggram_dict(single_path,union_path,output_path)
+    if status:
         raise IOError("build biggram dict failed!")
 
 
@@ -196,8 +205,11 @@ cdef class Dregex:
         return True
    
     def __cinit__(self, str path not None):
+        self.reg=NULL
         py_byte_string= path.encode("utf-8",'ignore')
-        self.reg=load_dregex(py_byte_string)
+        cdef const char* native_path=py_byte_string
+        with nogil:
+            self.reg=load_dregex(native_path)
         if self.reg==NULL:
             raise IOError("load %s regex file failed!"%path)
 
@@ -217,7 +229,8 @@ cdef class Dregex:
         
 
     def __dealloc__(self):
-        free_dregex(self.reg)
+        with nogil:
+            free_dregex(self.reg)
         self.reg=NULL
 
 
@@ -250,12 +263,13 @@ cdef class PyAtomList:
         cdef list ret=<list>user_data
         cdef str py_str=buf.image[:].decode("utf-8","ignore")
         atm=PyAtom(py_str,buf.st,buf.et);
-        atm.chtype=buf.char_type[:].decode("utf-8","ignore")
+        atm.chtype=buf.char_type[:].decode("utf-8","ignore") if buf.char_type!=NULL else ""
         atm.masked=buf.masked
         ret.append(atm)
         return False
    
     def __cinit__(self, str text not None,bool skip_space=True, bool normal_before=True):
+        self.alist=NULL
         py_byte_string= text.encode("utf-8",'ignore')
         cdef const char* txt=py_byte_string
         cdef size_t byteslen=len(py_byte_string)
@@ -269,16 +283,16 @@ cdef class PyAtomList:
         walk_alist(self.alist,PyAtomList.alist_hit_func, <void*> user_data)
         return user_data
 
-    def __getiterm__(self,idx:size_t)->PyAtom:
+    def __getitem__(self, size_t idx)->PyAtom:
         cdef atom_buffer buf
         if get_npos_atom(self.alist,idx,&buf):
             raise IndexError("index err %d"%idx)
         py_str=buf.image[:].decode("utf-8","ignore")
         atm=PyAtom(py_str,buf.st,buf.et);
         atm.masked=buf.masked
-        atm.char_type=""
+        atm.chtype=""
         if buf.char_type!=NULL:
-            atm.char_type=buf.char_type[:].decode("utf-8","ignore")
+            atm.chtype=buf.char_type[:].decode("utf-8","ignore")
         return atm
 
     def __len__(self)->int:
@@ -334,10 +348,12 @@ cdef class PyWordList:
         walk_wlist(self.wlist, PyWordList.wlist_hit_func, <void*> ret_list)
         return ret_list
 
-    def __getiterm__(self,index:size_t)->PyWord:
+    def __getitem__(self, size_t index)->PyWord:
         cdef word_buffer buf
         cdef ctsr_list ptrs
+        cdef string image_cache
         buf.label_cache=<void *>(&ptrs);
+        buf.image_cache=<void *>(&image_cache);
         if get_npos_word(self.wlist,index,&buf):
             raise IndexError("index err %d"%index)
         py_str=buf.image[:].decode("utf-8","ignore") if buf.image!=NULL else ""
@@ -363,14 +379,17 @@ cdef class DSegment:
     cdef segment segt 
 
     def __cinit__(self,str conffile,str mode,bool isdev=False):
+        self.segt=NULL
         if conffile is None:
             conffile="data/conf.json"
         confpath=conffile.encode("utf-8","ignore")
+        cdef const char* native_confpath=confpath
         cdef const char* modstr=NULL
         if mode:
             mode_bytes=mode.encode("utf-8","ignore")
             modstr=mode_bytes
-        self.segt=load_segment(confpath, modstr, isdev)
+        with nogil:
+            self.segt=load_segment(native_confpath, modstr, isdev)
         if self.segt==NULL:
             raise IOError(f"load {conffile} segment failed!")
 
@@ -385,7 +404,8 @@ cdef class DSegment:
        
 
     def __dealloc__(self):
-        free_segment(self.segt)
+        with nogil:
+            free_segment(self.segt)
         self.segt=NULL
 
 
@@ -394,6 +414,7 @@ cdef class AtomCodec:
     cdef alist_encoder encoder
 
     def __cinit__(self, dict str_params not None,str cls_name=None):
+        self.encoder=NULL
         if cls_name is None:
             cls_name="WordPice"
         pparams={k.encode():v.encode() for k,v in str_params.items()}
@@ -407,10 +428,10 @@ cdef class AtomCodec:
         return max_acode_nums(self.encoder)
 
     def decode(self,int label):
-        cdef const char* str_label=decode_atype(self.encoder,label)
-        if str_label!=NULL:
-            return str_label[:].decode("utf-8")
-        return ""
+        cdef string output
+        with nogil:
+            decode_atype_to(self.encoder,label,&output)
+        return output.c_str().decode("utf-8")
 
     def encode(self,PyAtomList alist not None):
         cdef vector[pair[int,int]] buf
@@ -429,6 +450,7 @@ cdef class WordCodec:
     cdef wtype_encoder encoder
 
     def __cinit__(self,dict str_params not None,str cls_name not None):
+        self.encoder=NULL
         pparams={k.encode():v.encode() for k,v in str_params.items()}
         cdef map[string,string] param=pparams
         py_bytes=cls_name.encode("utf-8")
@@ -440,10 +462,10 @@ cdef class WordCodec:
         return max_wtype_nums(self.encoder)
 
     def decode(self,int label):
-        cdef const char* str_label=decode_wtype(self.encoder,label)
-        if str_label!=NULL:
-            return str_label[:].decode("utf-8")
-        return ""
+        cdef string output
+        with nogil:
+            decode_wtype_to(self.encoder,label,&output)
+        return output.c_str().decode("utf-8")
 
 
     def encode(self,PyWordList wlist not None):

@@ -83,7 +83,7 @@ void free_alist(atomlist alist) {
 // give the alist len
 size_t alist_len(atomlist alist) { return alist == nullptr ? 0 : alist->alist->size(); }
 void walk_alist(atomlist alist, walk_alist_hit hit, void* user_data) {
-    if (!alist || !alist->alist) return;
+    if (!alist || !alist->alist || !hit) return;
     atom_buffer buf;
     size_t len = alist->alist->size();
     for (size_t i = 0; i < len; ++i) {
@@ -96,7 +96,7 @@ void walk_alist(atomlist alist, walk_alist_hit hit, void* user_data) {
     }
 }
 int get_npos_atom(atomlist alist, size_t idx, atom_buffer* buffer) {
-    if (alist == nullptr || alist->alist == nullptr) return EXIT_FAILURE;
+    if (alist == nullptr || alist->alist == nullptr || buffer == nullptr) return EXIT_FAILURE;
     auto al = alist->alist;
     if (idx >= al->size()) return EXIT_FAILURE;
     auto x = al->at(idx);
@@ -238,12 +238,16 @@ void free_segment(segment sg) {
 }
 
 void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data) {
+    if (!wlist || !hit) return;
     word_buffer buf;
     std::vector<const char*> ptrs;
+    std::string image;
     buf.label_cache = &ptrs;
+    buf.image_cache = &image;
     for (size_t i = 0; i < wlist->wlist.size(); ++i) {
-        auto w         = wlist->wlist[i];
-        buf.image      = w->text().c_str();
+        const auto& w  = wlist->wlist[i];
+        image          = w->text();
+        buf.image      = image.c_str();
         buf.atom_s     = w->st;
         buf.atom_e     = w->et;
         buf.label_nums = w->labels_nums();
@@ -261,12 +265,15 @@ void walk_wlist(wordlist wlist, walk_wlist_hit hit, void* user_data) {
 size_t wlist_len(wordlist wlist) { return !wlist ? 0 : wlist->wlist.size(); }
 // get npos word
 int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer) {
-    if (wlist == nullptr || index >= wlist->wlist.size()) return EXIT_FAILURE;
+    if (wlist == nullptr || buffer == nullptr || index >= wlist->wlist.size()) return EXIT_FAILURE;
     std::vector<const char*>* ptrs;
     ptrs   = static_cast<std::vector<const char*>*>(buffer->label_cache);
-    auto w = wlist->wlist[index];
+    std::string* image = static_cast<std::string*>(buffer->image_cache);
+    if (!ptrs || !image) return EXIT_FAILURE;
+    const auto& w = wlist->wlist[index];
 
-    buffer->image      = w->text().c_str();
+    *image             = w->text();
+    buffer->image      = image->c_str();
     buffer->atom_s     = w->st;
     buffer->atom_e     = w->et;
     buffer->label_nums = w->labels_nums();
@@ -297,7 +304,7 @@ void free_wordlist(wordlist wlist) {
     }
 }
 int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outfile) {
-    if (!single_freq_dict || !union_freq_dict | !outfile) return EXIT_FAILURE;
+    if (!single_freq_dict || !union_freq_dict || !outfile) return EXIT_FAILURE;
     darts::BigramDict dict;
     if (dict.loadDictFromTxt(single_freq_dict, union_freq_dict)) return EXIT_FAILURE;
     return dict.saveDict(outfile);
@@ -337,7 +344,7 @@ void encode_wlist_type(wtype_encoder encoder, wordlist wlist, void* int_vector_b
     std::vector<int>& buf = *(static_cast<std::vector<int>*>(int_vector_buf));
     buf.reserve(wlist->wlist.size());
     auto& codec = *(encoder->encoder);
-    for (auto w : wlist->wlist) buf.emplace_back(codec.encode(w));
+    for (const auto& w : wlist->wlist) buf.emplace_back(codec.encode(w));
 }
 size_t max_wtype_nums(wtype_encoder encoder) {
     return !encoder || !encoder->encoder ? 0 : encoder->encoder->getLabelSize();
@@ -351,7 +358,15 @@ void free_wtype_encoder(wtype_encoder encoder) {
     }
 }
 const char* decode_wtype(wtype_encoder encoder, int wtype) {
-    return !encoder || !encoder->encoder ? nullptr : encoder->encoder->decode(wtype).c_str();
+    if (!encoder || !encoder->encoder) return nullptr;
+    thread_local std::string output;
+    output = encoder->encoder->decode(wtype);
+    return output.c_str();
+}
+void decode_wtype_to(wtype_encoder encoder, int wtype, void* string_buffer) {
+    if (!string_buffer) return;
+    auto& output = *static_cast<std::string*>(string_buffer);
+    output = !encoder || !encoder->encoder ? std::string() : encoder->encoder->decode(wtype);
 }
 // wlist encoder
 alist_encoder get_alist_encoder(void* map_param, const char* type_cls_name) {
@@ -399,7 +414,15 @@ size_t max_acode_nums(alist_encoder encoder) {
     return !encoder || !encoder->piece ? 0 : encoder->piece->getLabelSize();
 }
 const char* decode_atype(alist_encoder encoder, int atype) {
-    return !encoder || !encoder->piece ? nullptr : encoder->piece->decode(atype).c_str();
+    if (!encoder || !encoder->piece) return nullptr;
+    thread_local std::string output;
+    output = encoder->piece->decode(atype);
+    return output.c_str();
+}
+void decode_atype_to(alist_encoder encoder, int atype, void* string_buffer) {
+    if (!string_buffer) return;
+    auto& output = *static_cast<std::string*>(string_buffer);
+    output = !encoder || !encoder->piece ? std::string() : encoder->piece->decode(atype);
 }
 
 #endif  // SRC_MAIN_DARTS4PY_HPP_
