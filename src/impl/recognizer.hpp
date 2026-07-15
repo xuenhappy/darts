@@ -118,6 +118,73 @@ const char* DictWordRecongnizer::PB_FILE_KEY   = "pbfile.path";
 const char* DictWordRecongnizer::ATOM_MODE_KEY = "atom.mode";
 REGISTER_Recognizer(DictWordRecongnizer);
 
+/** Recognize numeric address components that are unsuitable for a finite POI dictionary. */
+class AddressRecongnizer : public CellRecognizer {
+   private:
+    static bool endsWith(const std::string& value, const std::set<std::string>& suffixes) {
+        for (const auto& suffix : suffixes) {
+            if (value.size() >= suffix.size() &&
+                value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0) return true;
+        }
+        return false;
+    }
+
+   public:
+    int initalize(const std::map<std::string, std::string>&,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>&) override {
+        return EXIT_SUCCESS;
+    }
+
+    void addWords(const AtomList& atoms, SegPath& path) const override {
+        static const std::set<std::string> component_suffixes = {
+            "号", "号院", "栋", "幢", "座", "层", "室", "弄", "单元", "楼"
+        };
+        static const std::set<std::string> road_suffixes = {
+            "路", "街", "大道", "公路", "道", "巷", "胡同", "街道"
+        };
+        static const std::set<std::string> poi_suffixes = {
+            "小区", "大厦", "广场", "中心", "公园", "医院", "学校", "大学", "车站", "机场",
+            "园", "园区"
+        };
+        static const std::set<std::string> division_suffixes = {
+            "省", "市", "区", "县", "镇", "乡", "自治州", "自治区"
+        };
+        Cursor cursor = path.Head();
+        for (size_t start = 0; start < atoms.size(); ++start) {
+            const auto& first = atoms.at(start);
+            std::string candidate;
+            const size_t limit = std::min(atoms.size(), start + 12);
+            for (size_t end = start; end < limit; ++end) {
+                const auto& atom = atoms.at(end);
+                candidate.append(atom->image);
+                const size_t atom_length = end - start + 1;
+                if (atom_length < 2) continue;
+
+                const bool numeric_component = atom_length <= 3 &&
+                    (first->char_type == char_type::NUM || first->char_type == char_type::ENG) &&
+                    endsWith(candidate, component_suffixes);
+                const bool cjk_candidate = first->char_type == char_type::CJK &&
+                    std::all_of(atoms.begin() + start, atoms.begin() + end + 1,
+                                [](const std::shared_ptr<Atom>& item) {
+                                    return item->char_type == char_type::CJK;
+                                });
+                const char* label = nullptr;
+                if (numeric_component) label = "ADDR_COMPONENT";
+                else if (cjk_candidate && atom_length <= 8 && endsWith(candidate, road_suffixes)) label = "ADDR_ROAD";
+                else if (cjk_candidate && atom_length <= 10 && endsWith(candidate, poi_suffixes)) label = "ADDR_POI";
+                else if (cjk_candidate && atom_length <= 6 && endsWith(candidate, division_suffixes)) label = "ADDR_DIVISION";
+                if (label) {
+                    auto word = std::make_shared<Word>(atoms, start, end + 1);
+                    word->addLabel(label);
+                    word->addLabel("ADDR_RULE");
+                    cursor = path.addCell(word, cursor);
+                }
+            }
+        }
+    }
+};
+REGISTER_Recognizer(AddressRecongnizer);
+
 /**
  * pinyin标注,该插件不可以❌和其他插件混用
  */

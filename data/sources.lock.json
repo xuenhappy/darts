@@ -71,6 +71,24 @@
       "target": "phrase-pinyin-data/LICENSE",
       "bytes": 1066,
       "sha256": "89ac55df747e4776088c3e77531ef61b973a1a59dd8e6a4548a58996da9a4f70"
+    },
+    {
+      "name": "china-administrative-divisions",
+      "version": "province-city-china 8.5.8",
+      "license": "MIT",
+      "url": "https://unpkg.com/province-city-china@8.5.8/dist/data.csv",
+      "target": "province-city-china/data.csv",
+      "bytes": 1275697,
+      "sha256": "5aff7c2e37cf553174ed1472dfdcaeea77b33fe63177bdd10d619e52a7fc9f44"
+    },
+    {
+      "name": "china-administrative-divisions-license",
+      "version": "province-city-china 8.5.8",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/uiwjs/province-city-china/v8.5.8/LICENSE",
+      "target": "province-city-china/LICENSE",
+      "bytes": 1061,
+      "sha256": "becf557b4dbb188022e699c2a2eb84828325252e992796b9e102deb303348359"
     }
   ]
 }

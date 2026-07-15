@@ -1,9 +1,11 @@
 import concurrent.futures
+import json
 from pathlib import Path
 import tempfile
 import unittest
 
-from darts import Dregex, DSegment, PinyinAnnotator, PyAtomList, Tokenizer, sentence_pinyin
+from darts import (Dregex, DSegment, LocationSegmenter, PinyinAnnotator, PyAtomList,
+                   Tokenizer, sentence_pinyin)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,6 +97,37 @@ class SegmentTests(unittest.TestCase):
         with self.assertRaises(OSError):
             DSegment(str(CONFIG), "missing-mode")
 
+    def test_only_selected_mode_dependency_graph_is_instantiated(self):
+        config = {
+            "dservices": {
+                "unused.service": {"type": "TypeThatDoesNotExist"},
+            },
+            "recognizers": {
+                "unused.recognizer": {
+                    "type": "DictWordRecongnizer",
+                    "pbfile.path": "/definitely/missing.pbs",
+                    "deps": {"unused": "unused.service"},
+                },
+            },
+            "deciders": {
+                "selected.decider": {"type": "MinCoverDecider"},
+                "unused.decider": {"type": "TypeThatDoesNotExist"},
+            },
+            "modes": {
+                "selected": {"decider": "selected.decider", "recognizers": []},
+                "broken": {"decider": "unused.decider", "recognizers": ["unused.recognizer"]},
+            },
+            "default.mode": "selected",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "lazy.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            segment = DSegment(str(path), "selected")
+            atoms, words = segment.cut("中文")
+            self.assertEqual(len(atoms), len(words))
+            with self.assertRaises(OSError):
+                DSegment(str(path), "broken")
+
 
 class PinyinTests(unittest.TestCase):
     def setUp(self):
@@ -129,6 +162,37 @@ class PinyinTests(unittest.TestCase):
             self.annotator.annotate(None)
         with self.assertRaises(TypeError):
             self.annotator.annotate("中文", non_cjk=1)
+
+
+class LocationTests(unittest.TestCase):
+    def setUp(self):
+        self.segmenter = LocationSegmenter(str(CONFIG))
+
+    def test_dictionary_rules_and_role_quantizer_form_address_path(self):
+        address = "浙江省杭州市西湖区文三路90号东部软件园2号楼"
+        result = self.segmenter.parse(address)
+        self.assertEqual(
+            [(token.text, token.kind) for token in result.tokens],
+            [("浙江省", "province"), ("杭州市", "city"), ("西湖区", "district"),
+             ("文三路", "road"), ("90号", "component"), ("东部软件园", "poi"),
+             ("2号楼", "component")],
+        )
+        self.assertTrue(all(address[token.start:token.end] == token.text
+                            for token in result.tokens))
+        self.assertEqual(result.poi, "东部软件园")
+
+    def test_street_and_oov_rule_candidates_do_not_swallow_hierarchy(self):
+        result = self.segmenter.parse("北京市海淀区中关村街道科学院南路88号")
+        self.assertEqual(
+            [(token.text, token.kind) for token in result.tokens],
+            [("北京市", "province"), ("海淀区", "district"), ("中关村街道", "street"),
+             ("科学院南路", "road"), ("88号", "component")],
+        )
+
+    def test_empty_and_invalid_address(self):
+        self.assertEqual(self.segmenter.parse("").tokens, ())
+        with self.assertRaises(TypeError):
+            self.segmenter.parse(None)
 
 
 class TokenizerTests(unittest.TestCase):

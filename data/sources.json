@@ -55,6 +55,20 @@
       "license": "MIT",
       "url": "https://raw.githubusercontent.com/mozillazg/phrase-pinyin-data/v0.19.0/LICENSE",
       "target": "phrase-pinyin-data/LICENSE"
+    },
+    {
+      "name": "china-administrative-divisions",
+      "version": "province-city-china 8.5.8",
+      "license": "MIT",
+      "url": "https://unpkg.com/province-city-china@8.5.8/dist/data.csv",
+      "target": "province-city-china/data.csv"
+    },
+    {
+      "name": "china-administrative-divisions-license",
+      "version": "province-city-china 8.5.8",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/uiwjs/province-city-china/v8.5.8/LICENSE",
+      "target": "province-city-china/LICENSE"
     }
   ]
 }

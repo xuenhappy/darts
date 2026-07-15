@@ -201,6 +201,9 @@ inline int loadSegment(const char* conffile, darts::Segment** segment, const cha
         return EXIT_FAILURE;
     }
 
+    // The cache starts empty for every Segment. Only the selected mode's
+    // decider/recognizers and dependencies reached recursively from them are
+    // instantiated; merely declaring a plugin in JSON never creates it.
     PluginCache _cache;
 
     // load the deciders
@@ -226,7 +229,7 @@ inline int loadSegment(const char* conffile, darts::Segment** segment, const cha
         used_recognizers_objs.push_back(recognizer);
     }
     *segment = new darts::Segment(decider);
-    for (auto r : used_recognizers_objs) {
+    for (const auto& r : used_recognizers_objs) {
         (*segment)->addRecognizer(r);
     }
     used_recognizers_objs.clear();

@@ -394,6 +394,31 @@ print(sentence_pinyin("银行行长前往上海"))
 
 `PinyinAnnotator` 复用已加载的词典，适合连续处理句子。拼音模式优先使用词级短语读音消除多音字歧义，再回退到单字读音。非中文的 `pinyin` 默认是 `None`；可向 `annotate/readings` 传入 `non_cjk="<NO_PINYIN>"` 生成对齐占位符，或使用 `format(..., preserve_non_cjk=True)` 在格式化文本中保留原文。
 
+### 中文地址与 POI 切分
+
+```python
+from darts import LocationSegmenter
+
+location = LocationSegmenter("data/conf.json")
+result = location.parse("浙江省杭州市西湖区文三路90号东部软件园2号楼")
+for token in result.tokens:
+    print(token.text, token.kind, token.start, token.end)
+print(result.components)
+```
+
+`location` 模式使用独立的 `location.dict`、规则型 `AddressRecongnizer` 和概率型 `AddressDecider`。词典负责已知省、市、区县、乡镇街道及 POI；规则负责词典外道路/建筑后缀和数字门牌；量化器按行政层级与 POI 词性关系计算 `-log P(next_role | previous_role)`，地址 Bigram 只作为低权重词面证据。
+
+重建数据和模型：
+
+```bash
+python scripts/data_pipeline.py download \
+  --name china-administrative-divisions \
+  --name china-administrative-divisions-license
+python scripts/location_data.py
+```
+
+可在 `data/external/location/poi.txt` 中按每行一个 POI 名称追加业务或 OpenStreetMap 数据。全国 OSM PBF 较大且采用 ODbL 1.0，因此不在默认构建中自动下载；来源和许可要求见 `data/readme.md`。
+
 ## C API
 
 公共 C API 位于 `src/main/darts.h`，主要生命周期如下：

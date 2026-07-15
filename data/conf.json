@@ -39,6 +39,14 @@
             "deps": {
                 "wordpiece.name": "wordpiece.dict"
             }
+        },
+        "location.dict": {
+            "type": "DictWordRecongnizer",
+            "pbfile.path": "data/models/location.pbs",
+            "atom.mode": "false"
+        },
+        "location.components": {
+            "type": "AddressRecongnizer"
         }
     },
     // all the deciders plugins
@@ -67,6 +75,11 @@
                 "wordpiece.name": "wordpiece.dict",
                 "tencode.name": "wtype.encoder"
             }
+        },
+        "location.decider": {
+            "type": "AddressDecider",
+            "dat.path": "data/models/location.bdf",
+            "lexical.weight": "0.15"
         }
     },
     // all mode that the segment working
@@ -101,6 +114,13 @@
             "recognizers": [
                 "inner.dict",
                 "neural.span"
+            ]
+        },
+        "location": {
+            "decider": "location.decider",
+            "recognizers": [
+                "location.dict",
+                "location.components"
             ]
         }
     },

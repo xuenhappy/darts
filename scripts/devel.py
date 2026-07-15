@@ -127,6 +127,19 @@ def data(args):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def location_build(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/location_data.py",
+               "--source", args.source, "--poi", args.poi,
+               "--output-dir", args.output_dir, "--work-dir", args.work_dir]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def location_poi_extract(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/extract_osm_poi.py",
+               args.input, "--output", args.output]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -202,6 +215,18 @@ def main():
     command = commands.add_parser("data", help="download, prepare, or build reproducible open data")
     command.add_argument("action", choices=("download", "prepare", "build-models"))
     command.set_defaults(func=data)
+
+    command = commands.add_parser("location-build", help="build address dictionary and quantizer data")
+    command.add_argument("--source", default="data/external/province-city-china/data.csv")
+    command.add_argument("--poi", default="data/external/location/poi.txt")
+    command.add_argument("--output-dir", default="data/models")
+    command.add_argument("--work-dir", default="data/generated/location")
+    command.set_defaults(func=location_build)
+
+    command = commands.add_parser("location-poi-extract", help="extract POI names from an OSM PBF")
+    command.add_argument("input")
+    command.add_argument("--output", default="data/external/location/poi.txt")
+    command.set_defaults(func=location_poi_extract)
 
     args = parser.parse_args()
     args.func(args)

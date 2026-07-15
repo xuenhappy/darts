@@ -9,6 +9,7 @@
 | UD Chinese GSD | UD 2.18 | CC BY-SA 4.0 | 训练、开发、测试切分与 Bigram 统计 |
 | jieba `dict.txt` | v0.42.1 | MIT | 扩展通用中文词典覆盖率 |
 | phrase-pinyin-data | v0.19.0 | MIT | 词级拼音与多音字消歧 |
+| province-city-china | v8.5.8 | MIT | 省、市、区县、乡镇街道地址词典与层级转移 |
 
 下载地址记录在 `sources.json`，实际文件大小与 SHA-256 记录在 `sources.lock.json`。原始数据和生成中间文件分别位于被 Git 忽略的 `external/`、`generated/`；仓库只提交生成后的运行时模型。
 
@@ -18,6 +19,8 @@
 python scripts/data_pipeline.py download
 python scripts/data_pipeline.py prepare
 python scripts/data_pipeline.py build-models
+python scripts/location_data.py
+python scripts/devel.py location-build
 
 # 等价的统一开发入口
 python scripts/devel.py data download
@@ -47,6 +50,8 @@ python scripts/data_pipeline.py evaluate data/generated/cws-test.txt --mode fast
 | `sources.lock.json` | 已下载文件的大小与 SHA-256 |
 | `models/panda.pbs` | 开放词典编译后的紧凑 Trie |
 | `models/ngram_dict.bdf` | UD 训练集生成的 Bigram 数据 |
+| `models/location.pbs` | 四级行政区划、地址后缀和可选 POI 的专用 Trie |
+| `models/location.bdf` | 地址层级与 POI 角色转移量化器词面统计 |
 | `models/neural/recognizer.onnx` | 2~5 Atom 可重叠候选的成词概率模型 |
 | `models/neural/indicator.onnx` | 量化器独立训练的 Transformer 词表示网络 |
 | `models/neural/quantizer.onnx` | 相邻词关联概率负对数网络 |
@@ -58,6 +63,20 @@ python scripts/data_pipeline.py evaluate data/generated/cws-test.txt --mode fast
 CC BY-SA 数据的再分发和衍生使用必须保留署名及相同方式共享；具体版权文本由流水线下载到对应来源目录。
 
 `kernel/pinyin.txt` 提供单字多音读法；`kernel/pinyin-phrases.txt` 是短语库与最终核心词典的交集，当前约 2.2 万条。拼音模式优先使用词级读音消除歧义，未命中时逐字回退。非 CJK 默认不添加拼音；如业务需要统一占位符，可在 `pinyin.dict` 中配置 `"non-cjk.label": "<NO_PINYIN>"`。
+
+## 地址与 POI 数据
+
+`location` 模式不会复用通用词典或通用 Bigram。`location.pbs` 标记 `ADDR_PROVINCE`、`ADDR_CITY`、`ADDR_DISTRICT`、`ADDR_STREET` 和 `ADDR_POI`；`AddressRecongnizer` 另行识别词典外道路、POI 后缀及“88号、A座、2号楼”等规则候选。`AddressDecider` 把角色条件概率转换成 `-log P(next_role | previous_role)`，再叠加较低权重的地址词面 Bigram NLL。
+
+可选 POI 文件为 UTF-8 `data/external/location/poi.txt`，每行第一列是 POI 名称，后续制表符列可保存来源或类别。可从 OpenStreetMap 的 Geofabrik 中国或省级 `.osm.pbf` 流式提取 `name:zh/name`：
+
+```bash
+pip install osmium
+python scripts/devel.py location-poi-extract china-latest.osm.pbf
+python scripts/devel.py location-build
+```
+
+OSM 衍生数据库受 ODbL 1.0 约束，发布时必须保留 OpenStreetMap 署名和相同许可。全国 PBF 约 1.4GB，默认构建不自动下载，建议按省下载；下载页为 `https://download.geofabrik.de/asia/china.html`。
 
 ## 神经训练数据
 
