@@ -47,6 +47,9 @@ python scripts/data_pipeline.py evaluate data/generated/cws-test.txt --mode fast
 | `sources.lock.json` | 已下载文件的大小与 SHA-256 |
 | `models/panda.pbs` | 开放词典编译后的紧凑 Trie |
 | `models/ngram_dict.bdf` | UD 训练集生成的 Bigram 数据 |
+| `models/neural/recognizer.onnx` | 2~5 Atom 可重叠候选的成词概率模型 |
+| `models/neural/indicator.onnx` | 量化器独立训练的 Transformer 词表示网络 |
+| `models/neural/quantizer.onnx` | 相邻词关联概率负对数网络 |
 | `kernel/` | 字符类型、归一化和拼音等运行时核心数据 |
 | `licenses/` | 随运行时衍生数据分发的上游许可证 |
 | `codes/` | 模型编码资源 |
@@ -55,3 +58,14 @@ python scripts/data_pipeline.py evaluate data/generated/cws-test.txt --mode fast
 CC BY-SA 数据的再分发和衍生使用必须保留署名及相同方式共享；具体版权文本由流水线下载到对应来源目录。
 
 `kernel/pinyin.txt` 提供单字多音读法；`kernel/pinyin-phrases.txt` 是短语库与最终核心词典的交集，当前约 2.2 万条。拼音模式优先使用词级读音消除歧义，未命中时逐字回退。非 CJK 默认不添加拼音；如业务需要统一占位符，可在 `pinyin.dict` 中配置 `"non-cjk.label": "<NO_PINYIN>"`。
+
+## 神经训练数据
+
+识别器从 CWS 行格式生成全部 2~5 Atom span，独立标注每个 span 是否为词，不生成 BIO 序列。量化器训练图合并词典候选、同一 span 上界和金标长词，确保 OOV 金标路径始终存在；每条边的模型输出是 `-log P(next|previous)`，由 `GraphLossSparse` 在完整 DAG 上归一化。两个任务共享 `WordEncoder` 代码与 ONNX 张量约定，但必须分别训练和导出，不能混用权重。
+
+```bash
+python scripts/train_recognizer.py train --device cuda
+python scripts/train_recognizer.py export model_bin/recognizer/best.pt data/models/neural/recognizer.onnx
+python scripts/train_quantizer.py train --device cuda
+python scripts/train_quantizer.py export model_bin/quantizer/best.pt data/models/neural
+```

@@ -134,6 +134,12 @@ class build_py(_build_py):
 
     def run(self):
         build_dir = ensure_meson_build()
+        # setuptools incrementally copies sources but does not remove modules
+        # deleted from the tree.  Recreate the package staging directory so a
+        # wheel can never retain obsolete training or model compatibility code.
+        package_dir = Path(self.build_lib) / "darts"
+        if package_dir.exists():
+            shutil.rmtree(package_dir)
         super().run()
 
         build_lib = Path(self.build_lib)

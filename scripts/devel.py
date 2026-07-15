@@ -73,47 +73,32 @@ def dict_benchmark(args):
 
 
 def model_train(args):
-    import torch
-    from darts.devel.model import NerTrainer
-    from darts.devel.reader import TorchNerSampleReader
-    from darts.devel.sover import TSolver
-
-    reader = TorchNerSampleReader(args.sample, args.labels, batch_nums=args.batch_size,
-                                  max_words_len=args.max_words)
-    model = NerTrainer(reader.wordsize(), args.hidden_size, reader.labelsize())
-    device = "cuda" if torch.cuda.is_available() and args.device != "cpu" else "cpu"
-    if args.device == "cuda" and device != "cuda":
-        raise RuntimeError("--device cuda requested but PyTorch cannot access CUDA")
-    print(f"training device={device} samples={args.sample}")
-    solver = TSolver(model, reader, {
-        "model_outdir": args.output_dir,
-        "epoch_num": args.epochs,
-        "device": device,
-        "log_every": args.log_every,
-    })
-    solver.solve()
+    command = [os.environ.get("PYTHON", "python3"), "scripts/train_recognizer.py", "train",
+               "--train", args.sample, "--dev", args.dev, "--epochs", str(args.epochs),
+               "--output-dir", args.output_dir, "--batch-size", str(args.batch_size),
+               "--max-span", str(args.max_span), "--hidden-size", str(args.hidden_size),
+               "--device", args.device]
+    subprocess.run(command, cwd=ROOT, check=True)
 
 
 def model_export(args):
-    import torch
+    command = [os.environ.get("PYTHON", "python3"), "scripts/train_recognizer.py", "export",
+               args.checkpoint, args.output]
+    subprocess.run(command, cwd=ROOT, check=True)
 
-    try:
-        checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-    except TypeError:
-        checkpoint = torch.load(args.checkpoint, map_location="cpu")
-    model = checkpoint.ner if hasattr(checkpoint, "ner") else checkpoint
-    model.eval()
-    output = Path(args.output).resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    previous = Path.cwd()
-    try:
-        os.chdir(output.parent)
-        generated = Path(model.export2onnx())
-        if generated.resolve() != output:
-            generated.replace(output)
-    finally:
-        os.chdir(previous)
-    print(f"exported={output}")
+
+def quantizer_train(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/train_quantizer.py", "train",
+               "--train", args.train, "--dev", args.dev, "--epochs", str(args.epochs),
+               "--output-dir", args.output_dir, "--batch-size", str(args.batch_size),
+               "--hidden-size", str(args.hidden_size), "--device", args.device]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def quantizer_export(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/train_quantizer.py", "export",
+               args.checkpoint, args.output_dir]
+    subprocess.run(command, cwd=ROOT, check=True)
 
 
 def build(args):
@@ -150,22 +135,36 @@ def main():
     command.add_argument("--warmup", type=int, default=100)
     command.set_defaults(func=dict_benchmark)
 
-    command = commands.add_parser("model-train", help="train the Transformer CRF recognizer")
+    command = commands.add_parser("model-train", help="train the overlapping-span Transformer recognizer")
     command.add_argument("sample")
     command.add_argument("--output-dir", default="model_bin")
-    command.add_argument("--labels", default="O,B-_HWORD,I-_HWORD")
+    command.add_argument("--dev", default="data/generated/cws-dev.txt")
     command.add_argument("--epochs", type=int, default=6)
     command.add_argument("--batch-size", type=int, default=100)
-    command.add_argument("--max-words", type=int, default=50)
+    command.add_argument("--max-span", type=int, default=5)
     command.add_argument("--hidden-size", type=int, default=128)
     command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
-    command.add_argument("--log-every", type=int, default=50)
     command.set_defaults(func=model_train)
 
     command = commands.add_parser("model-export", help="export a trained Transformer checkpoint to ONNX")
     command.add_argument("checkpoint")
     command.add_argument("output")
     command.set_defaults(func=model_export)
+
+    command = commands.add_parser("quantizer-train", help="train the Transformer graph quantizer")
+    command.add_argument("--train", default="data/generated/cws-train.txt")
+    command.add_argument("--dev", default="data/generated/cws-dev.txt")
+    command.add_argument("--output-dir", default="model_bin/quantizer")
+    command.add_argument("--epochs", type=int, default=20)
+    command.add_argument("--batch-size", type=int, default=8)
+    command.add_argument("--hidden-size", type=int, default=128)
+    command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.set_defaults(func=quantizer_train)
+
+    command = commands.add_parser("quantizer-export", help="export indicator and quantizer ONNX models")
+    command.add_argument("checkpoint")
+    command.add_argument("output_dir")
+    command.set_defaults(func=quantizer_export)
 
     command = commands.add_parser("build", help="run the Meson-only build workflow")
     command.add_argument("--test", action="store_true")

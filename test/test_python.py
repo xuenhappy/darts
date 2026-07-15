@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from darts import Dregex, DSegment, PyAtomList
+from darts import Dregex, DSegment, PyAtomList, Tokenizer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,6 +82,35 @@ class SegmentTests(unittest.TestCase):
     def test_missing_mode_fails(self):
         with self.assertRaises(OSError):
             DSegment(str(CONFIG), "missing-mode")
+
+
+class TokenizerTests(unittest.TestCase):
+
+    def setUp(self):
+        self.tokenizer = Tokenizer(str(CONFIG), "hybrid")
+
+    def test_common_cut_interfaces(self):
+        text = "目标检测模型量化"
+        words = self.tokenizer.lcut(text)
+        self.assertEqual("".join(words), text)
+        self.assertEqual(list(self.tokenizer.cut(text)), words)
+        self.assertEqual(self.tokenizer(text), words)
+        self.assertEqual(self.tokenizer.batch_cut([text, text]), [words, words])
+
+    def test_offsets_and_labels(self):
+        text = "中文ABC分词"
+        tuples = list(self.tokenizer.tokenize(text))
+        self.assertEqual("".join(token for token, _start, _end in tuples), text)
+        self.assertTrue(all(text[start:end] == token for token, start, end in tuples))
+        rich = self.tokenizer.tokens(text)
+        self.assertEqual([(item.text, item.start, item.end) for item in rich], tuples)
+
+    def test_empty_and_invalid_input(self):
+        self.assertEqual(self.tokenizer.lcut(""), [])
+        with self.assertRaises(TypeError):
+            self.tokenizer.lcut(None)
+        with self.assertRaises(ValueError):
+            list(self.tokenizer.tokenize("中文", mode="invalid"))
 
 
 if __name__ == "__main__":

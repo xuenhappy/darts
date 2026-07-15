@@ -26,6 +26,19 @@
             "deps": {
                 "pyin.encoder": "pinyin.encoder"
             }
+        },
+        "neural.span": {
+            "type": "OnnxRecongnizer",
+            "model.path": "data/models/neural/recognizer.onnx",
+            "max.span": "5",
+            "threshold": "0.5",
+            "threshold.2": "0.5",
+            "threshold.3": "0.5",
+            "threshold.4": "0.5",
+            "threshold.5": "0.5",
+            "deps": {
+                "wordpiece.name": "wordpiece.dict"
+            }
         }
     },
     // all the deciders plugins
@@ -45,6 +58,15 @@
             "length.power": "1.0",
             "token.penalty": "0.0",
             "unknown.penalty": "20.0"
+        },
+        "neural.decider": {
+            "type": "OnnxDecider",
+            "pmodel.path": "data/models/neural/indicator.onnx",
+            "qmodel.path": "data/models/neural/quantizer.onnx",
+            "deps": {
+                "wordpiece.name": "wordpiece.dict",
+                "tencode.name": "wtype.encoder"
+            }
         }
     },
     // all mode that the segment working
@@ -72,6 +94,13 @@
             "recognizers": [
                 "inner.dict",
                 "pinyin.dict"
+            ]
+        },
+        "neural": {
+            "decider": "neural.decider",
+            "recognizers": [
+                "inner.dict",
+                "neural.span"
             ]
         }
     },

@@ -12,6 +12,7 @@ Copyright 2021 - 2022 Your Company, Moka
 import torch
 import numpy as np
 import torch.nn as nn
+import random
 from ..cdarts import *
 from torch.utils.data import Dataset, DataLoader, IterableDataset
 
@@ -27,165 +28,183 @@ def d2list2array(d2list, fval=0, dtype=np.int32):
     return out, lens
 
 
-def wordlist2graph(wordarr):
-    #word add is a int tensor like batch*(bixd,atom_s,atome_e,bool)
-    #return is batch*(gbidx,w_s,w_e,bool)
-    feats_lens = np.unique(wordarr[:, 0], return_counts=True)[1]
-    s, e = 0, 0
-    graphs = []
-    for gidx, lens in enumerate(feats_lens):
-        e = s + lens
-        words = wordarr[s:e]
-        advj_ = (words[:, 2].reshape(-1, 1) == words[:, 1].reshape(1, -1))
-        best_ = (words[:, 3].reshape(-1, 1) * words[:, 3].reshape(1, -1))
-        node_index = np.arange(lens) + s
-        rowidx = node_index.reshape(-1, 1).repeat(lens, 1)
-        colidx = node_index.reshape(1, -1).repeat(lens, 0)
-        idxes = np.stack((rowidx, colidx, best_), 2)[advj_]
-        if idxes.size > 0:
-            # Keep edges grouped by dst first and src second so the sparse loss can scan them linearly.
-            order = np.lexsort((idxes[:, 0], idxes[:, 1]))
-            idxes = idxes[order]
-        bidxs = np.ones(idxes.shape[0]).reshape(-1, 1) * gidx
-        graphs.append(np.concatenate((bidxs, idxes), 1))
-        s = e
-    return np.concatenate(graphs, 0)
+class GraphSampleReader(IterableDataset):
+    """Build candidate DAGs aligned with the C++ ONNX decider contract.
 
+    Nodes are sorted candidate words plus synthetic head/tail nodes.  Edges join
+    exactly adjacent half-open atom spans, and gold_mask marks one complete path.
+    Flattened node indexes allow GraphLossSparse to train a batch without dense
+    ``V x V`` allocation.
+    """
 
-class TokenNerSampleReader():
-
-    def __init__(self, filep, labes, max_sent_asize=50, batch_nums=100, max_words_len=50):
-        self.samplefile = filep
-        self.batch_nums = batch_nums
-        self.max_words_len = max_words_len
-        self.aencoder = AtomCodec({"base.dir": "data/models/codex"})
-        self.max_sent_asize = max_sent_asize
-        self.labes = [l.strip() for l in labes.split(",") if l.strip()]
-
-    def decode(self, codes):
-        return [self.aencoder.decode(l) for l in codes]
-
-    def _sample_iter(self):
-        with open(self.samplefile, encoding="utf-8") as fd:
-            for line in fd:
-                line = line.strip()
-                if not line:
-                    continue
-                if len(line) < 3:
-                    continue
-                yield line
-
-    def getBio(self, line):
-        tokens = [l.strip() for l in line.split(" ") if l.strip()]
-        line_str = [tokens[0]]
-        for word in tokens[1:]:
-            if ord(word[0]) < 255 and ord(line_str[-1][-1]) < 255:
-                line_str.append(" ")
-            line_str.append(word)
-        bios = []
-        for word in line_str:
-            if len(word) > 1 and any(ord(x) > 255 for x in word):
-                bio = ['I-_HWORD'] * len(word)
-                bio[0] = 'B-_HWORD'
-            else:
-                bio = ['O'] * len(word)
-            bios.extend(bio)
-
-        alist = PyAtomList("".join(line_str), normal_before=False)
-        abio = ['O']  #append 'START'
-        for atom in alist.tolist():
-            tag = set(bios[atom.st:atom.et])
-            if len(tag) == 1:
-                if 'I-_HWORD' in tag:
-                    abio.append('I-_HWORD')
-                elif 'B-_HWORD' in tag:
-                    abio.append('B-_HWORD')
-                else:
-                    abio.append('O')
-            else:
-                if 'B-_HWORD' in tag:
-                    abio.append('B-_HWORD')
-                elif 'I-_HWORD' in tag:
-                    abio.append('I-_HWORD')
-                else:
-                    abio.append('O')
-        abio.append('O')  #appaned end
-        return alist, [self.labes.index(l) for l in abio]
-
-    def toIndex(self, alist, bios, batch_idx):
-        codes = self.aencoder.encode(alist)
-        idxs = [code[0] for code in codes]
-        atom_code_s = [0] * len(bios)
-        atom_code_e = [0] * len(bios)
-        atom_code_s[-1] = len(codes) - 1
-        atom_code_e[-1] = len(codes) - 1
-        for i, code in enumerate(codes):
-            index = code[1]
-            if index < 0:
-                continue
-            index += 1
-            if atom_code_s[index] == 0:
-                atom_code_s[index] = i
-            atom_code_e[index] = i
-        return idxs, list(zip([batch_idx] * len(bios), atom_code_s, atom_code_e, bios))
-
-    def cutLines(self, line):
-        minLineLength = 10
-        if len(line) < self.max_words_len + minLineLength:
-            return [line]
-        rets = []
-        SENTENCE_POS = "!。,?;:！，？；："
-        pre, pos = 0, minLineLength - 1
-
-        while pos < len(line) - 1:
-            pos += 1
-            if pos - pre >= self.max_words_len:
-                rets.append(line[pre:pos + 1])
-                pre = pos + 1
-                continue
-            if (line[pos] not in SENTENCE_POS) or (pos - pre < minLineLength):
-                continue
-            rets.append(line[pre:pos + 1])
-            pre = pos + 1
-
-        if pre < len(line):
-            rets.append(line[pre:])
-
-        return rets
-
-    def __iter__(self):
-        batch_word_index, batch_atom_infos = [], []
-        for line in self._sample_iter():
-            line = normalize(line).strip()
-            for line in self.cutLines(line):
-                alist, bios = self.getBio(line)
-                idexs, indexs = self.toIndex(alist, bios, len(batch_word_index))
-                batch_word_index.append(idexs)
-                batch_atom_infos.extend(indexs)
-                if len(batch_word_index) >= self.batch_nums:
-                    widxs, wlens = d2list2array(batch_word_index)
-                    atom_idxs = np.asarray(batch_atom_infos, dtype=np.int32)
-                    yield widxs, wlens, atom_idxs
-                    batch_word_index, batch_atom_infos = [], []
-
-        if len(batch_word_index) > 1:
-            widxs, wlens = d2list2array(batch_word_index)
-            atom_idxs = np.asarray(batch_atom_infos, dtype=np.int32)
-            yield widxs, wlens, atom_idxs
-
-
-class TorchNerSampleReader(IterableDataset):
-
-    def __init__(self, filep, labes, max_sent_asize=50, batch_nums=100, max_words_len=50) -> None:
+    def __init__(self, sample, config="data/conf.json", mode="hybrid", batch_size=16,
+                 max_span=5, shuffle=False):
         super().__init__()
-        self.dts = TokenNerSampleReader(filep, labes, max_sent_asize, batch_nums, max_words_len)
+        self.sample = sample
+        self.batch_size = batch_size
+        self.max_span = max_span
+        self.shuffle = shuffle
+        self._samples = None
+        self.segment = DSegment(config, mode, isdev=True)
+        self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
+        self.word_codec = WordCodec({"hx.file": "data/codes/type.hx.txt"}, "LabelEncoder")
 
     def wordsize(self):
-        return self.dts.aencoder.label_nums()
+        return self.atom_codec.label_nums()
 
-    def labelsize(self):
-        return len(self.dts.labes)
+    def typesize(self):
+        return self.word_codec.label_nums()
+
+    @staticmethod
+    def _gold_spans(tokens):
+        spans = []
+        position = 0
+        for token in tokens:
+            length = len(PyAtomList(token, skip_space=True, normal_before=False))
+            spans.append((position, position + length))
+            position += length
+        return spans
+
+    def _sample(self, tokens):
+        text = "".join(tokens)
+        atoms, candidates = self.segment.cut(text, max_mode=True)
+        words = candidates.tolist()
+        types = self.word_codec.encode(candidates)
+        codes = self.atom_codec.encode(atoms)
+        code_ids = [value[0] for value in codes]
+        starts = [0] * len(atoms)
+        ends = [0] * len(atoms)
+        for index, (_code, atom_position) in enumerate(codes):
+            if atom_position < 0:
+                continue
+            if starts[atom_position] == 0:
+                starts[atom_position] = index
+            ends[atom_position] = index
+
+        # Dictionary labels provide known type features.  Add the complete span
+        # envelope used by the recognizer so the quantizer also sees OOV words;
+        # type 0 is the LabelEncoder's unknown fallback.
+        candidates_by_span = {}
+        for word, type_code in zip(words, types):
+            candidates_by_span.setdefault((word.atom_s, word.atom_e), type_code)
+        for start in range(len(atoms)):
+            for end in range(start + 1, min(len(atoms), start + self.max_span) + 1):
+                candidates_by_span.setdefault((start, end), 0)
+        gold_spans = self._gold_spans(tokens)
+        for span in gold_spans:
+            candidates_by_span.setdefault(span, 0)
+
+        nodes = [(0, 0, 3, -1, 0)]
+        for (atom_start, atom_end), type_code in sorted(candidates_by_span.items()):
+            nodes.append((starts[atom_start], ends[atom_end - 1], type_code, atom_start, atom_end))
+        nodes.append((len(code_ids) - 1, len(code_ids) - 1, 2, len(atoms), len(atoms) + 1))
+
+        gold_nodes = [0]
+        for span in gold_spans:
+            match = next((index for index, node in enumerate(nodes) if node[3:5] == span), None)
+            if match is None:
+                raise RuntimeError(f"gold span {span} missing from candidate graph for {text}")
+            gold_nodes.append(match)
+        gold_nodes.append(len(nodes) - 1)
+        gold_edges = set(zip(gold_nodes, gold_nodes[1:]))
+
+        edges = []
+        for source, left in enumerate(nodes[:-1]):
+            target_start = 0 if source == 0 else left[4]
+            for target in range(1, len(nodes)):
+                right = nodes[target]
+                if right[3] == target_start:
+                    edges.append((source, target, int((source, target) in gold_edges)))
+        return code_ids, nodes, edges
+
+    def _batch(self, samples):
+        code_ids, lengths = d2list2array([sample[0] for sample in samples])
+        word_info = []
+        graph = []
+        offset = 0
+        for batch_id, (_codes, nodes, edges) in enumerate(samples):
+            word_info.extend((batch_id, node[0], node[1], node[2]) for node in nodes)
+            graph.extend((batch_id, source + offset, target + offset, gold)
+                         for source, target, gold in edges)
+            offset += len(nodes)
+        graph.sort(key=lambda edge: (edge[0], edge[2], edge[1]))
+        return (torch.from_numpy(code_ids).long(), torch.from_numpy(lengths).long(),
+                torch.tensor(word_info, dtype=torch.long), torch.tensor(graph, dtype=torch.long))
 
     def __iter__(self):
-        for widxs, lens, atom_idxs in self.dts:
-            yield torch.from_numpy(widxs).long(), torch.from_numpy(lens).long(), torch.from_numpy(atom_idxs).long()
+        if self._samples is None:
+            with open(self.sample, encoding="utf-8") as stream:
+                lines = list(stream)
+            self._samples = [self._sample(line.strip().split()) for line in lines if line.strip()]
+        ordered = list(self._samples)
+        if self.shuffle:
+            random.shuffle(ordered)
+        for start in range(0, len(ordered), self.batch_size):
+            yield self._batch(ordered[start:start + self.batch_size])
+
+
+class SpanSampleReader(IterableDataset):
+    """Generate all overlapping 2..max_span candidates and binary labels.
+
+    Gold segmentation is used only to label independently possible words; no BIO
+    path is created.  Atom bounds are half-open here, then converted to inclusive
+    WordPiece bounds for WordEncoder and the exported ONNX model.
+    """
+
+    def __init__(self, sample, batch_size=32, max_span=5, shuffle=False):
+        super().__init__()
+        self.sample = sample
+        self.batch_size = batch_size
+        self.max_span = max_span
+        self.shuffle = shuffle
+        self._samples = None
+        self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
+
+    def wordsize(self):
+        return self.atom_codec.label_nums()
+
+    def _sample(self, tokens):
+        text = "".join(tokens)
+        atoms = PyAtomList(text)
+        codes = self.atom_codec.encode(atoms)
+        code_ids = [item[0] for item in codes]
+        starts = [0] * len(atoms)
+        ends = [0] * len(atoms)
+        for index, (_code, atom_position) in enumerate(codes):
+            if atom_position < 0:
+                continue
+            if starts[atom_position] == 0:
+                starts[atom_position] = index
+            ends[atom_position] = index
+        gold = set(GraphSampleReader._gold_spans(tokens))
+        spans = []
+        for start in range(len(atoms)):
+            for end in range(start + 2, min(len(atoms), start + self.max_span) + 1):
+                spans.append((starts[start], ends[end - 1], end - start, int((start, end) in gold)))
+        return code_ids, spans
+
+    def _batch(self, samples):
+        code_ids, lengths = d2list2array([sample[0] for sample in samples])
+        spans = [(batch_id, start, end, atom_length, label)
+                 for batch_id, (_codes, sample_spans) in enumerate(samples)
+                 for start, end, atom_length, label in sample_spans]
+        return (torch.from_numpy(code_ids).long(), torch.from_numpy(lengths).long(),
+                torch.tensor(spans, dtype=torch.long))
+
+    def __iter__(self):
+        if self._samples is None:
+            with open(self.sample, encoding="utf-8") as stream:
+                lines = list(stream)
+            self._samples = []
+            for line in lines:
+                tokens = line.strip().split()
+                if not tokens:
+                    continue
+                sample = self._sample(tokens)
+                if sample[1]:
+                    self._samples.append(sample)
+        ordered = list(self._samples)
+        if self.shuffle:
+            random.shuffle(ordered)
+        for start in range(0, len(ordered), self.batch_size):
+            yield self._batch(ordered[start:start + self.batch_size])

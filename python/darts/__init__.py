@@ -2,6 +2,7 @@ from .cdarts import (DSegment, Dregex, PyAtom, PyAtomList, PyWord, PyWordList, b
     AtomCodec, WordCodec)
 
 from typing import Iterator, Tuple
+from .tokenizer import Token, Tokenizer, cut, lcut, tokenize
 
 
 def compileDregex(kvPiars: Iterator[Tuple[str, str]], outfile: str):

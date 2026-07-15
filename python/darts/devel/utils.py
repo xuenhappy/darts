@@ -1,285 +1,25 @@
-'''
-File: torch_tools.py
-Project: devel
-File Created: Saturday, 8th January 2022 9:07:18 pm
-Author: Xu En (xuen@mokar.com)
------
-Last Modified: Saturday, 8th January 2022 9:07:31 pm
-Modified By: Xu En (xuen@mokahr.com)
------
-Copyright 2021 - 2022 Your Company, Moka
-'''
+"""Sparse graph objectives used by neural segmentation training."""
+
 import torch
 import torch.nn as nn
 
 
-def _revMatidx(max_time_len, batch_size):
-    base = torch.arange(0, max_time_len).to(batch_size)
-    base = base[None, :].expand(batch_size.shape[0], -1)
-    base = batch_size[:, None] - 1 - base
-    base[base < 0] = 0
-    return base.unsqueeze(-1)
-
-
-def run_rnn(input_tensors, batch_lengths, fw_rnn, bw_rnn):
-    """input_tensors must be batch first (N,T,C)
-    batch_lengths must be (N,)，this mothod support onnx export """
-
-    fw_out, _ = fw_rnn(input_tensors)
-    with torch.no_grad():
-        revidx = _revMatidx(input_tensors.shape[1], batch_lengths)
-    rev_input = input_tensors.take_along_dim(revidx, 1)
-    bw_out = bw_rnn(rev_input)[0].take_along_dim(revidx, 1)
-    return torch.concat((fw_out, bw_out), dim=2)
-
-
-def getFeatsIdx(postions):
-    """postions shape is (N,)
-    """
-    with torch.no_grad():
-        feats_lens = torch.unique(postions, return_counts=True)[1]
-        words_len = torch.max(feats_lens)
-        base_idx = torch.arange(0, words_len, device=feats_lens.device).view(1, -1).repeat(feats_lens.shape[0], 1)
-        start_idx = torch.roll(torch.cumsum(feats_lens, -1), 1)
-        start_idx[0] = 0
-        feats_idx = (base_idx + start_idx.view((-1, 1))) * (base_idx < feats_lens.view(-1, 1))
-        return feats_lens, feats_idx
-
-
-def batch_segment_fill(arr, batch_slices, val):
-    """arr is a 2d or 3d tensor and shape is (N,T),
-    batch_slices is a long tensor and shape is (M,3),
-    the meaning of batch_slices's colum is [batch idx,start idx,end idx]
-    val is a tensor that shape is (M,)
-    """
-
-    def _getGroupMask(batch_slice):
-        outlens = batch_slice[:, 2] - batch_slice[:, 1] + 1
-        alen, clens = torch.sum(outlens), torch.cumsum(outlens, 0)
-        group = torch.zeros(alen, dtype=torch.long, device=outlens.device)
-        group[clens[:-1]] = 1
-        group = torch.cumsum(group, 0)
-        incre_idx = clens[group] - torch.arange(0, alen, device=batch_slice.device, dtype=torch.long) - 1
-        ridx = batch_slice[:, 0][group]
-        cidx = batch_slice[:, 2][group] - incre_idx
-        return group, ridx, cidx
-
-    with torch.no_grad():
-        group, ridx, cidx = _getGroupMask(batch_slices)
-        arr[ridx, cidx] = val[group]
-
-
-class CRFLoss(nn.Module):
-
-    def __init__(self, tagset_size):
-        super(CRFLoss, self).__init__()
-        self.tagset_size = tagset_size
-        self.transitions = nn.Parameter(torch.zeros(self.tagset_size, self.tagset_size))
-
-    def viterbi_decode(self, score):
-        #score: A [seq_len, num_tags] matrix of unary potentials.
-        trellis = torch.zeros_like(score, device=score.device)
-        backpointers = torch.zeros_like(score, dtype=torch.long, device=score.device)
-        #set data
-        seq_length, _ = score.shape
-        trellis[0] = score[0]
-        for t in range(1, seq_length):
-            v = torch.unsqueeze(trellis[t - 1], 1) + self.transitions.data
-            trellis[t] = score[t] + torch.max(v, 0)[0]
-            backpointers[t] = torch.argmax(v, 0)
-
-        viterbi = torch.zeros((score.shape[0], ), dtype=torch.long, device=score.device)
-        viterbi[seq_length - 1] = torch.argmax(trellis[seq_length - 1])
-        for t in range(seq_length - 1, 0, -1):
-            viterbi[t - 1] = backpointers[t][viterbi[t]]
-
-        return viterbi
-
-    def _logsumexp(self, vec):
-        max_score, _ = vec.max(1)
-        return max_score + torch.log(torch.exp(vec - max_score.unsqueeze(1)).sum(1))
-
-    def _forward_alg(self, feats, feats_mask):
-        _zeros = torch.zeros_like(feats[0]).to(feats.device)
-        state = torch.where(feats_mask[0].view(-1, 1), feats[0], _zeros)
-        transition_params = self.transitions.unsqueeze(0)
-        for i in range(1, feats.shape[0]):
-            transition_scores = state.unsqueeze(2) + transition_params
-            new_state = feats[i] + self._logsumexp(transition_scores)
-            state = torch.where(feats_mask[i].view(-1, 1), new_state, state)
-        all_mask = feats_mask.any(0).float()
-        return self._logsumexp(state) * all_mask
-
-    def _score_sentence(self, feats, tags, feats_mask):
-        # Gives the score of a provided tag sequence
-        feats_mask = feats_mask.float()
-        time_step, batch_size, tags_size = feats.shape
-        s_score = feats.view(-1, tags_size).gather(1, tags.view(-1, 1)) * feats_mask.view(-1, 1)
-        u_score = s_score.view(-1, batch_size).sum(0)
-        if time_step > 1:
-            t_mask = feats_mask[:-1].view(-1, 1) * feats_mask[1:].view(-1, 1)
-            t_scores = self.transitions.index_select(0, tags[0:-1].view(-1))
-            t_score = t_scores.gather(1, tags[1:].view(-1, 1)) * t_mask
-            u_score += t_score.view(-1, batch_size).sum(0)
-        return u_score
-
-    def forward(self, feats, tags, feats_len):
-        """feats is [batch,time,tag_size] float tensor
-        tags is a int tensor that shape (batch,time)
-        feats_len is a int tensor that shape (batch,)
-        """
-        feats = feats.transpose(0, 1).contiguous()
-        tags = tags.long().transpose(0, 1).contiguous()
-        base_index = torch.arange(0, feats.shape[0]).unsqueeze(0).expand(feats.shape[1], -1).to(feats.device)
-        feats_mask = base_index < feats_len.long().view(-1, 1)
-        feats_mask = feats_mask.transpose(0, 1).contiguous()
-
-        forward_score = self._forward_alg(feats, feats_mask)
-        gold_score = self._score_sentence(feats, tags, feats_mask)
-
-        return forward_score - gold_score
-
-
-class GraphLoss(nn.Module):
-
-    def __init__(self):
-        super(GraphLoss, self).__init__()
-
-    @staticmethod
-    def _get_step_state(graph, weight):
-        with torch.no_grad():
-            node_num, edge_num = graph.max() + 1, graph.size(0)
-            _dense_idx = torch.zeros((node_num, node_num), dtype=torch.long, device=graph.device) - 1
-            _dense_idx[graph[:, 0], graph[:, 1]] = torch.arange(edge_num, dtype=torch.long, device=graph.device)
-            _advj = (_dense_idx > -1).to(weight)
-            idegree = _advj.sum(0)
-            vailed_node = (idegree != 0).to(weight)
-            weight_mask = torch.zeros((node_num, node_num), dtype=weight.dtype, device=weight.device)
-            weight_mask[(_dense_idx + (idegree == 0).long().view(1, -1)) < 0] = float('inf')
-            flags = torch.zeros(node_num, dtype=weight.dtype, device=weight.device)
-            flags[0] = 1
-            inrc_step_masks = [flags * vailed_node]
-            while flags.min() < 1:
-                passv = torch.matmul(flags.view(1, -1), _advj)
-                flags = (passv == idegree).view(-1).to(flags)
-                inrc_step_masks.append(flags * vailed_node)
-            inrc_step_masks = torch.stack(inrc_step_masks, 0)
-            inrc_step_masks = inrc_step_masks[1:] - inrc_step_masks[:-1]
-
-        _dense_weight = weight[_dense_idx] + weight_mask
-        return _advj, _dense_weight, inrc_step_masks, node_num
-
-    def _forward_alg(self, graph, weight):
-        _advj, _dense_weight, inrc_step_masks, node_num = self._get_step_state(graph, weight)
-        esum = torch.zeros(node_num, dtype=weight.dtype, device=weight.device)
-        for mask in inrc_step_masks:
-            esum += torch.logsumexp(esum.view(-1, 1) * _advj - _dense_weight, 0) * mask
-        return esum[-1]
-
-    def forward(self, graph, weight):
-        """
-        graph node idx must be continue and min idx is start, max idx is the end point;\n
-        graph is a int tensor and shape is edge_nums*3 ,the coloum is (start,end,bool);\n
-        weight is a float and shape is edge_nums,the row index is same as graph
-        """
-        gold_score = (weight * graph[:, 2].to(weight)).sum(0)
-        graph = graph[:, :2] - graph[:, :2].min()
-        forward_score = self._forward_alg(graph, weight)
-        return gold_score + forward_score
-
-
-class GraphLossV2(nn.Module):
-    """
-    Batched DAG loss for segmentation graphs.
-
-    Input graph format:
-    [batch_id, src_node, dst_node, gold_mask]
-    """
-
-    def __init__(self):
-        super(GraphLossV2, self).__init__()
-
-    @staticmethod
-    def _batch_layout(word_info):
-        if word_info is None or word_info.numel() < 1:
-            return None
-
-        batch_ids = word_info[:, 0].long()
-        starts = word_info[:, 1].long()
-        ends = word_info[:, 2].long()
-
-        batch_num = int(batch_ids.max().item()) + 1
-        counts = torch.bincount(batch_ids, minlength=batch_num)
-        offsets = torch.zeros_like(counts)
-        if counts.numel() > 1:
-            offsets[1:] = torch.cumsum(counts[:-1], 0)
-
-        end_base = int(ends.max().item()) + 1
-        start_base = int(starts.max().item()) + 1
-        # Keep each graph contiguous and topologically ordered by start/end span.
-        key = batch_ids * (start_base * (end_base + 1) + 1) + starts * (end_base + 1) + ends
-        order = torch.argsort(key)
-        inv_order = torch.empty_like(order)
-        inv_order[order] = torch.arange(order.numel(), device=order.device)
-        return counts, offsets, inv_order
-
-    def forward(self, word_info, graph, weight):
-        if weight is None:
-            return torch.zeros(())
-        if word_info is None or graph is None or word_info.numel() < 1 or graph.numel() < 1 or weight.numel() < 1:
-            return torch.zeros((), device=weight.device, dtype=weight.dtype)
-
-        layout = self._batch_layout(word_info)
-        if layout is None:
-            return torch.zeros((), device=weight.device, dtype=weight.dtype)
-
-        counts, offsets, inv_order = layout
-        device = weight.device
-        dtype = weight.dtype
-
-        batch_ids = graph[:, 0].long()
-        src = inv_order[graph[:, 1].long()] - offsets[batch_ids]
-        dst = inv_order[graph[:, 2].long()] - offsets[batch_ids]
-
-        batch_num = counts.numel()
-        max_nodes = int(counts.max().item())
-        if max_nodes < 1:
-            return torch.zeros((), device=device, dtype=dtype)
-
-        inf = torch.tensor(float("inf"), device=device, dtype=dtype)
-        dense_cost = torch.full((batch_num, max_nodes, max_nodes), inf, device=device, dtype=dtype)
-
-        dense_cost[batch_ids, src, dst] = weight
-
-        # Layered forward dynamic programming over the whole batch.
-        dp = torch.full((batch_num, max_nodes), inf, device=device, dtype=dtype)
-        dp[:, 0] = 0.0
-        for j in range(1, max_nodes):
-            valid = counts > j
-            if not torch.any(valid):
-                break
-            prev = dp[valid, :j]
-            step = dense_cost[valid, :j, j]
-            dp[valid, j] = torch.logsumexp(prev - step, dim=1)
-
-        end_idx = counts.clamp_min(1) - 1
-        log_z = dp[torch.arange(batch_num, device=device), end_idx]
-        gold_cost = (weight * graph[:, 3].to(dtype)).sum()
-        return gold_cost + log_z.sum()
-
-
 class GraphLossSparse(nn.Module):
-    """
-    Sparse DAG loss in O(E) memory and O(E + V) time per graph.
+    """Conditional path NLL with O(E) memory for a batch of candidate DAGs.
 
-    Expected graph format:
-    [batch_id, src_node, dst_node, gold_mask]
+    Every edge weight is ``-log P(dst is associated with src)``.  For gold path
+    G the objective is ``cost(G) + log(sum_path(exp(-cost(path))))``.  Therefore
+    lower quantizer output always means a more likely transition, not an
+    arbitrary score.
 
-    The reader should pre-sort edges by (batch_id, dst_node, src_node).
+    ``word_info`` rows start with a batch id. ``graph`` rows are
+    ``[batch_id, global_src, global_dst, gold_mask]`` and should be sorted by
+    ``(batch_id, global_dst, global_src)``.  Nodes must be topologically ordered
+    inside each graph, with head first and tail last.
     """
 
     def __init__(self, edge_chunk_size=65536, strict_path=True):
-        super(GraphLossSparse, self).__init__()
+        super().__init__()
         self.edge_chunk_size = int(edge_chunk_size) if edge_chunk_size else 0
         self.strict_path = strict_path
 
@@ -289,21 +29,21 @@ class GraphLossSparse(nn.Module):
             return values.new_tensor(float("-inf"))
         if chunk_size <= 0 or values.numel() <= chunk_size:
             return torch.logsumexp(values, dim=0)
-
-        acc = None
+        result = None
         for chunk in values.split(chunk_size):
-            chunk_lse = torch.logsumexp(chunk, dim=0)
-            acc = chunk_lse if acc is None else torch.logaddexp(acc, chunk_lse)
-        return acc
+            chunk_value = torch.logsumexp(chunk, dim=0)
+            result = chunk_value if result is None else torch.logaddexp(result, chunk_value)
+        return result
 
-    def forward(self, word_info, graph, weight):
-        if weight is None:
+    def forward(self, word_info, graph, association_nll):
+        if association_nll is None:
             return torch.zeros(())
-        if word_info is None or graph is None or word_info.numel() < 1 or graph.numel() < 1 or weight.numel() < 1:
-            return torch.zeros((), device=weight.device, dtype=weight.dtype)
+        if (word_info is None or graph is None or word_info.numel() == 0 or
+                graph.numel() == 0 or association_nll.numel() == 0):
+            return torch.zeros((), device=association_nll.device, dtype=association_nll.dtype)
 
-        device = weight.device
-        dtype = weight.dtype
+        device = association_nll.device
+        dtype = association_nll.dtype
         batch_ids = word_info[:, 0].long()
         batch_num = int(batch_ids.max().item()) + 1
         counts = torch.bincount(batch_ids, minlength=batch_num)
@@ -313,62 +53,55 @@ class GraphLossSparse(nn.Module):
 
         total_loss = torch.zeros((), device=device, dtype=dtype)
         valid_graphs = 0
-
-        for b in range(batch_num):
-            node_num = int(counts[b].item())
-            if node_num <= 0:
+        for batch_id in range(batch_num):
+            node_num = int(counts[batch_id].item())
+            if node_num == 0:
                 continue
-
-            node_offset = int(offsets[b].item())
-            edge_mask = graph[:, 0].long() == b
+            node_offset = int(offsets[batch_id].item())
+            edge_mask = graph[:, 0].long() == batch_id
             if not torch.any(edge_mask):
-                # No edges means there is no usable path; skip or fail depending on strict mode.
                 if self.strict_path and node_num > 1:
-                    raise RuntimeError("graph has nodes but no edges for batch %d" % b)
+                    raise RuntimeError(f"graph {batch_id} has nodes but no edges")
                 continue
 
             edges = graph[edge_mask]
-            edge_weight = weight[edge_mask]
+            edge_nll = association_nll[edge_mask]
             gold_mask = edges[:, 3].to(dtype)
             local_src = edges[:, 1].long() - node_offset
             local_dst = edges[:, 2].long() - node_offset
-
-            if local_src.numel() == 0:
-                continue
-
-            # If the reader already sorted edges this becomes a linear scan.
             if torch.any(local_dst[1:] < local_dst[:-1]):
-                order = torch.argsort(local_dst * max(node_num, 1) + local_src)
+                order = torch.argsort(local_dst * node_num + local_src)
                 local_src = local_src[order]
                 local_dst = local_dst[order]
-                edge_weight = edge_weight[order]
+                edge_nll = edge_nll[order]
                 gold_mask = gold_mask[order]
 
-            dp = torch.full((node_num,), float("-inf"), device=device, dtype=dtype)
-            dp[0] = 0.0
-
-            pos = 0
+            # A tensor list avoids in-place updates of an autograd-tracked DP
+            # array. Each value is the log partition of paths ending at a node.
+            sources = local_src.tolist()
+            neg_inf = association_nll.new_tensor(float("-inf"))
+            partition = [neg_inf for _ in range(node_num)]
+            partition[0] = association_nll.new_zeros(())
+            position = 0
             edge_num = local_dst.numel()
-            while pos < edge_num:
-                dst = int(local_dst[pos].item())
-                if dst < 0 or dst >= node_num:
-                    pos += 1
-                    continue
-                end = pos + 1
-                while end < edge_num and int(local_dst[end].item()) == dst:
+            while position < edge_num:
+                destination = int(local_dst[position].item())
+                end = position + 1
+                while end < edge_num and int(local_dst[end].item()) == destination:
                     end += 1
-                cand = dp[local_src[pos:end]] - edge_weight[pos:end]
-                dp[dst] = self._chunked_logsumexp(cand, self.edge_chunk_size)
-                pos = end
+                if 0 <= destination < node_num:
+                    previous = torch.stack([partition[src] for src in sources[position:end]])
+                    values = previous - edge_nll[position:end]
+                    partition[destination] = self._chunked_logsumexp(values, self.edge_chunk_size)
+                position = end
 
-            log_z = dp[node_num - 1]
-            if not torch.isfinite(log_z):
+            log_partition = partition[-1]
+            if not torch.isfinite(log_partition):
                 if self.strict_path:
-                    raise RuntimeError("no valid path found for batch %d" % b)
+                    raise RuntimeError(f"no valid path found for graph {batch_id}")
                 continue
-
-            gold_cost = (edge_weight * gold_mask).sum()
-            total_loss = total_loss + gold_cost + log_z
+            gold_cost = (edge_nll * gold_mask).sum()
+            total_loss = total_loss + gold_cost + log_partition
             valid_graphs += 1
 
         if valid_graphs == 0:

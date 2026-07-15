@@ -11,14 +11,23 @@ from torch.nn import functional as F
 
 
 class WordEncoder(nn.Module):
+    """Encode contextual candidate words with content/relative-position pooling.
 
-    def __init__(self, vocab_num, hidden_size, wtype_num, num_layers=2, num_heads=4, max_positions=4096):
+    ``batch_word_info`` uses ``[batch, first_piece, last_piece, optional_type]``;
+    piece bounds are inclusive because this is also the ONNX/C++ contract.  The
+    implementation is shared by the recognizer and quantizer as architecture,
+    while each task owns and trains a separate parameter set.
+    """
+
+    def __init__(self, vocab_num, hidden_size, wtype_num, num_layers=2, num_heads=4,
+                 max_positions=4096, max_word_positions=32):
         super().__init__()
         if hidden_size % num_heads:
             raise ValueError("hidden_size must be divisible by num_heads")
         self.vocab_num = vocab_num
         self.wtype_num = wtype_num
         self.max_positions = max_positions
+        self.max_word_positions = max_word_positions
         self.vocab_embeding = nn.Sequential(
             nn.Embedding(vocab_num, hidden_size),
             nn.LayerNorm(hidden_size, eps=1e-7),
@@ -36,6 +45,9 @@ class WordEncoder(nn.Module):
         )
         self.transformer = nn.TransformerEncoder(layer, num_layers=num_layers,
                                                  norm=nn.LayerNorm(hidden_size))
+        self.word_content_attention = nn.Linear(hidden_size, 1, bias=False)
+        self.word_position_attention = nn.Embedding(max_word_positions, 1)
+        self.word_pool_normal = nn.LayerNorm(hidden_size)
 
         if wtype_num > 0:
             self.type_embeding = nn.Sequential(
@@ -55,15 +67,28 @@ class WordEncoder(nn.Module):
         padding_mask = positions.unsqueeze(0) >= batch_lengths.unsqueeze(1)
         sent_embeding = self.transformer(vocab_emb, src_key_padding_mask=padding_mask)
 
-        word_head_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 1]]
-        word_tail_embeding = sent_embeding[batch_word_info[:, 0], batch_word_info[:, 2]]
-        word_sent_embeding = (word_head_embeding + word_tail_embeding) / 2.0
+        # A candidate is not represented by endpoint averaging.  Each piece in
+        # the span receives a content logit and a learned word-relative position
+        # bias.  Masked softmax then gives a normalized, length-independent word
+        # representation while retaining internal order information.
+        word_batches = batch_word_info[:, 0]
+        word_starts = batch_word_info[:, 1].unsqueeze(1)
+        word_ends = batch_word_info[:, 2].unsqueeze(1)
+        token_positions = torch.arange(steps, device=batch_input_idx.device).unsqueeze(0)
+        word_mask = (token_positions >= word_starts) & (token_positions <= word_ends)
+        relative_positions = (token_positions - word_starts).clamp(0, self.max_word_positions - 1)
+        content_logits = self.word_content_attention(sent_embeding).squeeze(-1)[word_batches]
+        position_logits = self.word_position_attention(relative_positions).squeeze(-1)
+        attention_logits = (content_logits + position_logits).masked_fill(~word_mask, -1e4)
+        attention = torch.softmax(attention_logits, dim=1)
+        word_sent_embeding = torch.bmm(attention.unsqueeze(1), sent_embeding[word_batches]).squeeze(1)
+        word_sent_embeding = self.word_pool_normal(word_sent_embeding)
         if self.wtype_num > 0:
             word_type_embeding = self.type_embeding(batch_word_info[:, 3])
             return self.type_normal(word_sent_embeding + word_type_embeding)
         return word_sent_embeding
 
-    def export2onnx(self):
+    def export2onnx(self, outfile="transformer.encoder.onnx"):
         sents_idx = torch.randint(0, self.vocab_num, (11, ))
         word_se = torch.LongTensor([[0, 0], [1, 2], [3, 3], [4, 6], [7, 7], [8, 9], [10, 10]])
         wtype_idx = torch.randint(0, self.wtype_num, (word_se.shape[0], 1))
@@ -83,7 +108,6 @@ class WordEncoder(nn.Module):
                 return self.obj(bsents, lens, words)
 
         # args must same as forawrd
-        outfile = "transformer.encoder.onnx"
         inputdata = (sents_idx, word_info)
         inputnames = ['sents', 'wordinfo']
         dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
@@ -102,6 +126,7 @@ class WordEncoder(nn.Module):
 
 
 class Quantizer(nn.Module):
+    """Return the negative log-probability of a word association."""
 
     def __init__(self, input_size, hidden_size):
         nn.Module.__init__(self)
@@ -115,14 +140,14 @@ class Quantizer(nn.Module):
         keys = F.normalize(self.Kmap(x), dim=-1)
         queries = F.normalize(self.Qmap(y), dim=-1)
         scale = self.logit_scale.exp().clamp(max=100.0)
-        similarity = torch.sum(keys * queries, dim=-1) * scale
-        return F.softplus(-similarity).view(-1)
+        association_logit = torch.sum(keys * queries, dim=-1) * scale
+        # softplus(-x) is the stable form of -log(sigmoid(x)).
+        return F.softplus(-association_logit).view(-1)
 
-    def export2onnx(self):
-        outfile = "sample.quantizer.onnx"
+    def export2onnx(self, outfile="sample.quantizer.onnx"):
         inputdata = (torch.randn((1, self.input_size)), torch.randn((1, self.input_size)))
         inputnames = ['a', 'b']
-        dynamic_axes = {'a': {0: 'edges'}, 'b': {0: 'edges'}, 'distance': {0: 'edges'}}
+        dynamic_axes = {'a': {0: 'edges'}, 'b': {0: 'edges'}, 'association_nll': {0: 'edges'}}
 
         torch.onnx.export(
             self,
@@ -132,125 +157,70 @@ class Quantizer(nn.Module):
             opset_version=17,
             do_constant_folding=True,  # whether to execute constant folding for optimization
             input_names=inputnames,  # the model's input names
-            output_names=['distance'],  # the model's output names
+            output_names=['association_nll'],
             dynamic_axes=dynamic_axes)
         return outfile
 
 
-class CrfNer(nn.Module):
+class SpanRecognizer(nn.Module):
+    """Predict independent word probabilities for overlapping candidate spans.
 
-    def __init__(self, vocab_num, hidden_size, tag_nums):
+    Training rows are ``[batch, first_piece, last_piece, atom_length, label]``.
+    Atom length is metadata for threshold calibration and is intentionally not a
+    model feature, so Python training and C++ inference use the same three-column
+    span tensor.
+    """
+
+    def __init__(self, vocab_num, hidden_size):
         super().__init__()
         self.encoder = WordEncoder(vocab_num, hidden_size, -1)
-        self.prop = nn.Sequential(
-            nn.Dropout(0.1),
-            nn.Linear(hidden_size, tag_nums),
-        )
-        self.crf = CRFLoss(tag_nums)
+        self.probability_head = nn.Sequential(nn.Dropout(0.1), nn.Linear(hidden_size, 1))
 
-    def getWordprop(self, batch_input_idx, batch_lengths, batch_word_info):
-        #batch_input_idx (batch*time_step)
-        #batch_lengths (batch,)
-        #batch_word_info(words_num*[bidx,s,e])
-        sents_emb = self.encoder(batch_input_idx, batch_lengths, batch_word_info)
-        return self.prop(sents_emb)
+    def logits(self, batch_input_idx, batch_lengths, batch_span_info):
+        embeddings = self.encoder(batch_input_idx, batch_lengths, batch_span_info)
+        return self.probability_head(embeddings).squeeze(-1)
 
-    def forward(self, batch_input_idx, batch_lengths, batch_word_info):
-        #batch_input_idx (batch*time_step)
-        #batch_lengths (batch,)
-        #batch_word_info(words_num*[bidx,s,e,tagidx])
-        wordprop = self.getWordprop(batch_input_idx, batch_lengths, batch_word_info)
-        featsLen, featsIdx = getFeatsIdx(batch_word_info[:, 0])
-        word_sent = wordprop.index_select(0, featsIdx.view(-1)).view((*featsIdx.shape, -1))
-        tag_sent = batch_word_info[:, -1].index_select(0, featsIdx.view(-1)).view(featsIdx.shape)
-        return self.crf(word_sent, tag_sent, featsLen)
+    def forward(self, batch_input_idx, batch_lengths, batch_span_info):
+        logits = self.logits(batch_input_idx, batch_lengths, batch_span_info[:, :3])
+        labels = batch_span_info[:, -1].to(logits.dtype)
+        positives = labels.sum().clamp_min(1.0)
+        negatives = (1.0 - labels).sum().clamp_min(1.0)
+        positive_weight = (negatives / positives).clamp(max=20.0)
+        return F.binary_cross_entropy_with_logits(logits, labels, pos_weight=positive_weight)
 
-    def export2onnx(self):
-        sents_idx = torch.randint(0, self.encoder.vocab_num, (11, ))
-        word_info = torch.LongTensor([[0, 0], [1, 2], [3, 3], [4, 6], [7, 7], [8, 9], [10, 10]])
+    def export2onnx(self, outfile="span.recognizer.onnx"):
+        sents = torch.randint(0, self.encoder.vocab_num, (11,))
+        spans = torch.LongTensor([[0, 1], [1, 3], [3, 6], [6, 10]])
 
-        class _script(nn.Module):
-
-            def __init__(self, obj) -> None:
+        class Script(nn.Module):
+            def __init__(self, model):
                 super().__init__()
-                self.obj = obj
+                self.model = model
 
-            def forward(self, sents, words):
-                lens = torch.LongTensor([sents.shape[0]]).to(sents)
-                bsents = torch.unsqueeze(sents, 0)
-                bidx = torch.zeros((words.shape[0], 1), dtype=words.dtype)
-                bwords = torch.concat((bidx, words), dim=1)
-                prop = self.obj.getWordprop(bsents, lens, bwords)
-                return self.obj.crf.viterbi_decode(prop)
-
-        # args must same as forawrd
-        outfile = "crf.ner.onnx"
-        inputdata = (sents_idx, word_info)
-        inputnames = ['sents', 'wordinfo']
-        dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
+            def forward(self, token_ids, span_info):
+                lengths = torch.ones((1,), dtype=torch.long, device=token_ids.device) * token_ids.shape[0]
+                batch_ids = torch.zeros((span_info.shape[0], 1), dtype=torch.long, device=span_info.device)
+                batched_spans = torch.cat((batch_ids, span_info), dim=1)
+                logits = self.model.logits(token_ids.unsqueeze(0), lengths, batched_spans)
+                return torch.sigmoid(logits)
 
         torch.onnx.export(
-            _script(self),
-            inputdata,
-            outfile,
-            export_params=True,  # store the trained parameter weights inside the model file
-            opset_version=17,
-            do_constant_folding=True,  # whether to execute constant folding for optimization
-            input_names=inputnames,  # the model's input names
-            output_names=['wordemb'],  # the model's output names
-            dynamic_axes=dynamic_axes)
+            Script(self), (sents, spans), outfile, export_params=True, opset_version=17,
+            do_constant_folding=True, input_names=["sents", "spaninfo"],
+            output_names=["word_probabilities"],
+            dynamic_axes={"sents": {0: "timestep"}, "spaninfo": {0: "spans"},
+                          "word_probabilities": {0: "spans"}},
+        )
         return outfile
-
-
-class NerTrainer(nn.Module):
-
-    def __init__(self, vocab_num, hidden_size, tag_nums):
-        super().__init__()
-        self.ner = CrfNer(vocab_num, hidden_size, tag_nums)
-
-    def forward(self, batch_input_idx, batch_lengths, batch_word_info):
-        if torch.cuda.is_available():
-            batch_input_idx = batch_input_idx.cuda()
-            batch_word_info = batch_word_info.cuda()
-            batch_lengths = batch_lengths.cuda()
-        return self.ner(batch_input_idx, batch_lengths, batch_word_info).mean()
-
-
-class GraphTrainer(nn.Module):
-
-    def __init__(self, vocab_num, hidden_size, wtype_num):
-        super().__init__()
-        self.predictor = WordEncoder(vocab_num, hidden_size, wtype_num)
-        self.quantizer = Quantizer(hidden_size, 32)
-        self.lossfunc = GraphLoss()
-
-    def loss(self, batch_input_idx, batch_word_info, batch_graph):
-        #batch_input_idx (batch*time_step)
-        #batch_word_info(words_num*[word_bidx,input_s,input_e,wtype_idx])
-        #batch_graph:batch*(graph_bidx,bwidx_s,bwidx_e,bool)
-        word_embeds = self.predictor(batch_input_idx, batch_word_info)
-        egeds_dists = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
-        featsLen, featsIdx = getFeatsIdx(batch_graph[:, 0])
-        losses = torch.FloatTensor(0, device=batch_input_idx.device)
-        for bidx in range(featsLen.shape[0]):
-            nidxs = featsIdx[bidx][:featsLen[bidx]]
-            edge_weight = egeds_dists[nidxs]
-            graph = batch_graph[nidxs][:, 1:]
-            losses += self.lossfunc(graph, edge_weight)
-
-        return losses / featsLen.shape[0]
-
-    def forward(self, batch_input_idx, batch_word_info, batch_graph):
-        if torch.cuda.is_available():
-            batch_input_idx = batch_input_idx.cuda()
-            batch_word_info = batch_word_info.cuda()
-            batch_graph = batch_graph.cuda()
-        return self.loss(batch_input_idx, batch_word_info, batch_graph)
 
 
 class GraphTrainerV2(nn.Module):
     """
     Sparse batched graph trainer.
+
+    The recognizer model is not reused here: only the WordEncoder implementation
+    is shared.  This model is independently optimized and exported as indicator
+    plus quantizer ONNX files.
 
     batch_graph is expected to be a flat edge table:
     [batch_id, src_node, dst_node, gold_mask]
@@ -264,12 +234,12 @@ class GraphTrainerV2(nn.Module):
         self.lossfunc = GraphLossSparse(edge_chunk_size=edge_chunk_size, strict_path=strict_path)
 
     def forward(self, batch_input_idx, batch_lengths, batch_word_info, batch_graph):
-        if torch.cuda.is_available():
-            batch_input_idx = batch_input_idx.cuda()
-            batch_lengths = batch_lengths.cuda()
-            batch_word_info = batch_word_info.cuda()
-            batch_graph = batch_graph.cuda()
+        device = next(self.parameters()).device
+        batch_input_idx = batch_input_idx.to(device)
+        batch_lengths = batch_lengths.to(device)
+        batch_word_info = batch_word_info.to(device)
+        batch_graph = batch_graph.to(device)
 
         word_embeds = self.predictor(batch_input_idx, batch_lengths, batch_word_info)
-        edge_weight = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
-        return self.lossfunc(batch_word_info, batch_graph, edge_weight)
+        association_nll = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
+        return self.lossfunc(batch_word_info, batch_graph, association_nll)

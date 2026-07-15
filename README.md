@@ -302,6 +302,23 @@ print(charDtype("中"))
 
 ### 加载分词器
 
+应用代码推荐使用高层 `Tokenizer`，接口兼容常见中文分词器调用方式：
+
+```python
+from darts import Tokenizer, cut, lcut, tokenize
+
+tokenizer = Tokenizer("data/conf.json", "hybrid")
+print(tokenizer.lcut("目标检测模型量化和中文分词测试"))
+print(list(tokenizer.cut("目标检测模型量化")))
+print(list(tokenizer.tokenize("中文ABC分词")))  # (词, 字符起点, 字符终点)
+print(tokenizer(["第一句话", "第二句话"]))       # 批量调用
+
+# 模块级函数延迟加载默认配置
+print(lcut("中文分词"))
+```
+
+`cut_all=True` 或 `tokenize(..., mode="search")` 返回可能重叠的全部候选，不保证能拼成唯一切分；默认模式返回 Decider 选择的连续最佳路径。`HMM` 参数仅为调用兼容而保留，实际识别器由 `conf.json` 决定。需要 Atom、标签或候选图时再使用底层 `DSegment`：
+
 ```python
 from darts import DSegment
 
@@ -400,7 +417,7 @@ Atom 是候选词图的最小覆盖单位。
 `Segment::buildSegPath` 先为每个 Atom 添加一个单原子 Word，再顺序调用模式中配置的 Recognizer：
 
 - `DictWordRecongnizer` 使用 Trie/双数组词典匹配连续 Atom，添加词典候选和标签。
-- `OnnxRecongnizer` 使用 WordPiece 编码输入 ONNX 序列标注模型，根据 `B/I/O` 标签合并新词候选。开发模块使用带位置嵌入和 padding mask 的轻量 Transformer 编码器，不再生成 LSTM/GRU 模型。
+- `OnnxRecongnizer` 枚举 2 到 `max.span` 个 Atom 的 span，使用 Transformer 独立预测每个 span 成词概率。候选可重叠，不使用 BIO、CRF、LSTM 或唯一切分约束；`threshold.N` 可按词长控制召回率与候选规模。
 - `PinyinRecongnizer` 为候选添加拼音标签和编码；该插件设计为独占识别器。
 
 候选可能重叠，例如“南京”“南京市”“市长”“长江”可以同时存在，后续决策器负责选择完整路径。
@@ -420,7 +437,7 @@ Decider 分为嵌入和距离两个阶段：
 
 - `MinCoverDecider`：代价与词长成反比，偏向更长、数量更少的候选覆盖。
 - `BigramDecider`：优先使用词文本查询 Bigram 索引，未登录词退化到词类型标签，再查询相邻词代价。
-- `OnnxDecider`：使用 Transformer indicator 生成候选嵌入，再由归一化双塔 quantizer 批量计算边代价。候选 embedding 共享连续缓冲区，避免逐词分配和复制。
+- `OnnxDecider`：使用 Transformer indicator 生成候选嵌入，再由归一化双塔 quantizer 批量计算相邻词关联概率的负对数。候选 embedding 共享连续缓冲区，避免逐词分配和复制。
 
 ### 5. 最优路径
 
@@ -463,11 +480,10 @@ Decider 分为嵌入和距离两个阶段：
 | 文件 | 职责 |
 | --- | --- |
 | `reader.py` | 文本、词候选和稀疏图训练数据构造 |
-| `model.py` | 编码器、量化器和 GraphTrainer |
-| `utils.py` | 图损失、稀疏图损失和训练工具 |
-| `trainer.py` | 训练流程 |
-| `export.py` | 模型导出 |
-| `sover.py` | 辅助求解逻辑 |
+| `model.py` | 共享 Transformer 词表示架构、span 识别器和稀疏图量化器 |
+| `utils.py` | `GraphLossSparse` 条件路径负对数似然 |
+| `scripts/train_recognizer.py` | 独立训练和导出可重叠 span 识别器 |
+| `scripts/train_quantizer.py` | 使用 `GraphLossSparse` 独立训练和导出图量化器 |
 
 开发模块依赖 PyTorch、NumPy 等训练库，这些大体积依赖不会随运行时 wheel 自动安装。
 
@@ -520,21 +536,24 @@ Decider 分为嵌入和距离两个阶段：
 | --- | --- | --- |
 | `DictWordRecongnizer` | `pbfile.path` | 编译后的词典文件 |
 | `DictWordRecongnizer` | `atom.mode` | 字符串 `"true"` 时按每个标签生成独立候选 |
-| `OnnxRecongnizer` | `model.path` | ONNX 序列标注模型 |
-| `OnnxRecongnizer` | `label.list` | 逗号分隔的输出标签列表 |
-| `OnnxRecongnizer` | `deps.wordpice.name` | 指向 `WordPice` 服务，键名沿用源码拼写 |
+| `OnnxRecongnizer` | `model.path` | 输出各候选成词概率的 ONNX span 模型 |
+| `OnnxRecongnizer` | `max.span` | 最大候选 Atom 长度，默认 `5` |
+| `OnnxRecongnizer` | `threshold` / `threshold.N` | 全局及按长度覆盖的成词概率阈值 |
+| `OnnxRecongnizer` | `deps.wordpiece.name` | 指向 `WordPice` 服务 |
 | `PinyinRecongnizer` | `deps.pyin.encoder` | 指向 `PinyinEncoder` 服务 |
 | `PinyinRecongnizer` | `non-cjk.label` | 可选的非中文占位标签；为空时不添加拼音 |
 
 示例：
 
 ```jsonc
-"hmm.new.finder": {
+"neural.span": {
   "type": "OnnxRecongnizer",
-  "label.list": "O,B-_HWORD,I-_HWORD",
-  "model.path": "data/models/crf.ner.onnx",
+  "model.path": "data/models/neural/recognizer.onnx",
+  "max.span": "5",
+  "threshold.2": "0.45",
+  "threshold.5": "0.65",
   "deps": {
-    "wordpice.name": "wordpiece.dict"
+    "wordpiece.name": "wordpiece.dict"
   }
 }
 ```
@@ -558,11 +577,11 @@ Decider 分为嵌入和距离两个阶段：
 
 `MinCoverDecider` 不需要统计模型，用于偏 precision 的 `faster` 模式；`BigramDecider` 用于兼容 `fast` 模式。默认 `hybrid` 使用 `HybridStatDecider`，将平滑 Bigram、词长先验和 OOV 惩罚组合为非负图边代价。参数由 `scripts/tune_decider.py` 在 dev 集搜索，禁止使用 test 集调参。
 
-### Transformer 模型迁移
+### Transformer 神经模型
 
-`python/darts/devel/model.py` 中的 `WordEncoder` 已改为 Transformer，ONNX 导出使用 opset 17，编码器默认输出 `transformer.encoder.onnx`。`Quantizer` 使用归一化 Key/Query、可学习温度和 `softplus(-similarity)` 产生非负边代价。
+识别器与量化器共享 `WordEncoder` 架构定义，但分别初始化、训练和导出，不共享权重文件。编码器先生成带句内位置的上下文字表示，再用内容注意力和词内相对位置偏置对 span 内所有 WordPiece 加权组合，不采用简单首尾或平均池化。
 
-仓库现有 `data/models/crf.ner.onnx` 是历史兼容模型，二进制中仍包含 GRU 权重，默认配置不再加载它。二进制不能通过代码修改原位转换为 Transformer；生产迁移需要用标注训练集重新训练 `CrfNer`，导出新 ONNX 文件并在自定义模式中配置 `OnnxRecongnizer`。不要把随机初始化导出的模型用于分词。
+识别器输出独立的 `word_probability`，允许同时召回交叠词。量化器输出 `association_nll = -log P(next | previous)`，使用 `GraphLossSparse` 在完整候选 DAG 上优化金标路径条件负对数似然。ONNX 使用 opset 17；项目不提供 CRF/BIO 兼容模型。
 
 ### `modes`
 
@@ -584,7 +603,7 @@ Decider 分为嵌入和距离两个阶段：
 
 `DSegment(config, mode)` 中显式传入的 mode 优先；mode 为空时读取 `default.mode`。
 
-默认配置提供 `hybrid`、`faster`、`fast` 和 `pinyin`，默认选择 `hybrid`。`pinyin` 共享混合统计分词路径，再以词级短语拼音消除多音字歧义，未命中短语时回退到单字读音；非中文默认保持原分词标签且不添加拼音。神经网络实验应在独立配置中补齐模型和决策器后启用。
+默认配置提供 `hybrid`、`faster`、`fast`、`pinyin` 和 `neural`，默认选择 `hybrid`。`pinyin` 共享混合统计分词路径，再以词级短语拼音消除多音字歧义，未命中短语时回退到单字读音；非中文默认保持原分词标签且不添加拼音。`neural` 需要先生成 `data/models/neural/` 下的三个 ONNX 文件。
 
 ### 开发模式
 
@@ -627,7 +646,9 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 | `data/codes/type.hx.txt` | 词类型标签及权重 |
 | `data/models/panda.pbs` | 内置词典 Trie |
 | `data/models/ngram_dict.bdf` | Bigram 决策词典 |
-| `data/models/crf.ner.onnx` | 历史 GRU 兼容模型，默认不加载 |
+| `data/models/neural/recognizer.onnx` | 可重叠 span 成词概率模型，由开发脚本生成 |
+| `data/models/neural/indicator.onnx` | 量化器的独立词表示模型，由开发脚本生成 |
+| `data/models/neural/quantizer.onnx` | 相邻词关联概率负对数模型，由开发脚本生成 |
 | `data/models/codex/engpiece.mbs` | 英文子词词典 |
 | `data/models/codex/table.vocab` | WordPiece 词表 |
 | `data/demo/` | 词典和模式编译示例数据 |
@@ -648,11 +669,17 @@ python scripts/devel.py dict-repack data/models/panda.pbs /tmp/panda-v2.pbs
 # 测量词典加载和匹配吞吐
 python scripts/devel.py dict-benchmark /tmp/panda-v2.pbs --repeat 10000
 
-# 使用开放数据训练 Transformer CRF 序列识别模型（CUDA 可用时自动使用 GPU）
-python scripts/devel.py model-train data/generated/cws-train.txt --epochs 6 --output-dir model_bin
+# 独立训练 span 识别器；默认枚举 2~5 Atom，CUDA 可用时自动使用 GPU
+python scripts/devel.py model-train data/generated/cws-train.txt --epochs 20 \
+  --max-span 5 --output-dir model_bin/recognizer
 
-# 将训练检查点导出为 opset 17 ONNX
-python scripts/devel.py model-export model_bin/checkpoint.pt data/models/transformer.crf.onnx
+# 导出成词概率 ONNX 及包含各长度阈值的 JSON 元数据
+python scripts/devel.py model-export model_bin/recognizer/best.pt \
+  data/models/neural/recognizer.onnx
+
+# 独立训练 GraphLossSparse 量化器并导出词表示网络和关联 NLL 网络
+python scripts/devel.py quantizer-train --epochs 20 --output-dir model_bin/quantizer
+python scripts/devel.py quantizer-export model_bin/quantizer/best.pt data/models/neural
 
 # 下载开放数据、生成训练切分并重建词典/Bigram 模型
 python scripts/devel.py data download

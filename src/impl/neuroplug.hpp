@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -38,7 +39,12 @@ inline Ort::Session* loadmodel(const char* model_path) {
     session_options.EnableMemPattern();
     session_options.EnableCpuMemArena();
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    return new Ort::Session(env, model_path, session_options);
+    try {
+        return new Ort::Session(env, model_path, session_options);
+    } catch (const Ort::Exception& error) {
+        std::cerr << "ERROR: load ONNX model " << model_path << ": " << error.what() << std::endl;
+        return nullptr;
+    }
 }
 /**
  * @brief a network onnx
@@ -51,7 +57,7 @@ class OnnxIndicator {
     static const char* TYPEENCODER_PARAM;
 
     size_t emdim;
-    Ort::Session* session;
+    Ort::Session* session = nullptr;
     std::vector<char*> input_name_;
     std::vector<char*> output_name_;
 
@@ -254,6 +260,9 @@ const char* OnnxIndicator::WORDPIECE_PARAM   = "wordpiece.name";
 const char* OnnxIndicator::TYPEENCODER_PARAM = "tencode.name";
 
 class OnnxQuantizer {
+    // ONNX contract: two [edges, embedding] float tensors produce one
+    // [edges] association NLL tensor.  Values are path costs, so NaN, infinity,
+    // and negative values are converted to a large finite rejection cost.
    private:
     static const char* MODEL_PATH_KEY;
     size_t emdim;
@@ -364,12 +373,12 @@ class OnnxQuantizer {
      *
      * @param pre
      * @param next
-     * @return double must >=0
+     * @return negative log-probability, must be >= 0
      */
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
-        if (pre == nullptr || next == nullptr) return 0.0;
+        if (pre == nullptr || next == nullptr) return 1e6;
         if (pre->getAttData() == nullptr || next->getAttData() == nullptr) {
-            return 0.0;
+            return 1e6;
         }
         // create inputs
         std::vector<Ort::Value> ort_inputs;
@@ -393,7 +402,8 @@ class OnnxQuantizer {
         session->Run(Ort::RunOptions{nullptr}, input_name_.data(), ort_inputs.data(), ort_inputs.size(),
                      output_name_.data(), &output_tensor, output_name_.size());
         // Get pointer to output tensor float values
-        return output_tensor.GetTensorMutableData<float>()[0];
+        const double association_nll = output_tensor.GetTensorMutableData<float>()[0];
+        return std::isfinite(association_nll) && association_nll >= 0.0 ? association_nll : 1e6;
     }
 
     void rangingBatch(
@@ -409,11 +419,14 @@ class OnnxQuantizer {
         if (edge_count == 0) return;
         thread_local std::vector<float> first;
         thread_local std::vector<float> second;
+        thread_local std::vector<bool> valid;
         first.assign(edge_count * emdim, 0.0f);
         second.assign(edge_count * emdim, 0.0f);
+        valid.assign(edge_count, false);
         for (size_t i = 0; i < edge_count; ++i) {
             const float* a = pairs[i].first ? pairs[i].first->getAttData() : nullptr;
             const float* b = pairs[i].second ? pairs[i].second->getAttData() : nullptr;
+            valid[i] = a && b;
             if (a) std::copy_n(a, emdim, first.data() + i * emdim);
             if (b) std::copy_n(b, emdim, second.data() + i * emdim);
         }
@@ -427,9 +440,12 @@ class OnnxQuantizer {
         Ort::Value output{nullptr};
         session->Run(Ort::RunOptions{nullptr}, input_name_.data(), inputs.data(), inputs.size(),
                      output_name_.data(), &output, output_name_.size());
-        const float* values = output.GetTensorData<float>();
+        const float* association_nll = output.GetTensorData<float>();
         weights.reserve(weights.size() + edge_count);
-        for (size_t i = 0; i < edge_count; ++i) weights.push_back(values[i]);
+        for (size_t i = 0; i < edge_count; ++i)
+            weights.push_back(valid[i] && std::isfinite(association_nll[i]) && association_nll[i] >= 0.0f
+                                  ? association_nll[i]
+                                  : 1e6);
     }
 
     ~OnnxQuantizer() {
@@ -479,7 +495,7 @@ class OnnxDecider : public Decider {
      *
      * @param pre
      * @param next
-     * @return double must >=0
+     * @return association negative log-probability, must be >= 0
      */
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const {
         return quantizer.ranging(pre, next);
@@ -501,15 +517,21 @@ REGISTER_Decider(OnnxDecider);
  *
  */
 class OnnxRecongnizer : public CellRecognizer {
+    // ONNX contract: token ids [pieces], inclusive spans [candidates, 2], and
+    // independent word probabilities [candidates].  Unlike BIO decoding this
+    // permits arbitrary overlap; the downstream DAG decider chooses a path.
    private:
     static const char* MODEL_PATH_KEY;
     static const char* WORDPIECE_PARAM;
-    static const char* LABELS_KEY;
+    static const char* MAX_SPAN_KEY;
+    static const char* THRESHOLD_KEY;
 
-    std::vector<std::string> labels;
+    size_t max_span = 5;
+    float threshold = 0.5f;
+    std::vector<float> length_thresholds;
     std::shared_ptr<WordPice> wordpiece;
 
-    Ort::Session* session;
+    Ort::Session* session = nullptr;
     std::vector<char*> input_name_;
     std::vector<char*> output_name_;
 
@@ -556,6 +578,10 @@ class OnnxRecongnizer : public CellRecognizer {
         // check output tensor
         auto out_tensor      = session->GetOutputTypeInfo(0);
         auto out_tensor_info = out_tensor.GetTensorTypeAndShapeInfo();
+        if (out_tensor_info.GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+            std::cerr << "ONNX recognizer output must contain word probabilities" << std::endl;
+            return EXIT_FAILURE;
+        }
         size_t out_dim_count = out_tensor_info.GetDimensionsCount();
         if (out_dim_count != 1) {  // timestep
             std::cerr << "This model is not supported by onnx recongnizer. output dim must 1 not " << out_dim_count
@@ -576,78 +602,76 @@ class OnnxRecongnizer : public CellRecognizer {
     }
 
    private:
-    /**
-     * @brief Get the feateure embeding object
-     *
-     * @param dstSrc
-     * @param props
-     */
-    void decode(const AtomList& dstSrc, std::vector<size_t>& seq) const {
-        // create inputs
-        auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-        std::vector<Ort::Value> ort_inputs;
-        // create tensor data
-        std::vector<int64_t> alist_tensor_values;
-        alist_tensor_values.reserve(dstSrc.size() * 2 + 2);
-        int64_t words_size              = dstSrc.size() + 2;
-        size_t words_tensor_size        = words_size * 2;
-        std::vector<int64_t> words_dims = {words_size, 2};
-        std::vector<int64_t> words_tensor_values(words_tensor_size);
-        // set alist data
-        wordpiece->encode(dstSrc, [&words_tensor_values, &alist_tensor_values](int code, int atom_postion) {
-            if (atom_postion >= 0) {
-                size_t idx   = atom_postion * 2 + 2;
-                int64_t aidx = alist_tensor_values.size();
-                if (words_tensor_values[idx] < 1) words_tensor_values[idx] = aidx;
-                words_tensor_values[idx + 1] = aidx;
-            }
-            alist_tensor_values.push_back(code);
+    void predictSpans(const AtomList& dstSrc, std::vector<std::pair<size_t, size_t>>& spans,
+                      std::vector<float>& probabilities) const {
+        if (dstSrc.size() < 2) return;
+        std::vector<int64_t> token_ids;
+        std::vector<int64_t> starts(dstSrc.size(), -1);
+        std::vector<int64_t> ends(dstSrc.size(), -1);
+        wordpiece->encode(dstSrc, [&token_ids, &starts, &ends](int code, int atom_position) {
+            const int64_t index = static_cast<int64_t>(token_ids.size());
+            token_ids.push_back(code);
+            if (atom_position < 0) return;
+            if (starts[atom_position] < 0) starts[atom_position] = index;
+            ends[atom_position] = index;
         });
-        int64_t adim = alist_tensor_values.size();
-        // set head and tail
-        words_tensor_values[0] = words_tensor_values[1] = 0;
-        words_tensor_values[words_tensor_size - 2] = words_tensor_values[words_tensor_size - 1] = adim - 1;
-        // std::cout << "a[";
-        // for (size_t i = 0; i < alist_tensor_values.size(); ++i) {
-        //     std::cout << alist_tensor_values[i] << ",";
-        // }
-        // std::cout << "]" << std::endl;
 
-        // std::cout << "w[";
-        // for (size_t i = 0; i < words_tensor_values.size(); ++i) {
-        //     std::cout << words_tensor_values[i] << ",";
-        // }
-        // std::cout << "]" << std::endl;
-        // push data
-        Ort::Value alist_input_tensor =
-            Ort::Value::CreateTensor<int64_t>(memory_info, alist_tensor_values.data(), adim, &adim, 1);
-        assert(alist_input_tensor.IsTensor());
-        ort_inputs.push_back(std::move(alist_input_tensor));
+        std::vector<int64_t> span_values;
+        // Atom spans are half-open [start, end).  WordEncoder consumes inclusive
+        // WordPiece bounds, hence ends[end - 1] in the ONNX input.
+        for (size_t start = 0; start < dstSrc.size(); ++start) {
+            const size_t limit = std::min(dstSrc.size(), start + max_span);
+            for (size_t end = start + 2; end <= limit; ++end) {
+                if (starts[start] < 0 || ends[end - 1] < 0) continue;
+                spans.emplace_back(start, end);
+                span_values.push_back(starts[start]);
+                span_values.push_back(ends[end - 1]);
+            }
+        }
+        if (spans.empty()) return;
 
-        Ort::Value words_input_tensor = Ort::Value::CreateTensor<int64_t>(
-            memory_info, words_tensor_values.data(), words_tensor_size, words_dims.data(), words_dims.size());
-        assert(words_input_tensor.IsTensor());
-        ort_inputs.push_back(std::move(words_input_tensor));
-        // score model & input tensor, get back output tensor
-        Ort::Value output_tensor{nullptr};
-        session->Run(Ort::RunOptions{nullptr}, input_name_.data(), ort_inputs.data(), ort_inputs.size(),
-                     output_name_.data(), &output_tensor, output_name_.size());
-
-        const auto output_info = output_tensor.GetTensorTypeAndShapeInfo();
-        const size_t output_size = output_info.GetElementCount();
-        const int64_t* arr = output_tensor.GetTensorData<int64_t>();
-        seq.assign(arr, arr + output_size);
+        auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        const int64_t token_count = static_cast<int64_t>(token_ids.size());
+        std::vector<int64_t> span_dims = {static_cast<int64_t>(spans.size()), 2};
+        std::vector<Ort::Value> inputs;
+        inputs.push_back(Ort::Value::CreateTensor<int64_t>(memory_info, token_ids.data(), token_ids.size(),
+                                                           &token_count, 1));
+        inputs.push_back(Ort::Value::CreateTensor<int64_t>(memory_info, span_values.data(), span_values.size(),
+                                                           span_dims.data(), span_dims.size()));
+        Ort::Value output{nullptr};
+        session->Run(Ort::RunOptions{nullptr}, input_name_.data(), inputs.data(), inputs.size(),
+                     output_name_.data(), &output, output_name_.size());
+        const auto info = output.GetTensorTypeAndShapeInfo();
+        if (info.GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ||
+            info.GetElementCount() != spans.size()) {
+            throw std::runtime_error("span recognizer returned an invalid probability tensor");
+        }
+        const float* values = output.GetTensorData<float>();
+        probabilities.assign(values, values + spans.size());
     }
 
    public:
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
-        auto iter = params.find(LABELS_KEY);
-        if (iter == params.end()) {
-            std::cerr << LABELS_KEY << " key not found in dictionary!" << std::endl;
+        auto iter = params.find(MAX_SPAN_KEY);
+        if (iter != params.end()) max_span = std::max<size_t>(2, std::stoul(iter->second));
+        iter = params.find(THRESHOLD_KEY);
+        if (iter != params.end()) threshold = std::stof(iter->second);
+        if (!(threshold >= 0.0f && threshold <= 1.0f)) {
+            std::cerr << THRESHOLD_KEY << " must be in [0, 1]" << std::endl;
             return EXIT_FAILURE;
         }
-        split(iter->second, ",", labels);
+        length_thresholds.assign(max_span + 1, threshold);
+        for (size_t length = 2; length <= max_span; ++length) {
+            const std::string key = std::string(THRESHOLD_KEY) + "." + std::to_string(length);
+            iter = params.find(key);
+            if (iter == params.end()) continue;
+            length_thresholds[length] = std::stof(iter->second);
+            if (!(length_thresholds[length] >= 0.0f && length_thresholds[length] <= 1.0f)) {
+                std::cerr << key << " must be in [0, 1]" << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
         // load wordpice
         auto it = plugins.find(WORDPIECE_PARAM);
         if (it == plugins.end()) {
@@ -680,58 +704,16 @@ class OnnxRecongnizer : public CellRecognizer {
     }
 
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
-        std::vector<size_t> label_idx;
-        decode(dstSrc, label_idx);
-        if (label_idx.size() < dstSrc.size() + 2) {
-            std::cerr << "ERROR: ONNX recognizer returned too few labels" << std::endl;
-            return;
-        }
+        std::vector<std::pair<size_t, size_t>> spans;
+        std::vector<float> probabilities;
+        predictSpans(dstSrc, spans, probabilities);
         Cursor cur = cmap.Head();
-        size_t pos = 1;
-        bool flag  = false;
-        const size_t sequence_end = std::min(label_idx.size() - 1, dstSrc.size() + 1);
-        // std::cout << "[";
-        // for (size_t i = 1; i < label_idx.size() - 1; ++i) {
-        //     std::cout << labels[label_idx[i]] << ",";
-        // }
-        // std::cout << "]" << std::endl;
-        for (size_t i = 1; i < sequence_end; ++i) {
-            if (label_idx[i] >= labels.size()) {
-                flag = false;
-                continue;
-            }
-            const std::string& nlabel = labels[label_idx[i]];
-            if (nlabel.empty()) continue;
-            if (nlabel[0] == 'B') {
-                if (flag && i - pos > 1) {
-                    const std::string& blabel = labels[label_idx[pos]];
-
-                    auto w = std::make_shared<Word>(dstSrc, pos - 1, i - 1);
-                    if (blabel.size() > 2) w->addLabel(blabel.substr(2));
-                    cur = cmap.addNext(cur, w);
-                }
-                pos  = i;
-                flag = true;
-                continue;
-            }
-            if (nlabel[0] == 'O') {
-                if (flag && i - pos > 1) {
-                    const std::string& blabel = labels[label_idx[pos]];
-
-                    auto w = std::make_shared<Word>(dstSrc, pos - 1, i - 1);
-                    if (nlabel.size() > 2) w->addLabel(blabel.substr(2));
-                    cur = cmap.addNext(cur, w);
-                }
-                flag = false;
-                continue;
-            }
-        }
-        if (flag && pos < sequence_end) {
-            auto w = std::make_shared<Word>(dstSrc, pos - 1, dstSrc.size());
-
-            const std::string& nlabel = labels[label_idx[pos]];
-            if (nlabel.size() > 2) w->addLabel(nlabel.substr(2));
-            cmap.addNext(cur, w);
+        for (size_t index = 0; index < spans.size(); ++index) {
+            const size_t length = spans[index].second - spans[index].first;
+            if (!std::isfinite(probabilities[index]) || probabilities[index] < length_thresholds[length]) continue;
+            auto word = std::make_shared<Word>(dstSrc, spans[index].first, spans[index].second);
+            word->addLabel("_NWORD");
+            cur = cmap.addCell(word, cur);
         }
     }
     ~OnnxRecongnizer() {
@@ -743,13 +725,13 @@ class OnnxRecongnizer : public CellRecognizer {
         for (auto ptr : output_name_) free(ptr);
         input_name_.clear();
         output_name_.clear();
-        labels.clear();
     }
 };
 
-const char* OnnxRecongnizer::LABELS_KEY      = "label.list";
 const char* OnnxRecongnizer::MODEL_PATH_KEY  = "model.path";
-const char* OnnxRecongnizer::WORDPIECE_PARAM = "wordpice.name";
+const char* OnnxRecongnizer::WORDPIECE_PARAM = "wordpiece.name";
+const char* OnnxRecongnizer::MAX_SPAN_KEY     = "max.span";
+const char* OnnxRecongnizer::THRESHOLD_KEY    = "threshold";
 
 REGISTER_Recognizer(OnnxRecongnizer);
 
