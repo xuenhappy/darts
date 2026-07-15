@@ -35,6 +35,16 @@ class NeuralModelTests(unittest.TestCase):
         self.assertAlmostEqual(nll, expected, places=6)
         self.assertGreaterEqual(nll, 0.0)
 
+    def test_quantizer_initialization_has_usable_probability_range(self):
+        model = self.Quantizer(8, 4)
+        with torch.no_grad():
+            model.Kmap.weight.zero_()
+            model.Qmap.weight.zero_()
+            model.Kmap.bias.copy_(torch.tensor([1.0, 0.0, 0.0, 0.0]))
+            model.Qmap.bias.copy_(torch.tensor([1.0, 0.0, 0.0, 0.0]))
+        probability = torch.exp(-model(torch.zeros(1, 8), torch.zeros(1, 8))).item()
+        self.assertGreater(probability, 0.8)
+
     def test_word_encoder_attention_pools_every_position(self):
         encoder = self.WordEncoder(vocab_num=32, hidden_size=16, wtype_num=-1, num_layers=1,
                                    num_heads=4, max_positions=32)
@@ -77,6 +87,32 @@ class NeuralModelTests(unittest.TestCase):
         model = self.JointSegmentationTrainer(vocab_num=32, hidden_size=16, wtype_num=4)
         self.assertIs(model.recognizer.encoder, model.graph_quantizer.predictor)
         self.assertIs(model.encoder, model.recognizer.encoder)
+
+    def test_both_joint_losses_update_shared_encoder(self):
+        model = self.JointSegmentationTrainer(vocab_num=32, hidden_size=16, wtype_num=4)
+        token_ids = torch.tensor([[1, 2, 3, 4]])
+        lengths = torch.tensor([4])
+        spans = torch.tensor([[0, 0, 1, 2, 1], [0, 1, 3, 3, 0]])
+        words = torch.tensor([[0, 0, 0, 0], [0, 0, 1, 1], [0, 2, 3, 2], [0, 3, 3, 3]])
+        graph = torch.tensor([[0, 0, 1, 1], [0, 0, 2, 0], [0, 1, 3, 1], [0, 2, 3, 0]])
+        recognizer_loss = model.recognizer(token_ids, lengths, spans)
+        quantizer_loss = model.graph_quantizer(token_ids, lengths, words, graph)
+        (recognizer_loss + quantizer_loss).backward()
+        gradient = model.encoder.vocab_embedding[0].weight.grad
+        self.assertIsNotNone(gradient)
+        self.assertGreater(float(gradient.abs().sum()), 0.0)
+
+
+class NeuralReaderTests(unittest.TestCase):
+
+    def test_piece_bounds_preserves_zero_offset_and_multi_piece_atom(self):
+        try:
+            from darts.devel.reader import piece_bounds
+        except (ImportError, OSError) as error:
+            self.skipTest(f"native darts training reader unavailable: {error}")
+        starts, ends = piece_bounds([(10, 0), (11, 0), (12, 1), (2, -2)], 2)
+        self.assertEqual(starts, [0, 2])
+        self.assertEqual(ends, [1, 2])
 
 
 if __name__ == "__main__":

@@ -59,6 +59,10 @@ def train(args):
     output = Path(args.output_dir)
     best_objective = float("inf")
     stale = 0
+    if not any(True for _ in span_train):
+        raise RuntimeError(f"no recognizer samples were generated from {args.train}")
+    if not any(True for _ in graph_train):
+        raise RuntimeError(f"no quantizer samples were generated from {args.train}")
 
     for epoch in range(1, args.epochs + 1):
         started = time.perf_counter()
@@ -131,8 +135,17 @@ def export(args):
     model.recognizer.export2onnx(str(output / "recognizer.onnx"))
     model.encoder.export2onnx(str(output / "indicator.onnx"))
     model.graph_quantizer.quantizer.export2onnx(str(output / "quantizer.onnx"))
+    thresholds = metadata.get("dev", {}).get("thresholds", {})
+    runtime = {
+        "model.path": "recognizer.onnx",
+        "pmodel.path": "indicator.onnx",
+        "qmodel.path": "quantizer.onnx",
+        "max.span": str(metadata["max_span"]),
+        "thresholds": {str(length): str(value) for length, value in thresholds.items()},
+    }
     (output / "neural.json").write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps({**metadata, "runtime": runtime}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
     )
     print(f"models={output}")
 

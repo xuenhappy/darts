@@ -27,6 +27,8 @@ def evaluate(model, reader, device):
         probabilities.append(torch.sigmoid(model.logits(word_ids, lengths, span_info[:, :3])).cpu())
         span_lengths.append(span_info[:, -2].cpu())
         labels.append(span_info[:, -1].bool().cpu())
+    if not probabilities:
+        raise RuntimeError(f"no recognizer samples were generated from {reader.sample}")
     probabilities = torch.cat(probabilities)
     labels = torch.cat(labels)
     span_lengths = torch.cat(span_lengths)
@@ -99,6 +101,8 @@ def train(args):
     output = Path(args.output_dir)
     best_f1 = -1.0
     stale = 0
+    if not any(True for _ in train_reader):
+        raise RuntimeError(f"no recognizer samples were generated from {args.train}")
     for epoch in range(1, args.epochs + 1):
         model.train()
         losses = []

@@ -124,7 +124,8 @@ class WordEncoder(nn.Module):
             do_constant_folding=True,  # whether to execute constant folding for optimization
             input_names=inputnames,  # the model's input names
             output_names=['wordemb'],  # the model's output names
-            dynamic_axes=dynamic_axes)
+            dynamic_axes=dynamic_axes,
+            dynamo=False)
         return outfile
 
 
@@ -137,7 +138,9 @@ class Quantizer(nn.Module):
         self.hidden_size = hidden_size
         self.Kmap = nn.Linear(input_size, hidden_size)
         self.Qmap = nn.Linear(input_size, hidden_size)
-        self.logit_scale = nn.Parameter(torch.tensor(np.log(1.0 / np.sqrt(hidden_size)), dtype=torch.float32))
+        # Cosine similarity is bounded to [-1, 1]. A sqrt(d) initial inverse
+        # temperature gives the probability head useful dynamic range early.
+        self.logit_scale = nn.Parameter(torch.tensor(np.log(np.sqrt(hidden_size)), dtype=torch.float32))
 
     def forward(self, x, y):
         keys = F.normalize(self.Kmap(x), dim=-1)
@@ -161,7 +164,7 @@ class Quantizer(nn.Module):
             do_constant_folding=True,  # whether to execute constant folding for optimization
             input_names=inputnames,  # the model's input names
             output_names=['association_nll'],
-            dynamic_axes=dynamic_axes)
+            dynamic_axes=dynamic_axes, dynamo=False)
         return outfile
 
 
@@ -213,6 +216,7 @@ class SpanRecognizer(nn.Module):
             output_names=["word_probabilities"],
             dynamic_axes={"sents": {0: "timestep"}, "spaninfo": {0: "spans"},
                           "word_probabilities": {0: "spans"}},
+            dynamo=False,
         )
         return outfile
 

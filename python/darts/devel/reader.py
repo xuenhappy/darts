@@ -27,6 +27,24 @@ def d2list2array(d2list, fval=0, dtype=np.int32):
     return out, lens
 
 
+def piece_bounds(codes, atom_count):
+    """Map each Atom to its inclusive WordPiece bounds."""
+    starts = [-1] * atom_count
+    ends = [-1] * atom_count
+    for piece_index, (_code, atom_position) in enumerate(codes):
+        if atom_position < 0:
+            continue
+        if atom_position >= atom_count:
+            raise ValueError(f"WordPiece atom position {atom_position} exceeds {atom_count} atoms")
+        if starts[atom_position] < 0:
+            starts[atom_position] = piece_index
+        ends[atom_position] = piece_index
+    missing = [index for index, start in enumerate(starts) if start < 0]
+    if missing:
+        raise ValueError(f"WordPiece encoder produced no pieces for atoms {missing}")
+    return starts, ends
+
+
 class GraphSampleReader(IterableDataset):
     """Build candidate DAGs aligned with the C++ ONNX decider contract.
 
@@ -71,14 +89,7 @@ class GraphSampleReader(IterableDataset):
         types = self.word_codec.encode(candidates)
         codes = self.atom_codec.encode(atoms)
         code_ids = [value[0] for value in codes]
-        starts = [0] * len(atoms)
-        ends = [0] * len(atoms)
-        for index, (_code, atom_position) in enumerate(codes):
-            if atom_position < 0:
-                continue
-            if starts[atom_position] == 0:
-                starts[atom_position] = index
-            ends[atom_position] = index
+        starts, ends = piece_bounds(codes, len(atoms))
 
         # Dictionary labels provide known type features.  Add the complete span
         # envelope used by the recognizer so the quantizer also sees OOV words;
@@ -167,14 +178,7 @@ class SpanSampleReader(IterableDataset):
         atoms = PyAtomList(text)
         codes = self.atom_codec.encode(atoms)
         code_ids = [item[0] for item in codes]
-        starts = [0] * len(atoms)
-        ends = [0] * len(atoms)
-        for index, (_code, atom_position) in enumerate(codes):
-            if atom_position < 0:
-                continue
-            if starts[atom_position] == 0:
-                starts[atom_position] = index
-            ends[atom_position] = index
+        starts, ends = piece_bounds(codes, len(atoms))
         gold = set(GraphSampleReader._gold_spans(tokens))
         spans = []
         for start in range(len(atoms)):

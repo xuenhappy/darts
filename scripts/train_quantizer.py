@@ -22,7 +22,9 @@ from darts.devel.reader import GraphSampleReader
 def evaluate(model, reader):
     model.eval()
     losses = [float(model(*batch).detach().cpu()) for batch in reader]
-    return sum(losses) / max(1, len(losses))
+    if not losses:
+        raise RuntimeError(f"no quantizer samples were generated from {reader.sample}")
+    return sum(losses) / len(losses)
 
 
 def save(model, metadata, path):
@@ -57,6 +59,8 @@ def train(args):
     output = Path(args.output_dir)
     best_loss = float("inf")
     stale = 0
+    if not any(True for _ in train_reader):
+        raise RuntimeError(f"no quantizer samples were generated from {args.train}")
     for epoch in range(1, args.epochs + 1):
         model.train()
         losses = []
