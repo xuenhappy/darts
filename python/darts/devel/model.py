@@ -10,6 +10,17 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
+def _finalize_onnx(outfile):
+    """Keep dynamo exports loadable by the bundled ONNX Runtime 1.17."""
+    import onnx
+
+    model = onnx.load(outfile)
+    if model.ir_version > 9:
+        model.ir_version = 9
+    onnx.checker.check_model(model)
+    onnx.save(model, outfile)
+
+
 class WordEncoder(nn.Module):
     """Encode contextual candidate words with content/relative-position pooling.
 
@@ -66,6 +77,10 @@ class WordEncoder(nn.Module):
         vocab_emb = self.vocab_embedding(batch_input_idx) + self.position_embedding(positions).unsqueeze(0)
         padding_mask = positions.unsqueeze(0) >= batch_lengths.unsqueeze(1)
         sentence_embedding = self.transformer(vocab_emb, src_key_padding_mask=padding_mask)
+        # Some fused/nested Transformer kernels leave NaN at fully masked
+        # padding positions. Zero attention does not protect BMM backward from
+        # 0 * NaN, so sanitize padding before any span gather or pooling.
+        sentence_embedding = sentence_embedding.masked_fill(padding_mask.unsqueeze(-1), 0.0)
 
         # A candidate is not represented by endpoint averaging.  Each piece in
         # the span receives a content logit and a learned word-relative position
@@ -81,7 +96,10 @@ class WordEncoder(nn.Module):
         position_logits = self.word_position_attention(relative_positions).squeeze(-1)
         attention_logits = (content_logits + position_logits).masked_fill(~word_mask, -1e4)
         attention = torch.softmax(attention_logits, dim=1)
-        word_embedding = torch.bmm(attention.unsqueeze(1), sentence_embedding[word_batches]).squeeze(1)
+        # Elementwise reduction is equivalent to a [1, steps] x
+        # [steps, hidden] BMM, but avoids unstable cuBLAS BMM backward kernels
+        # observed with variable-length span batches on sm_86 GPUs.
+        word_embedding = (attention.unsqueeze(-1) * sentence_embedding[word_batches]).sum(dim=1)
         word_embedding = self.word_pool_normal(word_embedding)
         # In joint training recognizer spans omit the optional type column,
         # while graph nodes include it. The contextual/position parameters are
@@ -104,7 +122,7 @@ class WordEncoder(nn.Module):
                 self.obj = obj
 
             def forward(self, sents, words):
-                lens = torch.LongTensor([sents.shape[0]]).to(sents)
+                lens = torch.ones((1,), dtype=torch.long, device=sents.device) * sents.shape[0]
                 bsents = torch.unsqueeze(sents, 0)
                 bidx = torch.zeros((words.shape[0], 1), dtype=wtype_idx.dtype)
                 words = torch.concat((bidx, words), dim=1)
@@ -114,18 +132,24 @@ class WordEncoder(nn.Module):
         inputdata = (sents_idx, word_info)
         inputnames = ['sents', 'wordinfo']
         dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}
+        timestep = torch.export.Dim("timestep", min=1)
+        wordnums = torch.export.Dim("wordnums", min=1)
 
+        script = _script(self).eval()
         torch.onnx.export(
-            _script(self),
+            script,
             inputdata,
             outfile,
             export_params=True,  # store the trained parameter weights inside the model file
-            opset_version=17,  # Transformer attention export requires a modern opset.
+            opset_version=18,  # Dynamo's native opset avoids lossy version conversion.
             do_constant_folding=True,  # whether to execute constant folding for optimization
             input_names=inputnames,  # the model's input names
             output_names=['wordemb'],  # the model's output names
             dynamic_axes=dynamic_axes,
-            dynamo=False)
+            dynamic_shapes=({0: timestep}, {0: wordnums}),
+            external_data=False,
+            dynamo=True)
+        _finalize_onnx(outfile)
         return outfile
 
 
@@ -154,17 +178,22 @@ class Quantizer(nn.Module):
         inputdata = (torch.randn((1, self.input_size)), torch.randn((1, self.input_size)))
         inputnames = ['a', 'b']
         dynamic_axes = {'a': {0: 'edges'}, 'b': {0: 'edges'}, 'association_nll': {0: 'edges'}}
+        edges = torch.export.Dim("edges", min=1)
 
         torch.onnx.export(
             self,
             inputdata,
             outfile,
             export_params=True,  # store the trained parameter weights inside the model file
-            opset_version=17,
+            opset_version=18,
             do_constant_folding=True,  # whether to execute constant folding for optimization
             input_names=inputnames,  # the model's input names
             output_names=['association_nll'],
-            dynamic_axes=dynamic_axes, dynamo=False)
+            dynamic_axes=dynamic_axes,
+            dynamic_shapes=({0: edges}, {0: edges}),
+            external_data=False,
+            dynamo=True)
+        _finalize_onnx(outfile)
         return outfile
 
 
@@ -210,14 +239,21 @@ class SpanRecognizer(nn.Module):
                 logits = self.model.logits(token_ids.unsqueeze(0), lengths, batched_spans)
                 return torch.sigmoid(logits)
 
+        timestep = torch.export.Dim("timestep", min=1)
+        spans_count = torch.export.Dim("spans", min=1)
+
+        script = Script(self).eval()
         torch.onnx.export(
-            Script(self), (sents, spans), outfile, export_params=True, opset_version=17,
+            script, (sents, spans), outfile, export_params=True, opset_version=18,
             do_constant_folding=True, input_names=["sents", "spaninfo"],
             output_names=["word_probabilities"],
             dynamic_axes={"sents": {0: "timestep"}, "spaninfo": {0: "spans"},
                           "word_probabilities": {0: "spans"}},
-            dynamo=False,
+            dynamic_shapes=({0: timestep}, {0: spans_count}),
+            external_data=False,
+            dynamo=True,
         )
+        _finalize_onnx(outfile)
         return outfile
 
 

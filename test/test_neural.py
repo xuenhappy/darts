@@ -1,4 +1,6 @@
 import math
+from pathlib import Path
+import tempfile
 import unittest
 
 
@@ -6,6 +8,12 @@ try:
     import torch
 except ImportError:
     torch = None
+
+try:
+    import onnx
+    import onnxscript  # noqa: F401 - required by the dynamo exporter
+except ImportError:
+    onnx = None
 
 
 @unittest.skipUnless(torch is not None, "PyTorch is an optional training dependency")
@@ -57,6 +65,18 @@ class NeuralModelTests(unittest.TestCase):
         self.assertEqual(output.shape, (1, 16))
         self.assertTrue(torch.all(gradients > 0))
 
+    def test_word_encoder_padding_has_finite_backward(self):
+        encoder = self.WordEncoder(vocab_num=32, hidden_size=16, wtype_num=-1,
+                                   num_layers=1, num_heads=4, max_positions=32)
+        token_ids = torch.tensor([[1, 2, 0, 0], [3, 4, 5, 6]])
+        lengths = torch.tensor([2, 4])
+        words = torch.tensor([[0, 0, 1], [1, 1, 3]])
+        output = encoder(token_ids, lengths, words)
+        output.sum().backward()
+        self.assertTrue(torch.isfinite(output).all())
+        self.assertTrue(all(parameter.grad is None or torch.isfinite(parameter.grad).all()
+                            for parameter in encoder.parameters()))
+
     def test_span_recognizer_accepts_overlapping_candidates(self):
         model = self.SpanRecognizer(vocab_num=32, hidden_size=16)
         token_ids = torch.tensor([[1, 2, 3, 4]])
@@ -83,6 +103,20 @@ class NeuralModelTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(loss))
         self.assertTrue(torch.all(torch.isfinite(association_nll.grad)))
 
+    def test_sparse_graph_loss_ignores_unreachable_predecessors(self):
+        word_info = torch.tensor([[0, 0, 0, 0]] * 4)
+        graph = torch.tensor([
+            [0, 0, 2, 1],
+            [0, 1, 2, 0],  # node 1 is unreachable from the graph head
+            [0, 2, 3, 1],
+        ])
+        association_nll = torch.tensor([0.2, 0.7, 0.3], requires_grad=True)
+        loss = self.GraphLossSparse()(word_info, graph, association_nll)
+        loss.backward()
+        self.assertTrue(torch.isfinite(loss))
+        self.assertTrue(torch.isfinite(association_nll.grad).all())
+        self.assertEqual(association_nll.grad[1].item(), 0.0)
+
     def test_joint_tasks_reference_one_encoder(self):
         model = self.JointSegmentationTrainer(vocab_num=32, hidden_size=16, wtype_num=4)
         self.assertIs(model.recognizer.encoder, model.graph_quantizer.predictor)
@@ -101,6 +135,26 @@ class NeuralModelTests(unittest.TestCase):
         gradient = model.encoder.vocab_embedding[0].weight.grad
         self.assertIsNotNone(gradient)
         self.assertGreater(float(gradient.abs().sum()), 0.0)
+
+    @unittest.skipUnless(onnx is not None, "ONNX and onnxscript are optional export dependencies")
+    def test_onnx_exports_have_real_dynamic_axes_and_runtime_ir(self):
+        model = self.JointSegmentationTrainer(vocab_num=32, hidden_size=16, wtype_num=4).eval()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = {
+                "recognizer": Path(directory) / "recognizer.onnx",
+                "indicator": Path(directory) / "indicator.onnx",
+                "quantizer": Path(directory) / "quantizer.onnx",
+            }
+            model.recognizer.export2onnx(str(paths["recognizer"]))
+            model.encoder.export2onnx(str(paths["indicator"]))
+            model.graph_quantizer.quantizer.export2onnx(str(paths["quantizer"]))
+            expected = {"recognizer": "timestep", "indicator": "timestep", "quantizer": "edges"}
+            for name, path in paths.items():
+                exported = onnx.load(path)
+                onnx.checker.check_model(exported)
+                self.assertLessEqual(exported.ir_version, 9)
+                self.assertEqual(exported.graph.input[0].type.tensor_type.shape.dim[0].dim_param,
+                                 expected[name])
 
 
 class NeuralReaderTests(unittest.TestCase):

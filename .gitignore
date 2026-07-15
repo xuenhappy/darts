@@ -45,3 +45,4 @@ GTAGS
 *.pyc
 data/external/
 data/generated/
+model_bin/*

@@ -497,7 +497,15 @@ class OnnxDecider : public Decider {
      * @param dstSrc
      * @param cmap
      */
-    void embed(const AtomList& dstSrc, SegPath& cmap) const { indicator.embed(dstSrc, cmap); }
+    void embed(const AtomList& dstSrc, SegPath& cmap) const {
+        try {
+            indicator.embed(dstSrc, cmap);
+        } catch (const Ort::Exception& error) {
+            std::cerr << "ONNX indicator inference failed: " << error.what() << std::endl;
+        } catch (const std::exception& error) {
+            std::cerr << "neural indicator failed: " << error.what() << std::endl;
+        }
+    }
     /**
      * @brief
      *

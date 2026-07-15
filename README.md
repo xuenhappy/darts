@@ -537,7 +537,7 @@ GPU 训练建议使用独立 Python 3.12 环境，并根据驱动和显卡选择
 python3.12 -m venv build/train-venv
 build/train-venv/bin/pip install --index-url https://download.pytorch.org/whl/cu128 \
   "torch==2.7.1"
-build/train-venv/bin/pip install numpy onnx
+build/train-venv/bin/pip install numpy onnx onnxscript
 build/train-venv/bin/python -c \
   'import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name())'
 ```
@@ -638,7 +638,7 @@ build/train-venv/bin/python -c \
 
 识别器与量化器共享 `WordEncoder` 架构。推荐的联合训练让两个损失共同更新同一份 encoder 参数，识别概率头与关联 NLL 头保持独立；独立训练脚本仍用于消融。导出时共享参数分别固化到 `recognizer.onnx` 和 `indicator.onnx`，运行时不要求跨 ONNX 会话共享内存。编码器先生成带句内位置的上下文字表示，再用内容注意力和词内相对位置偏置对 span 内所有 WordPiece 加权组合，不采用简单首尾或平均池化。
 
-识别器输出独立的 `word_probability`，允许同时召回交叠词。量化器输出 `association_nll = -log P(next | previous)`，使用 `GraphLossSparse` 在完整候选 DAG 上优化金标路径条件负对数似然。ONNX 使用 opset 17；项目不提供 CRF/BIO 兼容模型。
+识别器输出独立的 `word_probability`，允许同时召回交叠词。量化器输出 `association_nll = -log P(next | previous)`，使用 `GraphLossSparse` 在完整候选 DAG 上优化金标路径条件负对数似然。ONNX 使用 opset 18，并导出为 ONNX Runtime 1.17.3 可加载的 IR 9；项目不提供 CRF/BIO 兼容模型。
 
 ### `modes`
 
@@ -743,6 +743,10 @@ python scripts/devel.py joint-train --epochs 20 --output-dir model_bin/joint
 python scripts/devel.py joint-evaluate model_bin/joint/best.pt \
   --data data/generated/cws-test.txt
 python scripts/devel.py joint-export model_bin/joint/best.pt data/models/neural
+
+# RTX A2000 等旧架构在新 CUDA wheel 上若出现 AMP 内核错误，可关闭 AMP 并续用已有权重
+python scripts/devel.py joint-train --no-amp --resume model_bin/joint/best.pt \
+  --epochs 20 --output-dir model_bin/joint
 
 # 先用小型格式样本做一轮 smoke test（不用于准确率报告）
 python scripts/train_joint.py train --train data/demo/cws-train.txt \

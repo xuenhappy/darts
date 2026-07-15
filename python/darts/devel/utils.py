@@ -83,6 +83,8 @@ class GraphLossSparse(nn.Module):
             neg_inf = association_nll.new_tensor(float("-inf"))
             partition = [neg_inf for _ in range(node_num)]
             partition[0] = association_nll.new_zeros(())
+            reachable = [False for _ in range(node_num)]
+            reachable[0] = True
             position = 0
             edge_num = local_dst.numel()
             while position < edge_num:
@@ -91,16 +93,26 @@ class GraphLossSparse(nn.Module):
                 while end < edge_num and destinations[end] == destination:
                     end += 1
                 if 0 <= destination < node_num:
-                    previous = torch.stack([partition[src] for src in sources[position:end]])
-                    values = previous - edge_nll[position:end]
-                    partition[destination] = self._chunked_logsumexp(values, self.edge_chunk_size)
+                    # Never feed unreachable -inf states into logsumexp. Their
+                    # mathematical gradient is zero, but some CUDA backward
+                    # kernels produce NaN for a mixed finite/-inf input.
+                    valid = [edge for edge in range(position, end)
+                             if 0 <= sources[edge] < node_num and reachable[sources[edge]]]
+                    if valid:
+                        previous = torch.stack([partition[sources[edge]] for edge in valid])
+                        indexes = torch.tensor(valid, dtype=torch.long, device=edge_nll.device)
+                        values = previous - edge_nll[indexes]
+                        partition[destination] = self._chunked_logsumexp(values, self.edge_chunk_size)
+                        reachable[destination] = True
                 position = end
 
             log_partition = partition[-1]
-            if not torch.isfinite(log_partition):
+            if not reachable[-1]:
                 if self.strict_path:
                     raise RuntimeError(f"no valid path found for graph {batch_id}")
                 continue
+            if not torch.isfinite(log_partition):
+                raise RuntimeError(f"non-finite path cost found for graph {batch_id}")
             gold_cost = (edge_nll * gold_mask).sum()
             total_loss = total_loss + gold_cost + log_partition
             valid_graphs += 1

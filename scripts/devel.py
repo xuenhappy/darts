@@ -106,6 +106,10 @@ def joint_train(args):
                "--train", args.train, "--dev", args.dev, "--epochs", str(args.epochs),
                "--output-dir", args.output_dir, "--max-span", str(args.max_span),
                "--hidden-size", str(args.hidden_size), "--device", args.device]
+    if args.resume:
+        command.extend(["--resume", args.resume])
+    if not args.amp:
+        command.append("--no-amp")
     subprocess.run(command, cwd=ROOT, check=True)
 
 
@@ -207,6 +211,8 @@ def main():
     command.add_argument("--max-span", type=int, default=5)
     command.add_argument("--hidden-size", type=int, default=128)
     command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.add_argument("--resume")
+    command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True)
     command.set_defaults(func=joint_train)
 
     command = commands.add_parser("joint-export", help="export both tasks from a joint checkpoint")

@@ -29,6 +29,7 @@ def train(args):
         torch.cuda.manual_seed_all(args.seed)
         torch.set_float32_matmul_precision("high")
     device = select_device(args.device)
+    torch.autograd.set_detect_anomaly(args.detect_anomaly)
 
     span_train = SpanSampleReader(args.train, args.recognizer_batch_size, args.max_span, shuffle=True)
     span_dev = SpanSampleReader(args.dev, args.recognizer_batch_size, args.max_span)
@@ -50,12 +51,20 @@ def train(args):
     }
     model = JointSegmentationTrainer(metadata["vocab_num"], metadata["hidden_size"],
                                      metadata["wtype_num"]).to(device)
+    if args.resume:
+        resumed = torch.load(args.resume, map_location="cpu", weights_only=True)
+        resumed_metadata = resumed["metadata"]
+        for key in ("vocab_num", "hidden_size", "wtype_num", "max_span"):
+            if resumed_metadata[key] != metadata[key]:
+                raise RuntimeError(f"resume checkpoint {key} does not match current training data")
+        model.load_state_dict(resumed["state_dict"])
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate,
                                   weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=max(1, args.epochs), eta_min=1e-6
     )
-    scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
+    amp_enabled = args.amp and device.type == "cuda"
+    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
     output = Path(args.output_dir)
     best_objective = float("inf")
     stale = 0
@@ -82,13 +91,18 @@ def train(args):
                 span_batch = next(recognizer_iterator)
             optimizer.zero_grad(set_to_none=True)
             span_batch = tuple(tensor.to(device) for tensor in span_batch)
-            with torch.amp.autocast("cuda", enabled=device.type == "cuda"):
+            with torch.amp.autocast("cuda", enabled=amp_enabled):
                 recognizer_loss = model.recognizer(*span_batch)
                 quantizer_loss = model.graph_quantizer(*graph_batch)
                 loss = recognizer_loss + args.quantizer_weight * quantizer_loss
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+            bad_gradients = [name for name, parameter in model.named_parameters()
+                             if parameter.grad is not None and not torch.isfinite(parameter.grad).all()]
+            if bad_gradients:
+                raise RuntimeError(f"non-finite gradients in {bad_gradients}")
+            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad,
+                                           error_if_nonfinite=True)
             scaler.step(optimizer)
             scaler.update()
             recognizer_losses.append(float(recognizer_loss.detach().cpu()))
@@ -191,6 +205,10 @@ def main():
     command.add_argument("--weight-decay", type=float, default=1e-2)
     command.add_argument("--quantizer-weight", type=float, default=0.5)
     command.add_argument("--clip-grad", type=float, default=1.0)
+    command.add_argument("--resume", help="initialize model parameters from a compatible checkpoint")
+    command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True,
+                         help="enable CUDA automatic mixed precision; use --no-amp for older GPUs")
+    command.add_argument("--detect-anomaly", action="store_true")
     command.add_argument("--seed", type=int, default=20260715)
     command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
     command.set_defaults(func=train)
