@@ -14,8 +14,8 @@ from darts.devel.reader import SpanSampleReader
 
 
 @torch.no_grad()
-def evaluate(model, reader, device):
-    """Calibrate a probability threshold independently for each atom length."""
+def evaluate(model, reader, device, fixed_thresholds=None):
+    """Evaluate spans, calibrating thresholds only when none are supplied."""
     model.eval()
     probabilities = []
     labels = []
@@ -32,29 +32,32 @@ def evaluate(model, reader, device):
     probabilities = torch.cat(probabilities)
     labels = torch.cat(labels)
     span_lengths = torch.cat(span_lengths)
-    thresholds = {}
-    # Longer spans have many more negative combinations and usually need a
-    # stricter threshold.  Selecting each length on dev avoids letting abundant
-    # two-character candidates dominate one global threshold.
-    for length in sorted(span_lengths.unique().tolist()):
-        mask = span_lengths == length
-        if not labels[mask].any():
-            thresholds[str(length)] = 0.95
-            continue
-        best_length = None
-        for threshold in np.arange(0.10, 0.96, 0.05):
-            predicted = probabilities[mask] >= threshold
-            gold = labels[mask]
-            true_positive = int((predicted & gold).sum())
-            predicted_total = int(predicted.sum())
-            gold_total = int(gold.sum())
-            precision = true_positive / predicted_total if predicted_total else 0.0
-            recall = true_positive / gold_total if gold_total else 0.0
-            f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-            if best_length is None or f1 > best_length["f1"] or (
-                    f1 == best_length["f1"] and threshold > best_length["threshold"]):
-                best_length = {"threshold": round(float(threshold), 2), "f1": f1}
-        thresholds[str(length)] = best_length["threshold"]
+    thresholds = dict(fixed_thresholds or {})
+    if fixed_thresholds is None:
+        # Longer spans have many more negative combinations and usually need a
+        # stricter threshold. Select each length only on development data.
+        for length in sorted(span_lengths.unique().tolist()):
+            mask = span_lengths == length
+            if not labels[mask].any():
+                thresholds[str(length)] = 0.95
+                continue
+            best_length = None
+            for threshold in np.arange(0.10, 0.96, 0.05):
+                predicted = probabilities[mask] >= threshold
+                gold = labels[mask]
+                true_positive = int((predicted & gold).sum())
+                predicted_total = int(predicted.sum())
+                gold_total = int(gold.sum())
+                precision = true_positive / predicted_total if predicted_total else 0.0
+                recall = true_positive / gold_total if gold_total else 0.0
+                f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+                if best_length is None or f1 > best_length["f1"] or (
+                        f1 == best_length["f1"] and threshold > best_length["threshold"]):
+                    best_length = {"threshold": round(float(threshold), 2), "f1": f1}
+            thresholds[str(length)] = best_length["threshold"]
+    missing = sorted({str(int(length)) for length in span_lengths} - thresholds.keys())
+    if missing:
+        raise RuntimeError(f"missing fixed recognizer thresholds for atom lengths {missing}")
     selected = torch.tensor([thresholds[str(int(length))] for length in span_lengths])
     predicted = probabilities >= selected
     true_positive = int((predicted & labels).sum())

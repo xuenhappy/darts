@@ -4,7 +4,7 @@
 
 ## 神经训练样本
 
-`cws-train.txt` 和 `cws-dev.txt` 是小型格式示例，可用于快速检查 reader、前反向传播和 ONNX 导出，不能替代开放训练集。每行是一句话，金标词之间用一个或多个空白分隔；训练时会删除分隔空白再构造 Atom/WordPiece 对齐。
+`cws-train.txt` 和 `cws-dev.txt` 是小型格式示例，可用于快速检查 reader、前反向传播和 ONNX 导出，不能替代开放训练集。每行是一句话，金标词之间用一个或多个空白分隔。reader 将其规范为单空格后原子化，并启用 `skip_space=True`，所以空白不占 Atom idx，但仍能阻止 `New York` 等相邻英文词合并；语料原行字符偏移不会直接作为 Atom idx。
 
 ```text
 南京市 长江 大桥 今日 正式 通车
@@ -14,6 +14,7 @@
 - span 识别任务枚举 2 到 `max.span` 个 Atom 的所有区间；与任一金标词边界完全相同的区间标为 1。区间彼此独立，允许“南京”“南京市”“市长”等候选重叠，不生成 BIO。
 - 图量化任务把词典候选、上述高召回 span、单 Atom 兜底和金标长词合并成 DAG。金标边标为 1，`GraphLossSparse` 使用边的关联概率负对数训练完整路径。
 - train 用于参数更新，dev 只用于早停和按词长选择概率阈值。即使是 demo 也不要用 dev 反向更新，更不能用 test 调参。
+- 语料词边界会投影到整句原子化后的 Atom 边界；空白本身被跳过，不进入图节点编号。gold path、候选图和 `best_path` 始终使用同一 Atom 索引。
 
 快速 smoke test：
 

@@ -393,10 +393,11 @@ cdef class DSegment:
         if self.segt==NULL:
             raise IOError(f"load {conffile} segment failed!")
 
-    def cut(self,strs:str,max_mode:bool=False):
+    def cut(self, strs:str, max_mode:bool=False, skip_space:bool=True,
+            normal_before:bool=True):
         if not strs or len(strs)<1:
             return (None,None)
-        alist=PyAtomList(strs)
+        alist=PyAtomList(strs, skip_space=skip_space, normal_before=normal_before)
         wlist=PyWordList()
         with nogil:
             wlist.wlist=token_str(self.segt,alist.alist,max_mode)

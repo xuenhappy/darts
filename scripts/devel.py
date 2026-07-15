@@ -115,6 +115,12 @@ def joint_export(args):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def joint_evaluate(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/train_joint.py", "evaluate",
+               args.checkpoint, "--data", args.data, "--device", args.device]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
 def build(args):
     command = ["bash", "scripts/build_all.sh"]
     if args.test:
@@ -207,6 +213,12 @@ def main():
     command.add_argument("checkpoint")
     command.add_argument("output_dir")
     command.set_defaults(func=joint_export)
+
+    command = commands.add_parser("joint-evaluate", help="evaluate a joint checkpoint on held-out data")
+    command.add_argument("checkpoint")
+    command.add_argument("--data", default="data/generated/cws-test.txt")
+    command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.set_defaults(func=joint_evaluate)
 
     command = commands.add_parser("build", help="run the Meson-only build workflow")
     command.add_argument("--test", action="store_true")

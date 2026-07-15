@@ -186,7 +186,7 @@ class U32T32Iter_ : public U32StrIter {
 
 typedef std::function<void(const std::string&, const std::string&, size_t, size_t)> asplit_hit_func;
 
-inline void atomSplit(const U32StrIter& str, asplit_hit_func accept) {
+inline void atomSplit(const U32StrIter& str, asplit_hit_func accept, bool merge_pos_space = true) {
     size_t bufstart = 0, pos = 0;
     std::string btype = "", cbuffer = "";
 
@@ -194,12 +194,12 @@ inline void atomSplit(const U32StrIter& str, asplit_hit_func accept) {
         pos         = position;
         auto& ctype = charType(code);
         if (ctype != btype) {
-            if (ctype == char_type::EMPTY && btype == char_type::POS) {
+            if (merge_pos_space && ctype == char_type::EMPTY && btype == char_type::POS) {
                 btype = char_type::POS;
                 cbuffer.append(ct);
                 return;
             }
-            if (btype == char_type::EMPTY && ctype == char_type::POS) {
+            if (merge_pos_space && btype == char_type::EMPTY && ctype == char_type::POS) {
                 btype = char_type::POS;
                 cbuffer.append(ct);
                 return;
@@ -229,14 +229,14 @@ inline void atomSplit(const U32StrIter& str, asplit_hit_func accept) {
  * @param str 原始字符串
  * @param accept hook函数
  */
-inline void atomSplit(const std::string& str, asplit_hit_func accept) {
+inline void atomSplit(const std::string& str, asplit_hit_func accept, bool merge_pos_space = true) {
     U8T32Iter_ iter(str);
-    atomSplit(iter, accept);
+    atomSplit(iter, accept, merge_pos_space);
 }
 
-inline void atomSplit(const std::u32string& str, asplit_hit_func accept) {
+inline void atomSplit(const std::u32string& str, asplit_hit_func accept, bool merge_pos_space = true) {
     U32T32Iter_ iter(str);
-    atomSplit(iter, accept);
+    atomSplit(iter, accept, merge_pos_space);
 }
 
 #endif  // SRC_UTILS_CHSPLITER_HPP_

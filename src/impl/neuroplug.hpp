@@ -325,13 +325,14 @@ class OnnxQuantizer {
         auto out_tensor_info = out_tensor.GetTensorTypeAndShapeInfo();
         size_t out_dim_count = out_tensor_info.GetDimensionsCount();
         if (out_dim_count != 1) {  // nums*dim
-            std::cerr << "This model is not supported by onnx quantizer. output dim must 2 not " << out_dim_count
+            std::cerr << "This model is not supported by onnx quantizer. output rank must 1 not " << out_dim_count
                       << std::endl;
             return EXIT_FAILURE;
         }
         auto out_dims = out_tensor_info.GetShape();
         if (a1_dim_count == 1 && out_dims[0] != 1) {
-            std::cerr << "This model is not supported by onnx quantizer. output dim is not 2!" << std::endl;
+            std::cerr << "This model is not supported by onnx quantizer. scalar edge output must have size 1"
+                      << std::endl;
             return EXIT_FAILURE;
         }
         batched_input = a1_dim_count == 2;
@@ -389,18 +390,19 @@ class OnnxQuantizer {
         // create inputs
         std::vector<Ort::Value> ort_inputs;
         auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-        int64_t adim     = static_cast<int64_t>(this->emdim);
+        std::vector<int64_t> dims = {static_cast<int64_t>(this->emdim)};
+        if (batched_input) dims.insert(dims.begin(), 1);
 
         // set data
         const float* x1 = pre->getAttData();
         Ort::Value a1_tensor = Ort::Value::CreateTensor<float>(
-            memory_info, const_cast<float*>(x1), this->emdim, &adim, 1);
+            memory_info, const_cast<float*>(x1), this->emdim, dims.data(), dims.size());
         assert(a1_tensor.IsTensor());
         ort_inputs.push_back(std::move(a1_tensor));
 
         const float* x2 = next->getAttData();
         Ort::Value a2_tensor = Ort::Value::CreateTensor<float>(
-            memory_info, const_cast<float*>(x2), this->emdim, &adim, 1);
+            memory_info, const_cast<float*>(x2), this->emdim, dims.data(), dims.size());
         assert(a2_tensor.IsTensor());
         ort_inputs.push_back(std::move(a2_tensor));
         // run model

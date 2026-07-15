@@ -33,6 +33,9 @@ class AtomListTests(unittest.TestCase):
     def test_normalization_and_spaces(self):
         atoms = PyAtomList("ＡＢＣ １２３", skip_space=True, normal_before=True).tolist()
         self.assertEqual([atom.image for atom in atoms], ["ABC", "123"])
+        atoms = PyAtomList("ABC ， DEF", skip_space=True, normal_before=False).tolist()
+        self.assertEqual([atom.image for atom in atoms], ["ABC", "，", "DEF"])
+        self.assertNotIn(" ", "".join(atom.image for atom in atoms))
 
     def test_unicode_character_types(self):
         self.assertEqual(PyAtomList("あ").tolist()[0].chtype, "WUNK")
@@ -79,6 +82,12 @@ class SegmentTests(unittest.TestCase):
         self.assert_contiguous_cover("fast", text)
         self.assert_contiguous_cover("hybrid", text)
         self.assert_contiguous_cover("", text)
+
+    def test_cut_exposes_training_atomization_options(self):
+        atoms, _words = DSegment(str(CONFIG), "faster").cut(
+            "ＡＢＣ １２３", skip_space=True, normal_before=False
+        )
+        self.assertEqual([atom.image for atom in atoms.tolist()], ["ＡＢＣ", "１２３"])
 
     def test_long_text(self):
         self.assert_contiguous_cover("faster", "中文分词测试。" * 40)

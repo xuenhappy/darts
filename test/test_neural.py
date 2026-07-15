@@ -105,14 +105,32 @@ class NeuralModelTests(unittest.TestCase):
 
 class NeuralReaderTests(unittest.TestCase):
 
-    def test_piece_bounds_preserves_zero_offset_and_multi_piece_atom(self):
+    def _reader_types(self):
         try:
-            from darts.devel.reader import piece_bounds
+            from darts import PyAtomList
+            from darts.devel.reader import GraphSampleReader, piece_bounds
         except (ImportError, OSError) as error:
             self.skipTest(f"native darts training reader unavailable: {error}")
+        return PyAtomList, GraphSampleReader, piece_bounds
+
+    def test_piece_bounds_preserves_zero_offset_and_multi_piece_atom(self):
+        _atom_list, _reader, piece_bounds = self._reader_types()
         starts, ends = piece_bounds([(10, 0), (11, 0), (12, 1), (2, -2)], 2)
         self.assertEqual(starts, [0, 2])
         self.assertEqual(ends, [1, 2])
+
+    def test_gold_spans_use_sentence_atom_indexes(self):
+        atom_list, reader, _piece_bounds = self._reader_types()
+        english_atoms = atom_list("ABC DEF", skip_space=True, normal_before=False)
+        self.assertEqual(reader._gold_spans(["ABC", "DEF"], english_atoms), [(0, 1), (1, 2)])
+        split_atoms = atom_list("ABC 123", skip_space=True, normal_before=False)
+        self.assertEqual(reader._gold_spans(["ABC", "123"], split_atoms), [(0, 1), (1, 2)])
+
+    def test_corpus_whitespace_is_not_part_of_atom_indexes(self):
+        atom_list, reader, _piece_bounds = self._reader_types()
+        tokens = "南京市   长江\t大桥".split()
+        atoms = atom_list(" ".join(tokens), skip_space=True, normal_before=False)
+        self.assertEqual(reader._gold_spans(tokens, atoms), [(0, 3), (3, 5), (5, 7)])
 
 
 if __name__ == "__main__":

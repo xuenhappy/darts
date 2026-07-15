@@ -740,6 +740,8 @@ python scripts/devel.py quantizer-export model_bin/quantizer/best.pt data/models
 
 # 推荐：一次多任务训练共享 encoder，仍分别导出三个运行时 ONNX
 python scripts/devel.py joint-train --epochs 20 --output-dir model_bin/joint
+python scripts/devel.py joint-evaluate model_bin/joint/best.pt \
+  --data data/generated/cws-test.txt
 python scripts/devel.py joint-export model_bin/joint/best.pt data/models/neural
 
 # 先用小型格式样本做一轮 smoke test（不用于准确率报告）

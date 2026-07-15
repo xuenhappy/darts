@@ -150,6 +150,28 @@ def export(args):
     print(f"models={output}")
 
 
+def evaluate(args):
+    """Evaluate one checkpoint without updating it or selecting on test data."""
+    device = select_device(args.device)
+    saved = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
+    metadata = saved["metadata"]
+    model = JointSegmentationTrainer(metadata["vocab_num"], metadata["hidden_size"],
+                                     metadata["wtype_num"])
+    model.load_state_dict(saved["state_dict"])
+    model.to(device).eval()
+    spans = SpanSampleReader(args.data, args.recognizer_batch_size,
+                             metadata["max_span"])
+    graphs = GraphSampleReader(args.data, args.config, args.mode,
+                               args.quantizer_batch_size, metadata["max_span"])
+    fixed_thresholds = metadata.get("dev", {}).get("thresholds")
+    if not fixed_thresholds:
+        raise RuntimeError("checkpoint has no development-set recognizer thresholds")
+    recognizer_metrics = evaluate_recognizer(model.recognizer, spans, device, fixed_thresholds)
+    quantizer_loss = evaluate_quantizer(model.graph_quantizer, graphs)
+    print(json.dumps({"data": args.data, "quantizer_loss": quantizer_loss,
+                      **recognizer_metrics}, ensure_ascii=False))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -176,6 +198,15 @@ def main():
     command.add_argument("checkpoint")
     command.add_argument("output_dir")
     command.set_defaults(func=export)
+    command = commands.add_parser("evaluate")
+    command.add_argument("checkpoint")
+    command.add_argument("--data", default="data/generated/cws-test.txt")
+    command.add_argument("--config", default="data/conf.json")
+    command.add_argument("--mode", default="hybrid")
+    command.add_argument("--recognizer-batch-size", type=int, default=64)
+    command.add_argument("--quantizer-batch-size", type=int, default=16)
+    command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.set_defaults(func=evaluate)
     args = parser.parse_args()
     args.func(args)
 

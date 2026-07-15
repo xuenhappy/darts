@@ -73,18 +73,45 @@ class GraphSampleReader(IterableDataset):
         return self.word_codec.label_nums()
 
     @staticmethod
-    def _gold_spans(tokens):
-        spans = []
-        position = 0
-        for token in tokens:
-            length = len(PyAtomList(token, skip_space=True, normal_before=False))
-            spans.append((position, position + length))
-            position += length
-        return spans
+    def _gold_spans(tokens, atoms):
+        """Project corpus token boundaries onto the sentence AtomList.
+
+        Atomization must happen after tokens are concatenated because adjacent
+        ENG or NUM tokens may become one runtime Atom. A boundary inside such an
+        Atom cannot be represented by ``best_path`` and is therefore merged
+        with the next gold token. Returned indexes always address ``atoms``.
+        """
+        atom_values = atoms.tolist()
+        if not atom_values:
+            return []
+        # Readers rebuild a canonical single-space segmented sentence. Spaces
+        # are not Atoms, but they keep adjacent ENG/NUM gold words from being
+        # merged by the atomizer.
+        text_length = sum(len(token) for token in tokens) + len(tokens) - 1
+        if atom_values[0].st != 0 or atom_values[-1].et != text_length:
+            raise ValueError("gold text offsets do not cover the sentence AtomList")
+        atom_boundaries = {0: 0}
+        atom_boundaries.update({atom.et: index + 1 for index, atom in enumerate(atom_values)})
+        boundaries = [0]
+        text_offset = 0
+        for token in tokens[:-1]:
+            text_offset += len(token)
+            atom_offset = atom_boundaries.get(text_offset)
+            if atom_offset is None:
+                raise ValueError(f"gold boundary at text offset {text_offset} is not an Atom boundary")
+            if atom_offset != boundaries[-1]:
+                boundaries.append(atom_offset)
+            text_offset += 1
+        boundaries.append(len(atom_values))
+        return list(zip(boundaries, boundaries[1:]))
 
     def _sample(self, tokens):
-        text = "".join(tokens)
-        atoms, candidates = self.segment.cut(text, max_mode=True)
+        # Spaces separate adjacent ENG/NUM words during atomization, then
+        # skip_space removes them from the Atom index space.
+        text = " ".join(tokens)
+        atoms, candidates = self.segment.cut(
+            text, max_mode=True, skip_space=True, normal_before=False
+        )
         words = candidates.tolist()
         types = self.word_codec.encode(candidates)
         codes = self.atom_codec.encode(atoms)
@@ -100,7 +127,7 @@ class GraphSampleReader(IterableDataset):
         for start in range(len(atoms)):
             for end in range(start + 1, min(len(atoms), start + self.max_span) + 1):
                 candidates_by_span.setdefault((start, end), 0)
-        gold_spans = self._gold_spans(tokens)
+        gold_spans = self._gold_spans(tokens, atoms)
         for span in gold_spans:
             candidates_by_span.setdefault(span, 0)
 
@@ -174,12 +201,13 @@ class SpanSampleReader(IterableDataset):
         return self.atom_codec.label_nums()
 
     def _sample(self, tokens):
-        text = "".join(tokens)
-        atoms = PyAtomList(text)
+        # Keep this contract identical to GraphSampleReader.
+        text = " ".join(tokens)
+        atoms = PyAtomList(text, skip_space=True, normal_before=False)
         codes = self.atom_codec.encode(atoms)
         code_ids = [item[0] for item in codes]
         starts, ends = piece_bounds(codes, len(atoms))
-        gold = set(GraphSampleReader._gold_spans(tokens))
+        gold = set(GraphSampleReader._gold_spans(tokens, atoms))
         spans = []
         for start in range(len(atoms)):
             for end in range(start + 2, min(len(atoms), start + self.max_span) + 1):

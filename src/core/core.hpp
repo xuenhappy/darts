@@ -80,7 +80,10 @@ class AtomList {
             atom->char_type = ttype;
             this->data.push_back(atom);
         };
-        atomSplit(this->str, accept);
+        // When spaces are skipped they must first be emitted as independent
+        // EMPTY atoms. Otherwise the splitter's legacy POS/EMPTY coalescing
+        // can produce atoms such as " , " that the filter cannot remove.
+        atomSplit(this->str, accept, !skip_space);
     }
 
     /**
