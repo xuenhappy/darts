@@ -26,14 +26,6 @@
             "deps": {
                 "pyin.encoder": "pinyin.encoder"
             }
-        },
-        "hmm.new.finder": {
-            "type": "OnnxRecongnizer",
-            "label.list": "O,B-_HWORD,I-_HWORD",
-            "model.path": "data/models/crf.ner.onnx",
-            "deps": {
-                "wordpice.name": "wordpiece.dict"
-            }
         }
     },
     // all the deciders plugins
@@ -45,18 +37,14 @@
         "mini.decider": {
             "type": "MinCoverDecider"
         },
-        "onnx.decider": {
-            "type": "OnnxDecider",
-            "pmodel.path": "data/model/onnx/",
-            "qmodel.path": "data/model/onnx/",
-            "deps": {
-                "wordpiece.name": "wordpiece.dict",
-                "tencode.name": "wtype.encoder"
-            }
-        },
-        "pyin.decider": {
-            "type": "",
-            "model.path": ""
+        "hybrid.decider": {
+            "type": "HybridStatDecider",
+            "dat.path": "data/models/ngram_dict.bdf",
+            "bigram.weight": "2.0",
+            "length.weight": "15.0",
+            "length.power": "1.0",
+            "token.penalty": "0.0",
+            "unknown.penalty": "20.0"
         }
     },
     // all mode that the segment working
@@ -70,24 +58,23 @@
         "fast": {
             "decider": "ngram.decider",
             "recognizers": [
-                "inner.dict",
-                "hmm.new.finder"
+                "inner.dict"
             ]
         },
-        "smart": {
-            "decider": "onnx.decider",
+        "hybrid": {
+            "decider": "hybrid.decider",
             "recognizers": [
-                "inner.dict",
-                "hmm.new.finder"
+                "inner.dict"
             ]
         },
         "pinyin": {
-            "decider": "pinyin.embeder",
+            "decider": "hybrid.decider",
             "recognizers": [
+                "inner.dict",
                 "pinyin.dict"
             ]
         }
     },
     //which model to load for default
-    "default.mode": "fast"
+    "default.mode": "hybrid"
 }

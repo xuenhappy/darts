@@ -490,7 +490,7 @@ class PinyinEncoder : public TypeEncoder {
     const static int unk = 3;
 
    private:
-    std::map<std::string, int> pyin_codes;
+    std::unordered_map<std::string, int> pyin_codes;
     std::vector<std::string> plist;
 
    public:
@@ -499,12 +499,14 @@ class PinyinEncoder : public TypeEncoder {
         std::set<std::string> datas;
         for (auto it = _WordPinyin.begin(); it != _WordPinyin.end(); ++it) {
             for (auto w : it->second->piyins) {
-                datas.insert(w);
+                if (w.find(' ') == std::string::npos) datas.insert(w);
             }
         }
         plist.reserve(datas.size());
         plist.insert(plist.end(), datas.begin(), datas.end());
         std::sort(plist.begin(), plist.end());
+        pyin_codes.clear();
+        pyin_codes.reserve(plist.size());
         for (int i = 0; i < plist.size(); ++i) {
             pyin_codes[plist[i]] = i;
         }

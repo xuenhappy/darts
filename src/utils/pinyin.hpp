@@ -14,9 +14,11 @@
 #define SRC_UTILS_PINYIN_HPP_
 
 #include <fstream>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "./filetool.hpp"
@@ -33,7 +35,7 @@ typedef struct _pinyin {
     std::vector<std::string> piyins;
 } PinyinInfo;
 
-static std::unordered_map<std::string, std::shared_ptr<PinyinInfo>> _WordPinyin;
+inline std::unordered_map<std::string, std::shared_ptr<PinyinInfo>> _WordPinyin;
 /**
  * @brief 加载拼音数据
  *
@@ -47,6 +49,8 @@ inline int loadPinyin() {
     }
     std::string line;
     size_t s, e;
+    _WordPinyin.clear();
+    _WordPinyin.reserve(42000);
     while (std::getline(in, line)) {
         darts::trim(line);
         if (line.empty() || line.length() < 4) {
@@ -64,17 +68,25 @@ inline int loadPinyin() {
             std::cerr << "WARN: Bad line input " << line << std::endl;
             continue;
         }
-        std::string nums = line.substr(2, s);
+        std::string nums = line.substr(2, s - 2);
         darts::trim(nums);
-        std::string pinyin = line.substr(s + 1, e);
+        std::string pinyin = line.substr(s + 1, e - s - 1);
         darts::trim(pinyin);
-        uint32_t code = std::stoul(nums, nullptr, 16);
+        uint32_t code = 0;
+        try {
+            code = std::stoul(nums, nullptr, 16);
+        } catch (const std::exception&) {
+            std::cerr << "WARN: Bad code point input " << line << std::endl;
+            continue;
+        }
+        if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) continue;
 
         std::shared_ptr<PinyinInfo> info = std::make_shared<PinyinInfo>();
 
         info->code = code;
         info->key  = unicode_to_utf8(code);
         darts::split(pinyin, ",", info->piyins);
+        std::unordered_set<std::string> unique;
         std::vector<std::string>::iterator it = info->piyins.begin();
         while (it != info->piyins.end()) {
             darts::trim(*it);
@@ -82,7 +94,11 @@ inline int loadPinyin() {
                 it = info->piyins.erase(it);
                 continue;
             }
-            ++it;
+            if (!unique.insert(*it).second) {
+                it = info->piyins.erase(it);
+            } else {
+                ++it;
+            }
         }
         if (!info->piyins.empty()) {
             // std::cout << info->key << "," << darts::join(info->piyins, "|") << std::endl;
@@ -92,6 +108,33 @@ inline int loadPinyin() {
 
     in.close();
 
+    return EXIT_SUCCESS;
+}
+
+inline int loadPhrasePinyin() {
+    std::string path = getResource("data/kernel/pinyin-phrases.txt");
+    std::ifstream input(path.c_str());
+    if (!input.is_open()) {
+        std::cerr << "ERROR: open data " << path << " file failed " << std::endl;
+        return EXIT_FAILURE;
+    }
+    std::string line;
+    while (std::getline(input, line)) {
+        darts::trim(line);
+        if (line.empty() || line[0] == '#') continue;
+        const size_t separator = line.find(':');
+        if (separator == std::string::npos) continue;
+        auto info = std::make_shared<PinyinInfo>();
+        info->key = line.substr(0, separator);
+        std::string readings = line.substr(separator + 1);
+        darts::trim(info->key);
+        darts::trim(readings);
+        darts::split(readings, " ", info->piyins);
+        info->piyins.erase(std::remove_if(info->piyins.begin(), info->piyins.end(),
+                                         [](const std::string& value) { return value.empty(); }),
+                           info->piyins.end());
+        if (!info->key.empty() && !info->piyins.empty()) _WordPinyin[info->key] = std::move(info);
+    }
     return EXIT_SUCCESS;
 }
 

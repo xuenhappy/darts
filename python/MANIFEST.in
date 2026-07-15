@@ -2,6 +2,8 @@ recursive-include darts *.py *.pyx *.pxd *.json *.txt *.mbs *.pbs *.bdf *.onnx *
 recursive-include darts/devel *.py
 graft ../src
 graft ../data
+prune ../data/external
+prune ../data/generated
 include ../README.md
 include ../meson.build
 include ../meson_options.txt

@@ -272,11 +272,6 @@ class Segment {
         if (atomList.size() < 1) {
             return;
         }
-        if (atomList.size() == 1) {
-            auto atom = atomList.at(0);
-            ret.push_back(std::make_shared<Word>(atom->image, atom_start_pos, atom_start_pos + 1));
-            return;
-        }
         auto cmap = new SegPath();
         buildSegPath(atomList, *cmap);
         if (decider == nullptr || maxMode) {

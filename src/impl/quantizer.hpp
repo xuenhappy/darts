@@ -13,6 +13,7 @@
 #define SRC_IMPL_QUANTIZER_HPP_
 
 #include <cstdlib>
+#include <cmath>
 #include <map>
 #include <memory>
 #include <set>
@@ -55,6 +56,64 @@ class MinCoverDecider : public Decider {
 };
 
 REGISTER_Decider(MinCoverDecider);
+
+class HybridStatDecider : public Decider {
+   private:
+    BigramDict ngdict;
+    double bigram_weight = 1.0;
+    double length_weight = 100.0;
+    double length_power = 1.0;
+    double token_penalty = 0.0;
+    double unknown_penalty = 0.0;
+
+    static double readNonNegative(const std::map<std::string, std::string>& params, const char* key,
+                                  double fallback) {
+        auto it = params.find(key);
+        if (it == params.end()) return fallback;
+        try {
+            double value = std::stod(it->second);
+            return std::isfinite(value) && value >= 0.0 ? value : fallback;
+        } catch (const std::exception&) {
+            return fallback;
+        }
+    }
+
+    double wordCost(const std::shared_ptr<Word>& word) const {
+        if (!word || word->isStSpecial() || word->isEtSpecial()) return 0.0;
+        const double length = std::max(1, word->et - word->st);
+        double cost = token_penalty + length_weight / std::pow(length, length_power);
+        if (word->vocab_id < 0) cost += unknown_penalty;
+        return cost;
+    }
+
+   public:
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) override {
+        auto path = params.find("dat.path");
+        if (path == params.end() || path->second.empty() || ngdict.loadDict(getResource(path->second))) {
+            std::cerr << "ERROR: HybridStatDecider requires a valid dat.path" << std::endl;
+            return EXIT_FAILURE;
+        }
+        bigram_weight = readNonNegative(params, "bigram.weight", bigram_weight);
+        length_weight = readNonNegative(params, "length.weight", length_weight);
+        length_power = readNonNegative(params, "length.power", length_power);
+        token_penalty = readNonNegative(params, "token.penalty", token_penalty);
+        unknown_penalty = readNonNegative(params, "unknown.penalty", unknown_penalty);
+        return EXIT_SUCCESS;
+    }
+
+    void embed(const AtomList& dstSrc, SegPath& cmap) const override {
+        cmap.iterRow(nullptr, -1, [this](Cursor cur) { cur->val->vocab_id = ngdict.getWordKey(cur->val->text()); });
+    }
+
+    double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const override {
+        const int pre_idx = pre && !pre->isStSpecial() ? pre->vocab_id : -1;
+        const int next_idx = next && !next->isEtSpecial() ? next->vocab_id : -1;
+        return bigram_weight * ngdict.wordDist(pre_idx, next_idx) + wordCost(pre) + wordCost(next);
+    }
+};
+
+REGISTER_Decider(HybridStatDecider);
 
 /**
  * @brief this use cedar store thing

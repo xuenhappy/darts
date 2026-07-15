@@ -20,6 +20,11 @@ class AtomListTests(unittest.TestCase):
         atoms = PyAtomList("ＡＢＣ １２３", skip_space=True, normal_before=True).tolist()
         self.assertEqual([atom.image for atom in atoms], ["ABC", "123"])
 
+    def test_unicode_character_types(self):
+        self.assertEqual(PyAtomList("あ").tolist()[0].chtype, "WUNK")
+        self.assertEqual(PyAtomList("한").tolist()[0].chtype, "WUNK")
+        self.assertEqual(PyAtomList("𠀀").tolist()[0].chtype, "CJK")
+
     def test_thread_safe_atomization(self):
         expected = [atom.image for atom in PyAtomList("并发中文ABC123").tolist()]
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -54,13 +59,25 @@ class SegmentTests(unittest.TestCase):
         self.assertEqual(words[-1].atom_e, len(atoms))
         self.assertTrue(all(left.atom_e == right.atom_s for left, right in zip(words, words[1:])))
 
-    def test_faster_and_fast_modes(self):
+    def test_non_neural_modes(self):
         text = "目标检测模型量化和中文分词测试"
         self.assert_contiguous_cover("faster", text)
         self.assert_contiguous_cover("fast", text)
+        self.assert_contiguous_cover("hybrid", text)
+        self.assert_contiguous_cover("", text)
 
     def test_long_text(self):
         self.assert_contiguous_cover("faster", "中文分词测试。" * 40)
+
+    def test_pinyin_mode_and_single_character(self):
+        _atoms, output = DSegment(str(CONFIG), "pinyin").cut("重庆音乐ABC")
+        words = output.tolist()
+        self.assertIn("chóng qìng", next(word for word in words if word.image == "重庆").labels)
+        self.assertIn("yīn yuè", next(word for word in words if word.image == "音乐").labels)
+        self.assertFalse(next(word for word in words if word.image == "ABC").labels - {"ENG"})
+
+        _atoms, output = DSegment(str(CONFIG), "pinyin").cut("中")
+        self.assertIn("zhōng", output.tolist()[0].labels)
 
     def test_missing_mode_fails(self):
         with self.assertRaises(OSError):

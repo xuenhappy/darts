@@ -73,6 +73,7 @@ def dict_benchmark(args):
 
 
 def model_train(args):
+    import torch
     from darts.devel.model import NerTrainer
     from darts.devel.reader import TorchNerSampleReader
     from darts.devel.sover import TSolver
@@ -80,7 +81,16 @@ def model_train(args):
     reader = TorchNerSampleReader(args.sample, args.labels, batch_nums=args.batch_size,
                                   max_words_len=args.max_words)
     model = NerTrainer(reader.wordsize(), args.hidden_size, reader.labelsize())
-    solver = TSolver(model, reader, {"model_outdir": args.output_dir, "epoch_num": args.epochs})
+    device = "cuda" if torch.cuda.is_available() and args.device != "cpu" else "cpu"
+    if args.device == "cuda" and device != "cuda":
+        raise RuntimeError("--device cuda requested but PyTorch cannot access CUDA")
+    print(f"training device={device} samples={args.sample}")
+    solver = TSolver(model, reader, {
+        "model_outdir": args.output_dir,
+        "epoch_num": args.epochs,
+        "device": device,
+        "log_every": args.log_every,
+    })
     solver.solve()
 
 
@@ -110,6 +120,11 @@ def build(args):
     command = ["bash", "scripts/build_all.sh"]
     if args.test:
         command.append("--test")
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def data(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/data_pipeline.py", args.action]
     subprocess.run(command, cwd=ROOT, check=True)
 
 
@@ -143,6 +158,8 @@ def main():
     command.add_argument("--batch-size", type=int, default=100)
     command.add_argument("--max-words", type=int, default=50)
     command.add_argument("--hidden-size", type=int, default=128)
+    command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.add_argument("--log-every", type=int, default=50)
     command.set_defaults(func=model_train)
 
     command = commands.add_parser("model-export", help="export a trained Transformer checkpoint to ONNX")
@@ -153,6 +170,10 @@ def main():
     command = commands.add_parser("build", help="run the Meson-only build workflow")
     command.add_argument("--test", action="store_true")
     command.set_defaults(func=build)
+
+    command = commands.add_parser("data", help="download, prepare, or build reproducible open data")
+    command.add_argument("action", choices=("download", "prepare", "build-models"))
+    command.set_defaults(func=data)
 
     args = parser.parse_args()
     args.func(args)

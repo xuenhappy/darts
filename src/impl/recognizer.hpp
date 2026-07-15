@@ -125,6 +125,8 @@ class PinyinRecongnizer : public CellRecognizer {
    private:
     std::shared_ptr<PinyinEncoder> encoder;
     static const char* ENCODER_PARAM;
+    static const char* NON_CJK_LABEL_PARAM;
+    std::string non_cjk_label;
 
    public:
     int initalize(const std::map<std::string, std::string>& params,
@@ -139,37 +141,47 @@ class PinyinRecongnizer : public CellRecognizer {
             std::cerr << "plugin in init error " << ENCODER_PARAM << std::endl;
             return EXIT_FAILURE;
         }
+        auto label = params.find(NON_CJK_LABEL_PARAM);
+        if (label != params.end()) non_cjk_label = label->second;
         return EXIT_SUCCESS;
     }
 
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
-        std::vector<std::shared_ptr<Word>> adds;
-        auto dfunc = [this, &adds](Cursor cur) {
+        auto dfunc = [this, &dstSrc](Cursor cur) {
             auto pw   = cur->val;
             auto pyin = pinyin(pw->text());
-            if (pyin == nullptr) return;
-            pw->addLabel(pyin->piyins[0]);
-            pw->feat = encoder->encode(pyin->piyins[0]);
-            for (size_t i = 1; i < pyin->piyins.size(); ++i) {
-                auto w = std::make_shared<Word>(pw->text(), pw->st, pw->et);
-                w->addLabel(pyin->piyins[i]);
-                w->feat = encoder->encode(pyin->piyins[i]);
-                adds.push_back(w);
+            std::string annotation;
+            if (pyin != nullptr && pw->et - pw->st > 1 && pyin->piyins.size() == pw->et - pw->st) {
+                annotation = darts::join(pyin->piyins, " ");
+            } else {
+                bool is_cjk = true;
+                std::vector<std::string> readings;
+                for (size_t pos = pw->st; pos < pw->et; ++pos) {
+                    auto atom = dstSrc.at(pos);
+                    if (atom->char_type != char_type::CJK) {
+                        is_cjk = false;
+                        break;
+                    }
+                    auto reading = pinyin(atom->image);
+                    if (!reading || reading->piyins.empty()) {
+                        is_cjk = false;
+                        break;
+                    }
+                    readings.push_back(reading->piyins.front());
+                }
+                if (is_cjk) annotation = darts::join(readings, " ");
             }
+            if (annotation.empty()) annotation = non_cjk_label;
+            if (annotation.empty()) return;
+            pw->addLabel(annotation);
+            pw->feat = annotation.find(' ') == std::string::npos ? encoder->encode(annotation) : PinyinEncoder::unk;
         };
         cmap.iterRow(nullptr, -1, dfunc);
-        if (!adds.empty()) {
-            auto cur = cmap.Head();
-            for (auto w : adds) {
-                cur = cmap.addNext(cur, w);
-            }
-            adds.clear();
-        }
     }
-    bool exclusive() const override { return true; }
 };
 
 const char* PinyinRecongnizer::ENCODER_PARAM = "pyin.encoder";
+const char* PinyinRecongnizer::NON_CJK_LABEL_PARAM = "non-cjk.label";
 REGISTER_Recognizer(PinyinRecongnizer);
 
 class RuleRecongnizer : public CellRecognizer {

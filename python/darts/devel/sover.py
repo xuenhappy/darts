@@ -56,8 +56,8 @@ class TSolver():
         for (k, v) in conf.items():
             setattr(self, k, v)
         self.model = model
-        if torch.cuda.is_available():
-            self.model = self.model.cuda()
+        self.device = torch.device(getattr(self, "device", "cuda" if torch.cuda.is_available() else "cpu"))
+        self.model = self.model.to(self.device)
 
         modeldir = os.path.abspath(os.path.join(os.path.curdir, self.model_outdir))
         self.out_dir = os.path.join(modeldir, str(int(time.time())))
@@ -103,7 +103,9 @@ class TSolver():
                 # apply loss
                 self.optimizer.step()
                 self.optimizer.zero_grad()
-                print('train [epoch|step|sample]:[%d|%d|%d] loss:%g' % (_epoch, _step, _sample, float(loss.cpu())))
+                if _step == 1 or _step % getattr(self, "log_every", 50) == 0:
+                    print('train [epoch|step|sample]:[%d|%d|%d] loss:%g' %
+                          (_epoch, _step, _sample, float(loss.detach().cpu())))
                 if _step % 200000 == 0:
                     saveTorchModel(self.model, self.out_dir, _epoch)
             saveTorchModel(self.model, self.out_dir, _epoch)

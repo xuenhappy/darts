@@ -102,6 +102,15 @@ def copy_tree(src: Path, dst: Path) -> None:
         shutil.copytree(src, dst, dirs_exist_ok=True)
 
 
+def copy_runtime_data(dst: Path) -> None:
+    """Stage only files required at runtime, never downloaded training corpora."""
+    data_dir = ROOT_DIR / "data"
+    for name in ("conf.json", "readme.md", "sources.json", "sources.lock.json"):
+        shutil.copy2(data_dir / name, dst / name)
+    for directory in ("codes", "demo", "kernel", "licenses", "models"):
+        copy_tree(data_dir / directory, dst / directory)
+
+
 def copy_runtime_libs_if_requested(package_dir: Path) -> None:
     runtime_dir = _env_path("DARTS_ONNXRUNTIME_DIR") or _env_path("ONNXRUNTIME_HOME")
     if runtime_dir:
@@ -134,7 +143,11 @@ class build_py(_build_py):
         native_ext = find_native_extension(build_dir)
         shutil.copy2(native_ext, package_dir / native_ext.name)
 
-        copy_tree(ROOT_DIR / "data", package_dir / "data")
+        data_target = package_dir / "data"
+        if data_target.exists():
+            shutil.rmtree(data_target)
+        data_target.mkdir(parents=True)
+        copy_runtime_data(data_target)
         copy_runtime_libs_if_requested(package_dir)
 
 

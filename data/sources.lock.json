@@ -1,0 +1,76 @@
+{
+  "sources": [
+    {
+      "name": "ud-chinese-gsd-train",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSD/r2.18/zh_gsd-ud-train.conllu",
+      "target": "ud-chinese-gsd/train.conllu",
+      "bytes": 9318330,
+      "sha256": "de36e605a4786edb00097165cfc0ee425ab668a2dfc1da7ce4652ba4d2585b1e"
+    },
+    {
+      "name": "ud-chinese-gsd-dev",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSD/r2.18/zh_gsd-ud-dev.conllu",
+      "target": "ud-chinese-gsd/dev.conllu",
+      "bytes": 1195021,
+      "sha256": "09374c8361400861a536ae94a1d7710e1cdd72285c32b9764d94d2d956b4ae02"
+    },
+    {
+      "name": "ud-chinese-gsd-test",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSD/r2.18/zh_gsd-ud-test.conllu",
+      "target": "ud-chinese-gsd/test.conllu",
+      "bytes": 1136344,
+      "sha256": "ff01a3d01d62b623756396085e78bdaeefb7c2b7935a890dde5b18e92712d54f"
+    },
+    {
+      "name": "ud-chinese-gsd-license",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSD/r2.18/LICENSE.txt",
+      "target": "ud-chinese-gsd/LICENSE.txt",
+      "bytes": 202,
+      "sha256": "899b1804a12ebc090b96339614eede1b64b686721b650a71430b55b5235f7f79"
+    },
+    {
+      "name": "jieba-dictionary",
+      "version": "v0.42.1",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/fxsjy/jieba/v0.42.1/jieba/dict.txt",
+      "target": "jieba/dict.txt",
+      "bytes": 5071852,
+      "sha256": "7197c3211ddd98962b036cdf40324d1ea2bfaa12bd028e68faa70111a88e12a8"
+    },
+    {
+      "name": "jieba-license",
+      "version": "v0.42.1",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/fxsjy/jieba/v0.42.1/LICENSE",
+      "target": "jieba/LICENSE",
+      "bytes": 1075,
+      "sha256": "18ba0984839f85853b29fadaf992f7dba8fd0ca0fbeae34de2b8735222dc7a37"
+    },
+    {
+      "name": "phrase-pinyin-data",
+      "version": "v0.19.0",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/mozillazg/phrase-pinyin-data/v0.19.0/pinyin.txt",
+      "target": "phrase-pinyin-data/pinyin.txt",
+      "bytes": 1256063,
+      "sha256": "dcc769607c220b312fea3e71cb63421298b4b891b1f7356a95ab58f2c96fff81"
+    },
+    {
+      "name": "phrase-pinyin-license",
+      "version": "v0.19.0",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/mozillazg/phrase-pinyin-data/v0.19.0/LICENSE",
+      "target": "phrase-pinyin-data/LICENSE",
+      "bytes": 1066,
+      "sha256": "89ac55df747e4776088c3e77531ef61b973a1a59dd8e6a4548a58996da9a4f70"
+    }
+  ]
+}

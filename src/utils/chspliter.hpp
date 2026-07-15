@@ -29,8 +29,8 @@
  * @brief 字符串类型数据
  *
  */
-static std::unordered_map<uint32_t, std::string> _charType;
-static std::unordered_set<uint32_t> _cjkCodes;
+inline std::unordered_map<uint32_t, std::string> _charType;
+inline std::unordered_set<uint32_t> _cjkCodes;
 
 namespace char_type {
 static const std::string ENG("ENG");
@@ -45,10 +45,11 @@ inline void load_cjk_words_() {
     _cjkCodes.insert(0x3005);
     _cjkCodes.insert(0x3007);
     _cjkCodes.insert(0x303B);
-    uint32_t LHan[][2] = {{0x4e00, 0x9fa5},   {0x3130, 0x318F},  {0xAC00, 0xD7A3}, {0x2000, 0x4e00}, {0x3400, 0x4DB5},
-                          {0x2E80, 0x2E99},   {0x2E9B, 0x2EF3},  {0x2F00, 0x2FD5}, {0x3021, 0x3029}, {0x3038, 0x303A},
-                          {0x3400, 0x4DB5},   {0x4E00, 0x9FC3},  {0xF900, 0xFA2D}, {0xFA30, 0xFA6A}, {0xFA70, 0xFAD9},
-                          {0x20000, 0x2A6D6}, {0x2F800, 0x2FA1D}};
+    const uint32_t LHan[][2] = {
+        {0x3400, 0x4DBF},   {0x4E00, 0x9FFF},   {0xF900, 0xFAFF},   {0x20000, 0x2A6DF},
+        {0x2A700, 0x2B73F}, {0x2B740, 0x2B81F}, {0x2B820, 0x2CEAF}, {0x2CEB0, 0x2EBEF},
+        {0x2EBF0, 0x2EE5F}, {0x2F800, 0x2FA1F}, {0x30000, 0x3134F}, {0x31350, 0x3347F},
+    };
 
     size_t row = sizeof(LHan) / sizeof(LHan[0]);
     for (size_t r = 0; r < row; ++r)
@@ -66,6 +67,9 @@ inline int loadCharMap() {
     std::string head("-%");
     std::string line;
     std::string prefix = "";
+    _charType.clear();
+    _charType.reserve(10000);
+    _cjkCodes.clear();
     while (std::getline(in, line)) {
         darts::trim(line);
         if (line.empty()) continue;

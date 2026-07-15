@@ -256,7 +256,7 @@ bash scripts/build_all.sh --test
 
 ```bash
 meson test -C build/meson --print-errorlogs
-build/test-venv/bin/python -m unittest discover -s test -p 'test_python.py' -v
+build/test-venv/bin/python -m unittest discover -s test -p 'test_*.py' -v
 ```
 
 已有构建虚拟环境依赖完整时，测试流程不会重复访问 Python 包索引，可离线重复执行。
@@ -481,7 +481,7 @@ Decider 分为嵌入和距离两个阶段：
   "recognizers": {},
   "deciders": {},
   "modes": {},
-  "default.mode": "fast"
+  "default.mode": "faster"
 }
 ```
 
@@ -524,6 +524,7 @@ Decider 分为嵌入和距离两个阶段：
 | `OnnxRecongnizer` | `label.list` | 逗号分隔的输出标签列表 |
 | `OnnxRecongnizer` | `deps.wordpice.name` | 指向 `WordPice` 服务，键名沿用源码拼写 |
 | `PinyinRecongnizer` | `deps.pyin.encoder` | 指向 `PinyinEncoder` 服务 |
+| `PinyinRecongnizer` | `non-cjk.label` | 可选的非中文占位标签；为空时不添加拼音 |
 
 示例：
 
@@ -545,18 +546,23 @@ Decider 分为嵌入和距离两个阶段：
 | `MinCoverDecider` | 无 | 使用词长启发式代价 |
 | `BigramDecider` | `dat.path` | Bigram 二进制词典 |
 | `BigramDecider` | `deps.type.enc` | 可选的 `LabelEncoder` 服务 |
+| `HybridStatDecider` | `dat.path` | Bigram 二进制词典 |
+| `HybridStatDecider` | `bigram.weight` | Bigram 负对数代价权重 |
+| `HybridStatDecider` | `length.weight` / `length.power` | 词长先验的权重与幂次 |
+| `HybridStatDecider` | `unknown.penalty` | 不在统计词表中的候选惩罚 |
+| `HybridStatDecider` | `token.penalty` | 每个候选词的固定惩罚 |
 | `OnnxDecider` | `pmodel.path` | indicator/embedding 模型路径 |
 | `OnnxDecider` | `qmodel.path` | 边量化模型路径 |
 | `OnnxDecider` | `deps.wordpiece.name` | WordPiece 服务依赖 |
 | `OnnxDecider` | `deps.tencode.name` | 词类型编码服务依赖 |
 
-`MinCoverDecider` 不需要模型，适合验证词典候选；`BigramDecider` 是默认 `fast` 模式使用的稳定决策器。
+`MinCoverDecider` 不需要统计模型，用于偏 precision 的 `faster` 模式；`BigramDecider` 用于兼容 `fast` 模式。默认 `hybrid` 使用 `HybridStatDecider`，将平滑 Bigram、词长先验和 OOV 惩罚组合为非负图边代价。参数由 `scripts/tune_decider.py` 在 dev 集搜索，禁止使用 test 集调参。
 
 ### Transformer 模型迁移
 
 `python/darts/devel/model.py` 中的 `WordEncoder` 已改为 Transformer，ONNX 导出使用 opset 17，编码器默认输出 `transformer.encoder.onnx`。`Quantizer` 使用归一化 Key/Query、可学习温度和 `softplus(-similarity)` 产生非负边代价。
 
-仓库现有 `data/models/crf.ner.onnx` 是历史兼容模型，二进制中仍包含 GRU 权重。它只能用于旧配置回归，不能通过代码修改原位转换为 Transformer。生产迁移需要用原训练集重新训练 `CrfNer`，导出新 ONNX 文件后更新 `recognizers.*.model.path`；不要把随机初始化导出的模型用于分词。
+仓库现有 `data/models/crf.ner.onnx` 是历史兼容模型，二进制中仍包含 GRU 权重，默认配置不再加载它。二进制不能通过代码修改原位转换为 Transformer；生产迁移需要用标注训练集重新训练 `CrfNer`，导出新 ONNX 文件并在自定义模式中配置 `OnnxRecongnizer`。不要把随机初始化导出的模型用于分词。
 
 ### `modes`
 
@@ -570,15 +576,15 @@ Decider 分为嵌入和距离两个阶段：
   },
   "fast": {
     "decider": "ngram.decider",
-    "recognizers": ["inner.dict", "hmm.new.finder"]
+    "recognizers": ["inner.dict"]
   }
 },
-"default.mode": "fast"
+"default.mode": "faster"
 ```
 
 `DSegment(config, mode)` 中显式传入的 mode 优先；mode 为空时读取 `default.mode`。
 
-当前仓库的 `faster` 和 `fast` 模式有完整数据文件。`smart` 配置中的 `data/model/onnx/` 模型目录未包含在当前仓库中；`pinyin` 模式引用的决策器名称也没有对应完整注册配置，因此这两个模式需要补充模型或修正插件配置后才能用于生产。
+默认配置提供 `hybrid`、`faster`、`fast` 和 `pinyin`，默认选择 `hybrid`。`pinyin` 共享混合统计分词路径，再以词级短语拼音消除多音字歧义，未命中短语时回退到单字读音；非中文默认保持原分词标签且不添加拼音。神经网络实验应在独立配置中补齐模型和决策器后启用。
 
 ### 开发模式
 
@@ -617,10 +623,11 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 | `data/kernel/chars.tmap` | 字符类型映射 |
 | `data/kernel/confuse.json` | 归一化/易混字符映射 |
 | `data/kernel/pinyin.txt` | 拼音数据 |
+| `data/kernel/pinyin-phrases.txt` | 与核心词典对齐的词级拼音消歧数据 |
 | `data/codes/type.hx.txt` | 词类型标签及权重 |
 | `data/models/panda.pbs` | 内置词典 Trie |
 | `data/models/ngram_dict.bdf` | Bigram 决策词典 |
-| `data/models/crf.ner.onnx` | 新词序列识别模型 |
+| `data/models/crf.ner.onnx` | 历史 GRU 兼容模型，默认不加载 |
 | `data/models/codex/engpiece.mbs` | 英文子词词典 |
 | `data/models/codex/table.vocab` | WordPiece 词表 |
 | `data/demo/` | 词典和模式编译示例数据 |
@@ -641,15 +648,42 @@ python scripts/devel.py dict-repack data/models/panda.pbs /tmp/panda-v2.pbs
 # 测量词典加载和匹配吞吐
 python scripts/devel.py dict-benchmark /tmp/panda-v2.pbs --repeat 10000
 
-# 训练 Transformer CRF 序列识别模型
-python scripts/devel.py model-train samples.txt --epochs 6 --output-dir model_bin
+# 使用开放数据训练 Transformer CRF 序列识别模型（CUDA 可用时自动使用 GPU）
+python scripts/devel.py model-train data/generated/cws-train.txt --epochs 6 --output-dir model_bin
 
 # 将训练检查点导出为 opset 17 ONNX
 python scripts/devel.py model-export model_bin/checkpoint.pt data/models/transformer.crf.onnx
 
+# 下载开放数据、生成训练切分并重建词典/Bigram 模型
+python scripts/devel.py data download
+python scripts/devel.py data prepare
+python scripts/devel.py data build-models
+
 # 执行纯 Meson 构建和 wheel 回归
 python scripts/devel.py build --test
 ```
+
+### 开放数据流水线
+
+`data/sources.json` 固定 UD Chinese GSD 2.18 与 jieba 0.42.1 的下载地址和许可；`data/sources.lock.json` 记录实际文件大小和 SHA-256。原始文件下载到被 Git 忽略的 `data/external/`，训练切分和中间文本生成到 `data/generated/`。下载器继承 `HTTP_PROXY`/`HTTPS_PROXY`，支持 `.part` 断点续传和已有文件校验。
+
+```bash
+python scripts/data_pipeline.py download
+python scripts/data_pipeline.py prepare
+python scripts/data_pipeline.py build-models
+python scripts/data_pipeline.py evaluate data/generated/cws-dev.txt --mode faster
+python scripts/data_pipeline.py evaluate data/generated/cws-test.txt --mode faster
+
+# 仅在开发集扫描混合统计量化器参数
+python scripts/tune_decider.py
+python scripts/tune_decider.py --fine
+```
+
+词典保留全部 UD train 词汇，并合并 jieba 中频率至少为 10 的词条；默认过滤超过 8 个 Unicode 字符的异常长词。Bigram 只从 UD train 统计，dev 用于模式选择，test 仅用于最终评测。UD Chinese GSD 使用 CC BY-SA 4.0，jieba 词典使用 MIT；再分发时必须遵守各自署名与共享条款，详见 `data/readme.md` 和下载后的许可证文件。
+
+在 UD Chinese GSD dev 的 500 句上，调优后的 `faster` 模式边界 precision 为 0.8856、recall 为 0.9434、F1 为 0.9136；历史内置模型同模式 F1 为 0.7993。该结果是单一语料域基线，不代表新闻、医疗或社交文本的泛化质量。
+
+混合统计量化器在 dev 上取得 precision 0.8830、recall 0.9568、F1 0.9185；未参与调参的 test 上取得 precision 0.8634、recall 0.9436、F1 0.9017、整句准确率 0.112。相同 test 上 `faster` 的 F1 为 0.8971、整句准确率为 0.094。若业务更重视 precision，可显式选择 `faster`。
 
 词典 v2 使用差分 ZigZag 状态数组和最高级别 Deflate 压缩，同时保留旧 `.pbs` 的读取兼容。最高压缩会增加词典生成时间，但不影响运行时识别速度。`darts-dict-repack` 要求输入和输出路径不同，以免损坏原文件。
 

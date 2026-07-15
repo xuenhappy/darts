@@ -17,12 +17,12 @@
 #include "chspliter.hpp"
 #include "pinyin.hpp"
 
-static std::once_flag init_flag;
-static int init_result = EXIT_SUCCESS;
+inline std::once_flag init_flag;
+inline int init_result = EXIT_SUCCESS;
 
 inline int initUtils() {
     std::call_once(init_flag, []() {
-        if (loadCharMap() || loadPinyin() || initializeMap()) init_result = EXIT_FAILURE;
+        if (loadCharMap() || loadPinyin() || loadPhrasePinyin() || initializeMap()) init_result = EXIT_FAILURE;
     });
     return init_result;
 }

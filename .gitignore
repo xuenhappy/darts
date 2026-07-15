@@ -43,3 +43,5 @@ GPATH
 GRTAGS
 GTAGS
 *.pyc
+data/external/
+data/generated/

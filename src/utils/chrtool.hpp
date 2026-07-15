@@ -29,7 +29,7 @@
  * @brief  字符串规范化使用的工具
  *
  */
-static std::unordered_map<uint32_t, std::string> _WordMap;
+inline std::unordered_map<uint32_t, std::string> _WordMap;
 /**
  * @brief add some special words map
  *

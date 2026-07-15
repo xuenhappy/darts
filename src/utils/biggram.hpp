@@ -362,7 +362,7 @@ class BigramDict {
         if (pre_idx < 0 || next_idx < 0) {
             if (pre_idx >= 0) return getSingleNlogProp(pre_idx);
             if (next_idx >= 0) return getSingleNlogProp(next_idx);
-            return 0.0;
+            return getSingleNlogProp(-1);
         }
         return getNlogProp(pre_idx, next_idx);
     }

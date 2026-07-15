@@ -91,6 +91,6 @@ if [[ $run_test -eq 1 ]]; then
   # shellcheck disable=SC1091
   source "$venv_dir/bin/activate"
   python -m pip install --force-reinstall --ignore-requires-python "$wheel_path"
-  python -m unittest discover -s "$ROOT_DIR/test" -p 'test_python.py' -v
+  python -m unittest discover -s "$ROOT_DIR/test" -p 'test_*.py' -v
   deactivate
 fi

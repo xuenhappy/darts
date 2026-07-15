@@ -89,6 +89,19 @@ void testNormalization() {
     CHECK(output == "中文");
 }
 
+void testCoreLanguageData() {
+    CHECK(charType(0x3042) == char_type::WUNK);  // Hiragana is not CJK ideographic text.
+    CHECK(charType(0xD55C) == char_type::WUNK);  // Hangul is not CJK ideographic text.
+    CHECK(charType(0x20000) == char_type::CJK);
+    auto middle = pinyin("中");
+    CHECK(middle != nullptr);
+    if (middle) {
+        CHECK(!middle->piyins.empty());
+        CHECK(middle->piyins.front() == "zhōng");
+        for (const auto& reading : middle->piyins) CHECK(reading.find('#') == std::string::npos);
+    }
+}
+
 void testGraphSelection() {
     darts::SegGraph graph(3);
     graph.addEdge(-1, 0, 1.0);
@@ -99,6 +112,12 @@ void testGraphSelection() {
     std::vector<int> path;
     graph.selectPath(path);
     CHECK(path == std::vector<int>({0}));
+}
+
+void testBigramUnknownCost() {
+    darts::BigramDict dict;
+    CHECK(dict.loadDict("data/models/ngram_dict.bdf") == EXIT_SUCCESS);
+    CHECK(dict.wordDist(-1, -1) > 0.0);
 }
 
 void testDictionaryRoundTrip() {
@@ -151,7 +170,9 @@ int main() {
     initUtils();
     testAtomList();
     testNormalization();
+    testCoreLanguageData();
     testGraphSelection();
+    testBigramUnknownCost();
     testDictionaryRoundTrip();
     testConfiguredSegment();
     if (failures != 0) {

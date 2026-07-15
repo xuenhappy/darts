@@ -1,0 +1,60 @@
+{
+  "sources": [
+    {
+      "name": "ud-chinese-gsd-train",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSD/r2.18/zh_gsd-ud-train.conllu",
+      "target": "ud-chinese-gsd/train.conllu"
+    },
+    {
+      "name": "ud-chinese-gsd-dev",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSD/r2.18/zh_gsd-ud-dev.conllu",
+      "target": "ud-chinese-gsd/dev.conllu"
+    },
+    {
+      "name": "ud-chinese-gsd-test",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSD/r2.18/zh_gsd-ud-test.conllu",
+      "target": "ud-chinese-gsd/test.conllu"
+    },
+    {
+      "name": "ud-chinese-gsd-license",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSD/r2.18/LICENSE.txt",
+      "target": "ud-chinese-gsd/LICENSE.txt"
+    },
+    {
+      "name": "jieba-dictionary",
+      "version": "v0.42.1",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/fxsjy/jieba/v0.42.1/jieba/dict.txt",
+      "target": "jieba/dict.txt"
+    },
+    {
+      "name": "jieba-license",
+      "version": "v0.42.1",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/fxsjy/jieba/v0.42.1/LICENSE",
+      "target": "jieba/LICENSE"
+    },
+    {
+      "name": "phrase-pinyin-data",
+      "version": "v0.19.0",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/mozillazg/phrase-pinyin-data/v0.19.0/pinyin.txt",
+      "target": "phrase-pinyin-data/pinyin.txt"
+    },
+    {
+      "name": "phrase-pinyin-license",
+      "version": "v0.19.0",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/mozillazg/phrase-pinyin-data/v0.19.0/LICENSE",
+      "target": "phrase-pinyin-data/LICENSE"
+    }
+  ]
+}
