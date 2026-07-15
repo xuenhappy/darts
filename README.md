@@ -699,6 +699,11 @@ python scripts/devel.py quantizer-export model_bin/quantizer/best.pt data/models
 python scripts/devel.py joint-train --epochs 20 --output-dir model_bin/joint
 python scripts/devel.py joint-export model_bin/joint/best.pt data/models/neural
 
+# 先用小型格式样本做一轮 smoke test（不用于准确率报告）
+python scripts/train_joint.py train --train data/demo/cws-train.txt \
+  --dev data/demo/cws-dev.txt --epochs 1 --hidden-size 32 \
+  --output-dir /tmp/darts-joint-demo
+
 # 下载开放数据、生成训练切分并重建词典/Bigram 模型
 python scripts/devel.py data download
 python scripts/devel.py data prepare

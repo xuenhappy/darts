@@ -654,9 +654,18 @@ class OnnxRecongnizer : public CellRecognizer {
     int initalize(const std::map<std::string, std::string>& params,
                   std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) {
         auto iter = params.find(MAX_SPAN_KEY);
-        if (iter != params.end()) max_span = std::max<size_t>(2, std::stoul(iter->second));
-        iter = params.find(THRESHOLD_KEY);
-        if (iter != params.end()) threshold = std::stof(iter->second);
+        try {
+            if (iter != params.end()) max_span = std::stoul(iter->second);
+            iter = params.find(THRESHOLD_KEY);
+            if (iter != params.end()) threshold = std::stof(iter->second);
+        } catch (const std::exception& error) {
+            std::cerr << "invalid neural recognizer numeric option: " << error.what() << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (max_span < 2 || max_span > 32) {
+            std::cerr << MAX_SPAN_KEY << " must be in [2, 32]" << std::endl;
+            return EXIT_FAILURE;
+        }
         if (!(threshold >= 0.0f && threshold <= 1.0f)) {
             std::cerr << THRESHOLD_KEY << " must be in [0, 1]" << std::endl;
             return EXIT_FAILURE;
@@ -666,7 +675,12 @@ class OnnxRecongnizer : public CellRecognizer {
             const std::string key = std::string(THRESHOLD_KEY) + "." + std::to_string(length);
             iter = params.find(key);
             if (iter == params.end()) continue;
-            length_thresholds[length] = std::stof(iter->second);
+            try {
+                length_thresholds[length] = std::stof(iter->second);
+            } catch (const std::exception& error) {
+                std::cerr << "invalid " << key << ": " << error.what() << std::endl;
+                return EXIT_FAILURE;
+            }
             if (!(length_thresholds[length] >= 0.0f && length_thresholds[length] <= 1.0f)) {
                 std::cerr << key << " must be in [0, 1]" << std::endl;
                 return EXIT_FAILURE;
@@ -706,7 +720,12 @@ class OnnxRecongnizer : public CellRecognizer {
     void addWords(const AtomList& dstSrc, SegPath& cmap) const {
         std::vector<std::pair<size_t, size_t>> spans;
         std::vector<float> probabilities;
-        predictSpans(dstSrc, spans, probabilities);
+        try {
+            predictSpans(dstSrc, spans, probabilities);
+        } catch (const std::exception& error) {
+            std::cerr << "ONNX span recognizer inference failed: " << error.what() << std::endl;
+            return;
+        }
         Cursor cur = cmap.Head();
         for (size_t index = 0; index < spans.size(); ++index) {
             const size_t length = spans[index].second - spans[index].first;

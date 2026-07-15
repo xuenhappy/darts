@@ -28,12 +28,12 @@ class WordEncoder(nn.Module):
         self.wtype_num = wtype_num
         self.max_positions = max_positions
         self.max_word_positions = max_word_positions
-        self.vocab_embeding = nn.Sequential(
+        self.vocab_embedding = nn.Sequential(
             nn.Embedding(vocab_num, hidden_size),
             nn.LayerNorm(hidden_size, eps=1e-7),
             nn.Dropout(0.1),
         )
-        self.position_embeding = nn.Embedding(max_positions, hidden_size)
+        self.position_embedding = nn.Embedding(max_positions, hidden_size)
         layer = nn.TransformerEncoderLayer(
             d_model=hidden_size,
             nhead=num_heads,
@@ -50,7 +50,7 @@ class WordEncoder(nn.Module):
         self.word_pool_normal = nn.LayerNorm(hidden_size)
 
         if wtype_num > 0:
-            self.type_embeding = nn.Sequential(
+            self.type_embedding = nn.Sequential(
                 nn.Embedding(wtype_num, hidden_size),
                 nn.LayerNorm(hidden_size, eps=1e-7),
                 nn.Dropout(0.1),
@@ -63,9 +63,9 @@ class WordEncoder(nn.Module):
         #batch_word_info(words_num*[bidx,s,e,tidx])
         steps = batch_input_idx.shape[1]
         positions = torch.arange(steps, device=batch_input_idx.device).clamp_max(self.max_positions - 1)
-        vocab_emb = self.vocab_embeding(batch_input_idx) + self.position_embeding(positions).unsqueeze(0)
+        vocab_emb = self.vocab_embedding(batch_input_idx) + self.position_embedding(positions).unsqueeze(0)
         padding_mask = positions.unsqueeze(0) >= batch_lengths.unsqueeze(1)
-        sent_embeding = self.transformer(vocab_emb, src_key_padding_mask=padding_mask)
+        sentence_embedding = self.transformer(vocab_emb, src_key_padding_mask=padding_mask)
 
         # A candidate is not represented by endpoint averaging.  Each piece in
         # the span receives a content logit and a learned word-relative position
@@ -77,19 +77,19 @@ class WordEncoder(nn.Module):
         token_positions = torch.arange(steps, device=batch_input_idx.device).unsqueeze(0)
         word_mask = (token_positions >= word_starts) & (token_positions <= word_ends)
         relative_positions = (token_positions - word_starts).clamp(0, self.max_word_positions - 1)
-        content_logits = self.word_content_attention(sent_embeding).squeeze(-1)[word_batches]
+        content_logits = self.word_content_attention(sentence_embedding).squeeze(-1)[word_batches]
         position_logits = self.word_position_attention(relative_positions).squeeze(-1)
         attention_logits = (content_logits + position_logits).masked_fill(~word_mask, -1e4)
         attention = torch.softmax(attention_logits, dim=1)
-        word_sent_embeding = torch.bmm(attention.unsqueeze(1), sent_embeding[word_batches]).squeeze(1)
-        word_sent_embeding = self.word_pool_normal(word_sent_embeding)
+        word_embedding = torch.bmm(attention.unsqueeze(1), sentence_embedding[word_batches]).squeeze(1)
+        word_embedding = self.word_pool_normal(word_embedding)
         # In joint training recognizer spans omit the optional type column,
         # while graph nodes include it. The contextual/position parameters are
         # shared in both cases; only graph calls add the type representation.
         if self.wtype_num > 0 and batch_word_info.shape[1] > 3:
-            word_type_embeding = self.type_embeding(batch_word_info[:, 3])
-            return self.type_normal(word_sent_embeding + word_type_embeding)
-        return word_sent_embeding
+            word_type_embedding = self.type_embedding(batch_word_info[:, 3])
+            return self.type_normal(word_embedding + word_type_embedding)
+        return word_embedding
 
     def export2onnx(self, outfile="transformer.encoder.onnx"):
         sents_idx = torch.randint(0, self.vocab_num, (11, ))
@@ -110,7 +110,7 @@ class WordEncoder(nn.Module):
                 words = torch.concat((bidx, words), dim=1)
                 return self.obj(bsents, lens, words)
 
-        # args must same as forawrd
+        # Export one sentence; the C++ indicator supplies the same tensor layout.
         inputdata = (sents_idx, word_info)
         inputnames = ['sents', 'wordinfo']
         dynamic_axes = {"sents": {0: 'timestep'}, "wordinfo": {0: 'wordnums'}, "wordemb": {0: 'wordnums'}}

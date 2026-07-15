@@ -43,7 +43,7 @@ class NeuralModelTests(unittest.TestCase):
         words = torch.tensor([[0, 0, 3]])
         output = encoder(token_ids, lengths, words)
         output[0, 0].backward()
-        gradients = encoder.vocab_embeding[0].weight.grad[token_ids[0]].abs().sum(dim=1)
+        gradients = encoder.vocab_embedding[0].weight.grad[token_ids[0]].abs().sum(dim=1)
         self.assertEqual(output.shape, (1, 16))
         self.assertTrue(torch.all(gradients > 0))
 

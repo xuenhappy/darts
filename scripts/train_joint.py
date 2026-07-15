@@ -5,6 +5,7 @@ import argparse
 import json
 from pathlib import Path
 import random
+import time
 
 import numpy as np
 import torch
@@ -60,6 +61,9 @@ def train(args):
     stale = 0
 
     for epoch in range(1, args.epochs + 1):
+        started = time.perf_counter()
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
         model.train()
         recognizer_iterator = iter(span_train)
         recognizer_losses = []
@@ -96,6 +100,9 @@ def train(args):
             "quantizer_loss": sum(quantizer_losses) / max(1, len(quantizer_losses)),
             "quantizer_dev_loss": quantizer_dev_loss,
             "learning_rate": scheduler.get_last_lr()[0],
+            "elapsed_seconds": time.perf_counter() - started,
+            "peak_gpu_mb": (torch.cuda.max_memory_allocated(device) / 1024**2
+                            if device.type == "cuda" else 0.0),
             **recognizer_metrics,
         }
         print(json.dumps(metrics))
