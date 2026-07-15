@@ -21,6 +21,7 @@
 #include <cstring>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -185,13 +186,14 @@ class OnnxIndicator {
         // create alist tensor
         std::vector<int64_t> alist_tensor_values;
         alist_tensor_values.reserve(dstSrc.size() * 2 + 2);
-        std::vector<size_t> start_(dstSrc.size(), 0);
-        std::vector<size_t> ends_(dstSrc.size(), 0);
+        const size_t unset = std::numeric_limits<size_t>::max();
+        std::vector<size_t> start_(dstSrc.size(), unset);
+        std::vector<size_t> ends_(dstSrc.size(), unset);
         // set alist data
         wordpiece->encode(dstSrc, [&](int code, int atom_postion) {
             if (atom_postion >= 0) {
                 auto sz = alist_tensor_values.size();
-                if (start_[atom_postion] < 1) start_[atom_postion] = sz;
+                if (start_[atom_postion] == unset) start_[atom_postion] = sz;
                 ends_[atom_postion] = sz;
             }
             alist_tensor_values.push_back(code);
@@ -215,9 +217,13 @@ class OnnxIndicator {
         words_tensor_values[words_tensor_size - 2] = adim - 1;
         words_tensor_values[words_tensor_size - 1] = codemap::cls_code;
         // set common
-        cmap.iterRow(nullptr, -1, [this, &words_tensor_values, &start_, &ends_](Cursor cur) {
+        cmap.iterRow(nullptr, -1, [this, &words_tensor_values, &start_, &ends_, unset](Cursor cur) {
             auto w     = cur->val;
             size_t idx = (cur->idx + 1) * 3;
+
+            if (start_[w->st] == unset || ends_[w->et - 1] == unset) {
+                throw std::runtime_error("candidate has no aligned WordPiece span");
+            }
 
             words_tensor_values[idx]     = start_[w->st];
             words_tensor_values[idx + 1] = ends_[w->et - 1];
