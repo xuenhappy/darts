@@ -290,10 +290,13 @@ int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer) {
 
 // token str
 wordlist token_str(segment sg, atomlist alist, bool max_mode) {
+    return token_str_temperature(sg, alist, max_mode, -1.0);
+}
+wordlist token_str_temperature(segment sg, atomlist alist, bool max_mode, double temperature) {
     if (!sg || !sg->segment || !alist || !alist->alist) return nullptr;
     auto sgment  = sg->segment;
     wordlist ret = new struct _wordlist;
-    darts::tokenize(*sgment, *(alist->alist), ret->wlist, max_mode);
+    darts::tokenize(*sgment, *(alist->alist), ret->wlist, max_mode, 100, 10, temperature);
     return ret;
 }
 // free list

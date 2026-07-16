@@ -4,6 +4,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <random>
 #include <string>
 #include <utility>
 #include <vector>
@@ -112,6 +113,43 @@ void testGraphSelection() {
     std::vector<int> path;
     graph.selectPath(path);
     CHECK(path == std::vector<int>({0}));
+
+    std::mt19937_64 near_zero_rng(7);
+    graph.selectPath(path, 0.0, near_zero_rng);
+    CHECK(path == std::vector<int>({0}));
+}
+
+void testGraphBoltzmannSampling() {
+    // Path {0} costs 2, path {1, 2} costs 3. At T=1 the first path has
+    // probability exp(-2)/(exp(-2)+exp(-3)) = 0.731...
+    darts::SegGraph graph(3);
+    graph.addEdge(-1, 0, 1.0);
+    graph.addEdge(0, 3, 1.0);
+    graph.addEdge(-1, 1, 0.5);
+    graph.addEdge(1, 2, 2.0);
+    graph.addEdge(2, 3, 0.5);
+
+    std::mt19937_64 first_rng(42);
+    std::mt19937_64 second_rng(42);
+    for (int i = 0; i < 100; ++i) {
+        std::vector<int> first;
+        std::vector<int> second;
+        graph.selectPath(first, 0.7, first_rng);
+        graph.selectPath(second, 0.7, second_rng);
+        CHECK(first == second);
+    }
+
+    std::mt19937_64 distribution_rng(1234);
+    int shortest_count = 0;
+    constexpr int samples = 20000;
+    for (int i = 0; i < samples; ++i) {
+        std::vector<int> path;
+        graph.selectPath(path, 1.0, distribution_rng);
+        if (path == std::vector<int>({0})) ++shortest_count;
+        else CHECK(path == std::vector<int>({1, 2}));
+    }
+    const double observed = static_cast<double>(shortest_count) / samples;
+    CHECK(std::abs(observed - 0.7310585786) < 0.02);
 }
 
 void testBigramUnknownCost() {
@@ -172,6 +210,7 @@ int main() {
     testNormalization();
     testCoreLanguageData();
     testGraphSelection();
+    testGraphBoltzmannSampling();
     testBigramUnknownCost();
     testDictionaryRoundTrip();
     testConfiguredSegment();

@@ -648,7 +648,9 @@ build/train-venv/bin/python -c \
 "modes": {
   "faster": {
     "decider": "mini.decider",
-    "recognizers": ["inner.dict"]
+    "recognizers": ["inner.dict"],
+    "temperature": 0.0,
+    "random.seed": 42
   },
   "fast": {
     "decider": "ngram.decider",
@@ -659,6 +661,23 @@ build/train-venv/bin/python -c \
 ```
 
 `DSegment(config, mode)` 中显式传入的 mode 优先；mode 为空时读取 `default.mode`。
+
+`temperature` 控制完整分词路径的玻尔兹曼采样，默认 `0`，保持确定性最短路径。大于
+`0` 时，路径概率与 `exp(-总 NLL / temperature)` 成正比；较小值偏向最优路径，较大值
+会提高歧义切分的多样性。温度不强制限制在 `1` 以内，因为不同 Decider 的代价尺度不同；
+可从 `0.5、1、2、5、10` 逐级观察候选多样性。`random.seed` 可选，用于复现实验。
+Python 可按次覆盖配置：
+
+```python
+segment = DSegment("data/conf.json", "hybrid")
+_atoms, words = segment.cut("南京市长江大桥", temperature=0.5)
+
+tokenizer = Tokenizer(mode="hybrid")
+alternative = tokenizer.sample("南京市长江大桥", temperature=0.5)
+```
+
+采样器在 DAG 上使用对数空间后向配分动态规划，时间复杂度为 `O(V + E)`，不会枚举
+指数数量的完整路径。`temperature=0` 直接走原确定性路径算法，不引入随机数和配分计算。
 
 默认配置提供 `hybrid`、`faster`、`fast`、`pinyin` 和 `neural`，默认选择 `hybrid`。`pinyin` 共享混合统计分词路径，再以词级短语拼音消除多音字歧义，未命中短语时回退到单字读音；非中文默认保持原分词标签且不添加拼音。`neural` 需要先生成 `data/models/neural/` 下的三个 ONNX 文件。
 

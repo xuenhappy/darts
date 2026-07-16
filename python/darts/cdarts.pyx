@@ -92,6 +92,7 @@ cdef extern from 'darts.h':
     size_t wlist_len(wordlist wlist)
     int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer)
     wordlist token_str(segment sg, atomlist alist, bool max_mode) nogil
+    wordlist token_str_temperature(segment sg, atomlist alist, bool max_mode, double temperature) nogil
     void free_wordlist(wordlist wlist)
 
     wtype_encoder get_wtype_encoder(void* map_param,const char* type_cls_name)
@@ -394,13 +395,21 @@ cdef class DSegment:
             raise IOError(f"load {conffile} segment failed!")
 
     def cut(self, strs:str, max_mode:bool=False, skip_space:bool=True,
-            normal_before:bool=True):
+            normal_before:bool=True, temperature=None):
+        cdef double c_temperature
         if not strs or len(strs)<1:
             return (None,None)
         alist=PyAtomList(strs, skip_space=skip_space, normal_before=normal_before)
         wlist=PyWordList()
-        with nogil:
-            wlist.wlist=token_str(self.segt,alist.alist,max_mode)
+        if temperature is None:
+            with nogil:
+                wlist.wlist=token_str(self.segt,alist.alist,max_mode)
+        else:
+            if temperature < 0:
+                raise ValueError("temperature must be non-negative")
+            c_temperature = float(temperature)
+            with nogil:
+                wlist.wlist=token_str_temperature(self.segt,alist.alist,max_mode,c_temperature)
         return (alist,wlist)
        
 

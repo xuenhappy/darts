@@ -229,6 +229,33 @@ inline int loadSegment(const char* conffile, darts::Segment** segment, const cha
         used_recognizers_objs.push_back(recognizer);
     }
     *segment = new darts::Segment(decider);
+    if (use_node.isMember("temperature")) {
+        const auto& value = use_node["temperature"];
+        if (value.isDouble() || value.isInt() || value.isUInt()) {
+            (*segment)->setTemperature(value.asDouble());
+        } else if (value.isString()) {
+            try {
+                (*segment)->setTemperature(std::stod(value.asString()));
+            } catch (const std::exception&) {
+                std::cerr << "ERROR: invalid temperature at [modes/" << mode << "]" << std::endl;
+                delete *segment;
+                *segment = nullptr;
+                return EXIT_FAILURE;
+            }
+        }
+    }
+    if (use_node.isMember("random.seed")) {
+        const auto& value = use_node["random.seed"];
+        try {
+            const uint64_t seed = value.isString() ? std::stoull(value.asString()) : value.asUInt64();
+            (*segment)->setRandomSeed(seed);
+        } catch (const std::exception&) {
+            std::cerr << "ERROR: invalid random.seed at [modes/" << mode << "]" << std::endl;
+            delete *segment;
+            *segment = nullptr;
+            return EXIT_FAILURE;
+        }
+    }
     for (const auto& r : used_recognizers_objs) {
         (*segment)->addRecognizer(r);
     }

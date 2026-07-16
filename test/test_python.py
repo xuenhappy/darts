@@ -92,6 +92,19 @@ class SegmentTests(unittest.TestCase):
     def test_long_text(self):
         self.assert_contiguous_cover("faster", "中文分词测试。" * 40)
 
+    def test_temperature_override_keeps_complete_paths(self):
+        segment = DSegment(str(CONFIG), "faster")
+        for _ in range(20):
+            atoms, words = segment.cut("南京市长江大桥", temperature=0.8)
+            result = words.tolist()
+            self.assertTrue(result)
+            self.assertEqual(result[0].atom_s, 0)
+            self.assertEqual(result[-1].atom_e, len(atoms))
+            self.assertTrue(all(result[i - 1].atom_e == result[i].atom_s
+                                for i in range(1, len(result))))
+        with self.assertRaises(ValueError):
+            segment.cut("中文", temperature=-0.1)
+
     def test_pinyin_mode_and_single_character(self):
         _atoms, output = DSegment(str(CONFIG), "pinyin").cut("重庆音乐ABC")
         words = output.tolist()

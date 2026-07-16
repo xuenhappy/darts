@@ -35,12 +35,12 @@ class Tokenizer:
         self.mode = mode or ""
         self._segment = DSegment(config, self.mode)
 
-    def _analyze(self, text: str, all_candidates: bool = False):
+    def _analyze(self, text: str, all_candidates: bool = False, temperature=None):
         if not isinstance(text, str):
             raise TypeError("text must be str")
         if not text:
             return [], []
-        atoms, words = self._segment.cut(text, max_mode=all_candidates)
+        atoms, words = self._segment.cut(text, max_mode=all_candidates, temperature=temperature)
         return atoms.tolist(), words.tolist()
 
     @staticmethod
@@ -76,6 +76,11 @@ class Tokenizer:
             start, end = self._offsets(atoms, word)
             result.append(Token(word.image, start, end, frozenset(word.labels)))
         return result
+
+    def sample(self, sentence: str, temperature: float = 0.5) -> List[str]:
+        """Sample one complete segmentation from the Boltzmann path distribution."""
+        _atoms, words = self._analyze(sentence, temperature=temperature)
+        return [word.image for word in words]
 
     def tokenize(self, unicode_sentence: str, mode: str = "default", HMM: bool = True
                  ) -> Iterator[Tuple[str, int, int]]:

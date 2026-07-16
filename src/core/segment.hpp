@@ -14,9 +14,12 @@
 #define SRC_CORE_SEGMENT_HPP_
 #include <float.h>
 #include <cassert>
+#include <cmath>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <queue>
+#include <random>
 #include <set>
 #include <string>
 #include <utility>
@@ -92,6 +95,14 @@ class SegGraph {
    private:
     std::vector<std::vector<GraphEdge>> graph;
     size_t candidate_count;
+    static constexpr double DETERMINISTIC_TEMPERATURE = 1e-8;
+
+    static double logAdd(double lhs, double rhs) {
+        if (lhs == -std::numeric_limits<double>::infinity()) return rhs;
+        if (rhs == -std::numeric_limits<double>::infinity()) return lhs;
+        const double upper = std::max(lhs, rhs);
+        return upper + std::log(std::exp(lhs - upper) + std::exp(rhs - upper));
+    }
 
    public:
     explicit SegGraph(size_t candidates) : graph(candidates + 1), candidate_count(candidates) {}
@@ -110,7 +121,8 @@ class SegGraph {
      * @param graph
      * @param bestPaths
      */
-    void selectPath(std::vector<int>& bestPaths) {
+    void selectPath(std::vector<int>& bestPaths) const {
+        bestPaths.clear();
         auto sz = candidate_count + 2;
         std::vector<double> dist(sz, std::numeric_limits<double>::max());
         std::vector<int> prev(sz, -2);
@@ -128,6 +140,7 @@ class SegGraph {
                 }
             }
         }
+        if (prev.back() == -2) return;
         int pre = prev[prev.size() - 1];
         while (pre > -1) {
             bestPaths.emplace_back(pre);
@@ -135,12 +148,74 @@ class SegGraph {
         }
         std::reverse(bestPaths.begin(), bestPaths.end());
     }
+
+    /**
+     * Sample a complete path with probability proportional to exp(-cost / temperature).
+     *
+     * The graph is already topologically ordered by candidate id. A single
+     * reverse pass computes the log partition of every suffix; sampling then
+     * only visits edges on the selected path. This is O(V + E) time and O(V)
+     * memory, without enumerating complete paths.
+     */
+    template <typename RandomEngine>
+    void selectPath(std::vector<int>& sampled_path, double temperature, RandomEngine& rng) const {
+        if (!(temperature > DETERMINISTIC_TEMPERATURE) || !std::isfinite(temperature)) {
+            selectPath(sampled_path);
+            return;
+        }
+
+        const size_t terminal = candidate_count + 1;
+        const double unreachable = -std::numeric_limits<double>::infinity();
+        std::vector<double> suffix_log_partition(candidate_count + 2, unreachable);
+        suffix_log_partition[terminal] = 0.0;
+
+        for (int node = static_cast<int>(candidate_count) - 1; node >= -1; --node) {
+            double value = unreachable;
+            for (const auto& edge : graph[node + 1]) {
+                const size_t next = static_cast<size_t>(edge.et + 1);
+                if (next >= suffix_log_partition.size() || suffix_log_partition[next] == unreachable) continue;
+                value = logAdd(value, -edge.weight / temperature + suffix_log_partition[next]);
+            }
+            suffix_log_partition[node + 1] = value;
+        }
+
+        sampled_path.clear();
+        if (suffix_log_partition[0] == unreachable) return;
+        std::uniform_real_distribution<double> uniform(0.0, 1.0);
+        int current = -1;
+        while (current < static_cast<int>(candidate_count)) {
+            const auto& edges = graph[current + 1];
+            const double normalizer = suffix_log_partition[current + 1];
+            double draw = uniform(rng);
+            const GraphEdge* fallback = nullptr;
+            for (const auto& edge : edges) {
+                const size_t next = static_cast<size_t>(edge.et + 1);
+                if (next >= suffix_log_partition.size() || suffix_log_partition[next] == unreachable) continue;
+                fallback = &edge;
+                draw -= std::exp(-edge.weight / temperature + suffix_log_partition[next] - normalizer);
+                if (draw <= 0.0) {
+                    fallback = &edge;
+                    break;
+                }
+            }
+            // Floating-point rounding can leave a tiny positive residual.
+            if (!fallback) {
+                sampled_path.clear();
+                return;
+            }
+            current = fallback->et;
+            if (current >= 0 && current < static_cast<int>(candidate_count)) sampled_path.push_back(current);
+        }
+    }
 };
 
 class Segment {
    private:
     std::vector<std::shared_ptr<CellRecognizer>> cellRecognizers;
     std::shared_ptr<Decider> decider;
+    double temperature = 0.0;
+    std::mt19937_64 random_engine{std::random_device{}()};
+    std::mutex random_mutex;
 
    public:
     /**
@@ -217,12 +292,18 @@ class Segment {
      * @param ret
      */
     void splitContent(const AtomList& context, SegPath& cmap, std::vector<std::shared_ptr<Word>>& ret,
-                      int atom_start_pos = 0) {
+                      int atom_start_pos = 0, double temperature_override = -1.0) {
         // get best path
         SegGraph graph(cmap.Size());
         buildGraph(context, cmap, graph);
         std::vector<int> bestPaths;
-        graph.selectPath(bestPaths);
+        const double selected_temperature = temperature_override >= 0.0 ? temperature_override : temperature;
+        if (selected_temperature > 0.0) {
+            std::lock_guard<std::mutex> lock(random_mutex);
+            graph.selectPath(bestPaths, selected_temperature, random_engine);
+        } else {
+            graph.selectPath(bestPaths);
+        }
 
         // output result
         auto dfunc = [&](Cursor cur) {
@@ -253,6 +334,12 @@ class Segment {
 
    public:
     explicit Segment(std::shared_ptr<Decider> quantizer) { this->decider = quantizer; }
+    void setTemperature(double value) { temperature = std::isfinite(value) && value > 0.0 ? value : 0.0; }
+    double getTemperature() const { return temperature; }
+    void setRandomSeed(uint64_t seed) {
+        std::lock_guard<std::mutex> lock(random_mutex);
+        random_engine.seed(seed);
+    }
     ~Segment() {
         if (this->decider) {
             this->decider = nullptr;
@@ -268,7 +355,7 @@ class Segment {
      * @param atom_start_pos
      */
     void select(const AtomList& atomList, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
-                int atom_start_pos = 0) {
+                int atom_start_pos = 0, double temperature_override = -1.0) {
         if (atomList.size() < 1) {
             return;
         }
@@ -283,7 +370,7 @@ class Segment {
             };
             cmap->iterRow(nullptr, -1, dfunc);
         } else {
-            splitContent(atomList, *cmap, ret, atom_start_pos);
+            splitContent(atomList, *cmap, ret, atom_start_pos, temperature_override);
         }
         delete cmap;
     }
@@ -300,9 +387,9 @@ const std::set<std::string> SENTENCE_POS = {"!", "。", ",", "?", ";", ":", "！
  * @param maxMode
  */
 inline void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
-                     size_t maxLineLength = 100, size_t minLineLength = 10) {
+                     size_t maxLineLength = 100, size_t minLineLength = 10, double temperature = -1.0) {
     if (ori.size() <= maxLineLength) {
-        sg.select(ori, ret, maxMode);
+        sg.select(ori, ret, maxMode, 0, temperature);
         return;
     }
     // too long context
@@ -310,7 +397,7 @@ inline void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_p
     for (size_t pos = minLineLength; pos < ori.size(); pos++) {
         if (pos - pre >= maxLineLength) {
             AtomList temp(ori, pre, pos + 1);
-            sg.select(temp, ret, maxMode, pre);
+            sg.select(temp, ret, maxMode, pre, temperature);
             pre = pos + 1;
             continue;
         }
@@ -318,12 +405,12 @@ inline void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_p
         if (pos - pre < minLineLength) continue;
 
         AtomList temp(ori, pre, pos + 1);
-        sg.select(temp, ret, maxMode, pre);
+        sg.select(temp, ret, maxMode, pre, temperature);
         pre = pos + 1;
     }
     if (pre < ori.size()) {
         AtomList temp(ori, pre, ori.size());
-        sg.select(temp, ret, maxMode, pre);
+        sg.select(temp, ret, maxMode, pre, temperature);
         return;
     }
 }
