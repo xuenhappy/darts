@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable, Iterator, List, Sequence, Tuple, Union
 
 from .cdarts import DSegment, PyWord
+from .pos import LacToken, select_pos
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,16 @@ class Tokenizer:
         for word in words:
             start, end = self._offsets(atoms, word)
             result.append(Token(word.image, start, end, frozenset(word.labels)))
+        return result
+
+    def lac(self, sentence: str) -> List[LacToken]:
+        """Return one segmented path with stable LAC-like POS tags."""
+        atoms, words = self._analyze(sentence)
+        result = []
+        for word in words:
+            start, end = self._offsets(atoms, word)
+            labels = frozenset(word.labels)
+            result.append(LacToken(word.image, select_pos(labels), start, end, labels))
         return result
 
     def sample(self, sentence: str, temperature: float = 0.5) -> List[str]:

@@ -3,6 +3,7 @@ from .cdarts import (DSegment, Dregex, PyAtom, PyAtomList, PyWord, PyWordList, b
 
 from typing import Iterator, Tuple
 from .tokenizer import Token, Tokenizer, cut, lcut, tokenize
+from .pos import LacToken, select_pos
 from .pinyin import PinyinAnnotator, PinyinToken, annotate, sentence_pinyin
 from .location import LocationResult, LocationSegmenter, LocationToken, parse_location
 
@@ -20,7 +21,7 @@ def compileDregex(kvPiars: Iterator[Tuple[str, str]], outfile: str):
             if not k:
                 continue
             k = [iterm.image for iterm in PyAtomList(k).tolist()]
-            if len(k) < 2:
+            if not k:
                 continue
             v = [] if not v else [iterm.strip() for iterm in v.split(",")]
             yield (k, v)

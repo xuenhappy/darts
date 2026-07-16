@@ -695,6 +695,29 @@ alternative = tokenizer.sample("南京市长江大桥", temperature=0.5)
 `2GB`、`三百二十个` 等数字量词和常见公制、时间、货币、存储单位。状态机直接在
 AtomList 上运行，候选位置与训练、量化器和 `best_path` 使用同一 Atom 索引。
 
+### LAC/POS 模式
+
+`lac` 模式使用专用 `data/models/lac.pbs` 和 `atom.mode=true`。内部词性标签采用
+`POS_*` 命名空间，主要接近 Universal POS，并保留 LAC/Jieba 常用的
+`nr/ns/nt/nz/vn/q` 等细分类，避免与字符类型 `POS` 冲突。Python 可直接返回
+LAC 风格短标签：
+
+```python
+from darts import Tokenizer
+
+for token in Tokenizer(mode="lac").lac("中文分词在2026年发布"):
+    print(token.text, token.pos, token.start, token.end)
+```
+
+训练语料支持兼容的 `词/POS_*` 空白分隔格式，例如：
+
+```text
+中文/POS_NOUN 分词/POS_NOUN 发布/POS_VERB
+```
+
+量化器训练图以 `(atom_start, atom_end, pos_type)` 标识节点，同一词面的多个候选
+词性不会再按 span 合并。纯 CWS 空白分隔语料继续使用 unknown type，保持兼容。
+
 ### 开发模式
 
 C API 的 `load_segment(..., isdevel=true)` 或 Python 的 `DSegment(..., isdev=True)` 不加载 Decider。此时配合 `max_mode=True` 可以保留 Recognizer 产生的全部候选，主要用于训练图构建和调试。

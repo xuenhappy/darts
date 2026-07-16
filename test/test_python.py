@@ -56,6 +56,7 @@ class DictionaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "test.pbs")
             Dregex.compile(path, iter([
+                (["中"], ["POS_n"]),
                 (["中", "文"], ["LANG"]),
                 (["abc", "123"], ["MIXED"]),
             ]))
@@ -63,8 +64,9 @@ class DictionaryTests(unittest.TestCase):
             hits = []
             regex.parse(["中", "文", "ABC", "123"],
                         lambda start, end, labels: hits.append((start, end, set(labels))) or False)
-            self.assertEqual(hits[0], (0, 2, {"LANG"}))
-            self.assertEqual(hits[1], (2, 4, {"MIXED"}))
+            self.assertEqual(hits[0], (0, 1, {"POS_n"}))
+            self.assertEqual(hits[1], (0, 2, {"LANG"}))
+            self.assertEqual(hits[2], (2, 4, {"MIXED"}))
 
 
 class SegmentTests(unittest.TestCase):
@@ -258,6 +260,13 @@ class TokenizerTests(unittest.TestCase):
         self.assertTrue(all(text[start:end] == token for token, start, end in tuples))
         rich = self.tokenizer.tokens(text)
         self.assertEqual([(item.text, item.start, item.end) for item in rich], tuples)
+
+    def test_lac_mode_returns_namespaced_pos_as_short_tags(self):
+        tokenizer = Tokenizer(str(CONFIG), "lac")
+        tokens = tokenizer.lac("中文分词在2026年7月16日发布")
+        self.assertEqual("".join(token.text for token in tokens), "中文分词在2026年7月16日发布")
+        self.assertTrue(all(token.pos for token in tokens))
+        self.assertIn("t", {token.pos for token in tokens})
 
     def test_empty_and_invalid_input(self):
         self.assertEqual(self.tokenizer.lcut(""), [])

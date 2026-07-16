@@ -199,6 +199,17 @@ class NeuralReaderTests(unittest.TestCase):
         atoms = atom_list(" ".join(tokens), skip_space=True, normal_before=False)
         self.assertEqual(reader._gold_spans(tokens, atoms), [(0, 3), (3, 5), (5, 7)])
 
+    def test_graph_reader_preserves_same_span_pos_candidates(self):
+        _atom_list, reader_type, _piece_bounds = self._reader_types()
+        reader = reader_type(
+            "data/generated/lac-dev.txt", mode="lac", batch_size=1, max_span=5
+        )
+        _codes, nodes, _edges = reader._sample(
+            ["研究/POS_NOUN", "工作/POS_NOUN"]
+        )
+        research_types = {node[2] for node in nodes if node[3:5] == (0, 2)}
+        self.assertGreaterEqual(len(research_types), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

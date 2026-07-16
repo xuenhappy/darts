@@ -6,6 +6,10 @@
             "type": "LabelEncoder",
             "hx.file": "data/codes/type.hx.txt"
         },
+        "pos.encoder": {
+            "type": "LabelEncoder",
+            "hx.file": "data/codes/pos.hx.txt"
+        },
         "wordpiece.dict": {
             "type": "WordPice",
             "base.dir": "data/models/codex"
@@ -20,6 +24,11 @@
             "type": "DictWordRecongnizer",
             "pbfile.path": "data/models/panda.pbs",
             "atom.mode": "false"
+        },
+        "lac.dict": {
+            "type": "DictWordRecongnizer",
+            "pbfile.path": "data/models/lac.pbs",
+            "atom.mode": "true"
         },
         "pinyin.dict": {
             "type": "PinyinRecongnizer",
@@ -105,6 +114,13 @@
             "decider": "hybrid.decider",
             "recognizers": [
                 "inner.dict",
+                "temporal.quantity.rules"
+            ]
+        },
+        "lac": {
+            "decider": "hybrid.decider",
+            "recognizers": [
+                "lac.dict",
                 "temporal.quantity.rules"
             ]
         },

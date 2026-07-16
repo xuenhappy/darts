@@ -100,6 +100,14 @@ def write_segmented(source, target):
     return count
 
 
+def normalize_pos(pos, source):
+    """Map corpus/lexicon tags into a namespaced Darts POS label."""
+    clean = pos.replace("<", "").replace(">", "")
+    if source == "ud":
+        return f"POS_{clean}"
+    return f"POS_{clean or 'xc'}"
+
+
 def prepare(args):
     raw_dir = Path(args.raw_dir)
     output_dir = Path(args.output_dir)
@@ -121,7 +129,7 @@ def prepare(args):
         for word, pos in sentence:
             words[word] += 1
             ud_words.add(word)
-            word_pos.setdefault(word, pos)
+            word_pos.setdefault(word, normalize_pos(pos, "ud"))
             singles[word] += 1
         bigrams.update(zip(forms, forms[1:]))
 
@@ -135,19 +143,27 @@ def prepare(args):
             frequency = int(columns[1]) if len(columns) > 1 and columns[1].isdigit() else 1
             pos = columns[2] if len(columns) > 2 else "X"
             words[word] = max(words[word], frequency)
-            word_pos.setdefault(word, f"JIEBA_{pos}")
+            word_pos.setdefault(word, normalize_pos(pos, "jieba"))
 
     dictionary_path = output_dir / "dictionary.txt"
     selected_words = set()
     with open(dictionary_path, "w", encoding="utf-8") as output:
         for word in sorted(words):
-            if len(word) < 2 or len(word) > args.max_word_length:
+            if not word or len(word) > args.max_word_length:
                 continue
             if word not in ud_words and words[word] < args.jieba_min_frequency:
                 continue
-            label = word_pos[word].replace("<", "").replace(">", "")
-            output.write(f"<CJK>,<{label}>:{word}\n")
+            output.write(f"<{word_pos[word]}>:{word}\n")
             selected_words.add(word)
+
+    for split in ("train", "dev", "test"):
+        source = raw_dir / "ud-chinese-gsd" / f"{split}.conllu"
+        target = output_dir / f"lac-{split}.txt"
+        with open(target, "w", encoding="utf-8") as output:
+            for sentence in read_conllu(source):
+                output.write(" ".join(
+                    f"{word}/{normalize_pos(pos, 'ud')}" for word, pos in sentence
+                ) + "\n")
 
     phrase_path = output_dir / "pinyin-phrases.txt"
     phrase_entries = 0

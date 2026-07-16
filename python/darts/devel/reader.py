@@ -55,7 +55,7 @@ class GraphSampleReader(IterableDataset):
     """
 
     def __init__(self, sample, config="data/conf.json", mode="hybrid", batch_size=16,
-                 max_span=5, shuffle=False):
+                 max_span=5, shuffle=False, type_map=None):
         super().__init__()
         self.sample = sample
         self.batch_size = batch_size
@@ -64,7 +64,12 @@ class GraphSampleReader(IterableDataset):
         self._samples = None
         self.segment = DSegment(config, mode, isdev=True)
         self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
-        self.word_codec = WordCodec({"hx.file": "data/codes/type.hx.txt"}, "LabelEncoder")
+        if type_map is None:
+            type_map = "data/codes/pos.hx.txt" if mode == "lac" else "data/codes/type.hx.txt"
+        self.word_codec = WordCodec({"hx.file": type_map}, "LabelEncoder")
+        self.type_codes = {
+            self.word_codec.decode(code): code for code in range(self.word_codec.label_nums())
+        }
 
     def wordsize(self):
         return self.atom_codec.label_nums()
@@ -105,7 +110,22 @@ class GraphSampleReader(IterableDataset):
         boundaries.append(len(atom_values))
         return list(zip(boundaries, boundaries[1:]))
 
-    def _sample(self, tokens):
+    @staticmethod
+    def _tagged_tokens(items):
+        words = []
+        tags = []
+        for item in items:
+            word, separator, tag = item.rpartition("/")
+            if separator and word and tag.startswith("POS_"):
+                words.append(word)
+                tags.append(tag)
+            else:
+                words.append(item)
+                tags.append(None)
+        return words, tags
+
+    def _sample(self, items):
+        tokens, gold_tags = self._tagged_tokens(items)
         # Spaces separate adjacent ENG/NUM words during atomization, then
         # skip_space removes them from the Atom index space.
         text = " ".join(tokens)
@@ -121,26 +141,33 @@ class GraphSampleReader(IterableDataset):
         # Dictionary labels provide known type features.  Add the complete span
         # envelope used by the recognizer so the quantizer also sees OOV words;
         # type 0 is the LabelEncoder's unknown fallback.
-        candidates_by_span = {}
+        candidates_by_node = {}
         for word, type_code in zip(words, types):
-            candidates_by_span.setdefault((word.atom_s, word.atom_e), type_code)
+            candidates_by_node[(word.atom_s, word.atom_e, type_code)] = None
         for start in range(len(atoms)):
             for end in range(start + 1, min(len(atoms), start + self.max_span) + 1):
-                candidates_by_span.setdefault((start, end), 0)
+                candidates_by_node.setdefault((start, end, 0), None)
         gold_spans = self._gold_spans(tokens, atoms)
-        for span in gold_spans:
-            candidates_by_span.setdefault(span, 0)
+        gold_nodes_by_span = []
+        for span, tag in zip(gold_spans, gold_tags):
+            type_code = self.type_codes.get(tag, 0) if tag else 0
+            node_key = (*span, type_code)
+            candidates_by_node.setdefault(node_key, None)
+            gold_nodes_by_span.append(node_key)
 
         nodes = [(0, 0, 3, -1, 0)]
-        for (atom_start, atom_end), type_code in sorted(candidates_by_span.items()):
+        for atom_start, atom_end, type_code in sorted(candidates_by_node):
             nodes.append((starts[atom_start], ends[atom_end - 1], type_code, atom_start, atom_end))
         nodes.append((len(code_ids) - 1, len(code_ids) - 1, 2, len(atoms), len(atoms) + 1))
 
         gold_nodes = [0]
-        for span in gold_spans:
-            match = next((index for index, node in enumerate(nodes) if node[3:5] == span), None)
+        for atom_start, atom_end, type_code in gold_nodes_by_span:
+            match = next((index for index, node in enumerate(nodes)
+                          if node[2] == type_code and node[3:5] == (atom_start, atom_end)), None)
             if match is None:
-                raise RuntimeError(f"gold span {span} missing from candidate graph for {text}")
+                raise RuntimeError(
+                    f"gold node {(atom_start, atom_end, type_code)} missing from graph for {text}"
+                )
             gold_nodes.append(match)
         gold_nodes.append(len(nodes) - 1)
         gold_edges = set(zip(gold_nodes, gold_nodes[1:]))
