@@ -770,5 +770,162 @@ const char* OnnxRecongnizer::THRESHOLD_KEY    = "threshold";
 
 REGISTER_Recognizer(OnnxRecongnizer);
 
+class OnnxSyntaxRecongnizer : public CellRecognizer {
+   private:
+    static const char* MODEL_PATH_KEY;
+    static const char* LABEL_PATH_KEY;
+    static const char* WORDPIECE_PARAM;
+    static const char* MAX_SPAN_KEY;
+    static const char* THRESHOLD_KEY;
+
+    size_t max_span = 5;
+    float threshold = 0.5f;
+    std::shared_ptr<WordPice> wordpiece;
+    std::vector<std::string> labels;
+    Ort::Session* session = nullptr;
+    std::vector<char*> input_name_;
+    std::vector<char*> output_name_;
+
+    int loadLabels(const std::string& path) {
+        std::ifstream input(getResource(path));
+        if (!input.is_open()) return EXIT_FAILURE;
+        std::string line;
+        while (std::getline(input, line)) {
+            darts::trim(line);
+            if (!line.empty()) labels.push_back(line);
+        }
+        if (labels.size() < 2 || labels.front() != "NOT_WORD") {
+            std::cerr << "syntax labels must start with NOT_WORD and contain POS classes" << std::endl;
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
+    }
+
+    int validator() {
+        if (session->GetInputCount() != 2 || session->GetOutputCount() != 1) return EXIT_FAILURE;
+        auto span_info = session->GetInputTypeInfo(1).GetTensorTypeAndShapeInfo();
+        auto output_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        const auto span_shape = span_info.GetShape();
+        const auto output_shape = output_info.GetShape();
+        if (span_shape.size() != 2 || span_shape[1] != 2 ||
+            output_shape.size() != 2 ||
+            output_info.GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+            std::cerr << "syntax recognizer requires spans[N,2] and probabilities[N,C]" << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (output_shape[1] > 0 && static_cast<size_t>(output_shape[1]) != labels.size()) {
+            std::cerr << "syntax model class count does not match label file" << std::endl;
+            return EXIT_FAILURE;
+        }
+        Ort::AllocatorWithDefaultOptions allocator;
+        for (size_t i = 0; i < session->GetInputCount(); ++i) {
+            auto name = session->GetInputNameAllocated(i, allocator);
+            input_name_.push_back(strdup(name.get()));
+        }
+        auto name = session->GetOutputNameAllocated(0, allocator);
+        output_name_.push_back(strdup(name.get()));
+        return EXIT_SUCCESS;
+    }
+
+   public:
+    int initalize(const std::map<std::string, std::string>& params,
+                  std::map<std::string, std::shared_ptr<SegmentPlugin>>& plugins) override {
+        try {
+            auto option = params.find(MAX_SPAN_KEY);
+            if (option != params.end()) max_span = std::stoul(option->second);
+            option = params.find(THRESHOLD_KEY);
+            if (option != params.end()) threshold = std::stof(option->second);
+        } catch (const std::exception& error) {
+            std::cerr << "invalid syntax recognizer option: " << error.what() << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (max_span < 1 || max_span > 32 || threshold < 0.0f || threshold > 1.0f)
+            return EXIT_FAILURE;
+
+        auto dependency = plugins.find(WORDPIECE_PARAM);
+        if (dependency == plugins.end()) return EXIT_FAILURE;
+        wordpiece = std::dynamic_pointer_cast<WordPice>(dependency->second);
+        if (!wordpiece) return EXIT_FAILURE;
+
+        auto label_path = params.find(LABEL_PATH_KEY);
+        auto model_path = params.find(MODEL_PATH_KEY);
+        if (label_path == params.end() || model_path == params.end() ||
+            loadLabels(label_path->second)) return EXIT_FAILURE;
+        const std::string resolved = getResource(model_path->second);
+        session = loadmodel(resolved.c_str());
+        return session && !validator() ? EXIT_SUCCESS : EXIT_FAILURE;
+    }
+
+    void addWords(const AtomList& atoms, SegPath& path) const override {
+        if (atoms.size() == 0) return;
+        std::vector<int64_t> token_ids;
+        std::vector<int64_t> starts(atoms.size(), -1), ends(atoms.size(), -1);
+        wordpiece->encode(atoms, [&](int code, int atom_position) {
+            const int64_t index = token_ids.size();
+            token_ids.push_back(code);
+            if (atom_position >= 0) {
+                if (starts[atom_position] < 0) starts[atom_position] = index;
+                ends[atom_position] = index;
+            }
+        });
+
+        std::vector<std::pair<size_t, size_t>> spans;
+        std::vector<int64_t> span_values;
+        for (size_t start = 0; start < atoms.size(); ++start) {
+            for (size_t end = start + 1; end <= std::min(atoms.size(), start + max_span); ++end) {
+                if (starts[start] < 0 || ends[end - 1] < 0) continue;
+                spans.emplace_back(start, end);
+                span_values.push_back(starts[start]);
+                span_values.push_back(ends[end - 1]);
+            }
+        }
+        if (spans.empty()) return;
+
+        try {
+            auto memory = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+            const int64_t token_count = token_ids.size();
+            std::vector<int64_t> span_dims = {static_cast<int64_t>(spans.size()), 2};
+            std::vector<Ort::Value> inputs;
+            inputs.push_back(Ort::Value::CreateTensor<int64_t>(
+                memory, token_ids.data(), token_ids.size(), &token_count, 1));
+            inputs.push_back(Ort::Value::CreateTensor<int64_t>(
+                memory, span_values.data(), span_values.size(), span_dims.data(), 2));
+            Ort::Value output{nullptr};
+            session->Run(Ort::RunOptions{nullptr}, input_name_.data(), inputs.data(), inputs.size(),
+                         output_name_.data(), &output, 1);
+            const auto info = output.GetTensorTypeAndShapeInfo();
+            const auto shape = info.GetShape();
+            if (shape.size() != 2 || shape[0] != static_cast<int64_t>(spans.size()) ||
+                shape[1] != static_cast<int64_t>(labels.size()))
+                throw std::runtime_error("invalid syntax probability tensor");
+            const float* probabilities = output.GetTensorData<float>();
+            Cursor cursor = path.Head();
+            for (size_t span = 0; span < spans.size(); ++span) {
+                const float* row = probabilities + span * labels.size();
+                const size_t type = std::max_element(row, row + labels.size()) - row;
+                if (type == 0 || !std::isfinite(row[type]) || row[type] < threshold) continue;
+                auto word = std::make_shared<Word>(atoms, spans[span].first, spans[span].second);
+                word->addLabel(labels[type]);
+                cursor = path.addCell(word, cursor);
+            }
+        } catch (const std::exception& error) {
+            std::cerr << "ONNX syntax recognizer inference failed: " << error.what() << std::endl;
+        }
+    }
+
+    ~OnnxSyntaxRecongnizer() {
+        delete session;
+        for (auto name : input_name_) free(name);
+        for (auto name : output_name_) free(name);
+    }
+};
+
+const char* OnnxSyntaxRecongnizer::MODEL_PATH_KEY = "model.path";
+const char* OnnxSyntaxRecongnizer::LABEL_PATH_KEY = "label.path";
+const char* OnnxSyntaxRecongnizer::WORDPIECE_PARAM = "wordpiece.name";
+const char* OnnxSyntaxRecongnizer::MAX_SPAN_KEY = "max.span";
+const char* OnnxSyntaxRecongnizer::THRESHOLD_KEY = "threshold";
+REGISTER_Recognizer(OnnxSyntaxRecongnizer);
+
 }  // namespace darts
 #endif  // SRC_IMPL_NETWORDQI_HPP_

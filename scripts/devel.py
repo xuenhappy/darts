@@ -97,6 +97,25 @@ def model_export(args):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def syntax_train(args):
+    command = [
+        os.environ.get("PYTHON", "python3"), "scripts/train_syntax_recognizer.py", "train",
+        "--train", args.train, "--dev", args.dev, "--type-map", args.type_map,
+        "--output-dir", args.output_dir, "--epochs", str(args.epochs),
+        "--batch-size", str(args.batch_size), "--max-span", str(args.max_span),
+        "--hidden-size", str(args.hidden_size), "--device", args.device,
+    ]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def syntax_export(args):
+    command = [
+        os.environ.get("PYTHON", "python3"), "scripts/train_syntax_recognizer.py", "export",
+        args.checkpoint, args.output,
+    ]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
 def quantizer_train(args):
     command = [os.environ.get("PYTHON", "python3"), "scripts/train_quantizer.py", "train",
                "--train", args.train, "--dev", args.dev, "--epochs", str(args.epochs),
@@ -215,6 +234,27 @@ def main():
     command.add_argument("checkpoint")
     command.add_argument("output")
     command.set_defaults(func=model_export)
+
+    command = commands.add_parser(
+        "syntax-train", help="train a NOT_WORD plus POS multi-class span recognizer"
+    )
+    command.add_argument("--train", default="data/generated/lac-train.txt")
+    command.add_argument("--dev", default="data/generated/lac-dev.txt")
+    command.add_argument("--type-map", default="data/codes/pos.hx.txt")
+    command.add_argument("--output-dir", default="model_bin/syntax")
+    command.add_argument("--epochs", type=int, default=20)
+    command.add_argument("--batch-size", type=int, default=32)
+    command.add_argument("--max-span", type=int, default=5)
+    command.add_argument("--hidden-size", type=int, default=128)
+    command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.set_defaults(func=syntax_train)
+
+    command = commands.add_parser(
+        "syntax-export", help="export the multi-class syntax span recognizer to ONNX"
+    )
+    command.add_argument("checkpoint")
+    command.add_argument("output")
+    command.set_defaults(func=syntax_export)
 
     command = commands.add_parser("quantizer-train", help="train the Transformer graph quantizer")
     command.add_argument("--train", default="data/generated/cws-train.txt")

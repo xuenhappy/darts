@@ -49,6 +49,16 @@
                 "wordpiece.name": "wordpiece.dict"
             }
         },
+        "neural.syntax": {
+            "type": "OnnxSyntaxRecongnizer",
+            "model.path": "data/models/neural/syntax.onnx",
+            "label.path": "data/models/neural/syntax.labels.txt",
+            "max.span": "5",
+            "threshold": "0.5",
+            "deps": {
+                "wordpiece.name": "wordpiece.dict"
+            }
+        },
         "location.dict": {
             "type": "DictWordRecongnizer",
             "pbfile.path": "data/models/location.pbs",

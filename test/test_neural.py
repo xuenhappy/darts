@@ -21,11 +21,18 @@ class NeuralModelTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from darts.devel.model import JointSegmentationTrainer, Quantizer, SpanRecognizer, WordEncoder
+        from darts.devel.model import (
+            JointSegmentationTrainer,
+            Quantizer,
+            SpanRecognizer,
+            SyntaxSpanRecognizer,
+            WordEncoder,
+        )
         from darts.devel.utils import GraphLossSparse
 
         cls.Quantizer = Quantizer
         cls.SpanRecognizer = SpanRecognizer
+        cls.SyntaxSpanRecognizer = SyntaxSpanRecognizer
         cls.WordEncoder = WordEncoder
         cls.GraphLossSparse = GraphLossSparse
         cls.JointSegmentationTrainer = JointSegmentationTrainer
@@ -101,6 +108,19 @@ class NeuralModelTests(unittest.TestCase):
         ])
         loss = model(token_ids, lengths, spans)
         self.assertEqual(loss.ndim, 0)
+        self.assertTrue(torch.isfinite(loss))
+
+    def test_syntax_recognizer_classifies_not_word_and_pos(self):
+        model = self.SyntaxSpanRecognizer(vocab_num=32, hidden_size=16, class_num=5)
+        token_ids = torch.tensor([[1, 2, 3, 4]])
+        lengths = torch.tensor([4])
+        spans = torch.tensor([
+            [0, 0, 1, 2, 3],
+            [0, 1, 3, 3, 0],
+        ])
+        loss = model(token_ids, lengths, spans)
+        logits = model.logits(token_ids, lengths, spans[:, :3])
+        self.assertEqual(logits.shape, (2, 5))
         self.assertTrue(torch.isfinite(loss))
 
     def test_sparse_graph_loss_backpropagates_association_nll(self):
@@ -209,6 +229,19 @@ class NeuralReaderTests(unittest.TestCase):
         )
         research_types = {node[2] for node in nodes if node[3:5] == (0, 2)}
         self.assertGreaterEqual(len(research_types), 2)
+
+    def test_syntax_reader_generates_pos_and_not_word_classes(self):
+        try:
+            from darts.devel.reader import SyntaxSpanSampleReader
+        except (ImportError, OSError) as error:
+            self.skipTest(f"native darts training reader unavailable: {error}")
+        reader = SyntaxSpanSampleReader(
+            "data/generated/lac-dev.txt", batch_size=1, max_span=5
+        )
+        _codes, spans = reader._sample(["研究/POS_NOUN", "工作/POS_NOUN"])
+        labels = [span[-1] for span in spans]
+        self.assertEqual(sum(label != 0 for label in labels), 2)
+        self.assertIn(0, labels)
 
 
 if __name__ == "__main__":

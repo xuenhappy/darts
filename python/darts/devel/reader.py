@@ -266,3 +266,65 @@ class SpanSampleReader(IterableDataset):
             random.shuffle(ordered)
         for start in range(0, len(ordered), self.batch_size):
             yield self._batch(ordered[start:start + self.batch_size])
+
+
+class SyntaxSpanSampleReader(IterableDataset):
+    """Generate span classes where 0 is NOT_WORD and 1..N are POS labels."""
+
+    def __init__(self, sample, type_map="data/codes/pos.hx.txt", batch_size=32,
+                 max_span=5, shuffle=False):
+        super().__init__()
+        self.sample = sample
+        self.batch_size = batch_size
+        self.max_span = max_span
+        self.shuffle = shuffle
+        self._samples = None
+        self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
+        self.labels = ["NOT_WORD"]
+        with open(type_map, encoding="utf-8") as stream:
+            self.labels.extend(line.split("#", 1)[0].strip() for line in stream if "#" in line)
+        self.label_codes = {label: index for index, label in enumerate(self.labels)}
+
+    def wordsize(self):
+        return self.atom_codec.label_nums()
+
+    def classsize(self):
+        return len(self.labels)
+
+    def _sample(self, items):
+        tokens, tags = GraphSampleReader._tagged_tokens(items)
+        text = " ".join(tokens)
+        atoms = PyAtomList(text, skip_space=True, normal_before=False)
+        codes = self.atom_codec.encode(atoms)
+        code_ids = [item[0] for item in codes]
+        starts, ends = piece_bounds(codes, len(atoms))
+        gold = {
+            span: self.label_codes.get(tag, 0)
+            for span, tag in zip(GraphSampleReader._gold_spans(tokens, atoms), tags)
+        }
+        spans = []
+        for start in range(len(atoms)):
+            for end in range(start + 1, min(len(atoms), start + self.max_span) + 1):
+                spans.append((starts[start], ends[end - 1], end - start,
+                              gold.get((start, end), 0)))
+        return code_ids, spans
+
+    def _batch(self, samples):
+        code_ids, lengths = d2list2array([sample[0] for sample in samples])
+        spans = [(batch_id, start, end, atom_length, label)
+                 for batch_id, (_codes, sample_spans) in enumerate(samples)
+                 for start, end, atom_length, label in sample_spans]
+        return (torch.from_numpy(code_ids).long(), torch.from_numpy(lengths).long(),
+                torch.tensor(spans, dtype=torch.long))
+
+    def __iter__(self):
+        if self._samples is None:
+            with open(self.sample, encoding="utf-8") as stream:
+                self._samples = [
+                    self._sample(line.strip().split()) for line in stream if line.strip()
+                ]
+        ordered = list(self._samples)
+        if self.shuffle:
+            random.shuffle(ordered)
+        for start in range(0, len(ordered), self.batch_size):
+            yield self._batch(ordered[start:start + self.batch_size])

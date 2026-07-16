@@ -597,6 +597,9 @@ build/train-venv/bin/python -c \
 | `OnnxRecongnizer` | `max.span` | 最大候选 Atom 长度，默认 `5` |
 | `OnnxRecongnizer` | `threshold` / `threshold.N` | 全局及按长度覆盖的成词概率阈值 |
 | `OnnxRecongnizer` | `deps.wordpiece.name` | 指向 `WordPice` 服务 |
+| `OnnxSyntaxRecongnizer` | `model.path` / `label.path` | 输出 `NOT_WORD + POS` 多分类概率的 ONNX span 模型及标签表 |
+| `OnnxSyntaxRecongnizer` | `max.span` / `threshold` | 最大候选长度及加入候选图的类别概率阈值 |
+| `OnnxSyntaxRecongnizer` | `deps.wordpiece.name` | 指向 `WordPice` 服务 |
 | `PinyinRecongnizer` | `deps.pyin.encoder` | 指向 `PinyinEncoder` 服务 |
 | `PinyinRecongnizer` | `non-cjk.label` | 可选的非中文占位标签；为空时不添加拼音 |
 
@@ -717,6 +720,41 @@ for token in Tokenizer(mode="lac").lac("中文分词在2026年发布"):
 
 量化器训练图以 `(atom_start, atom_end, pos_type)` 标识节点，同一词面的多个候选
 词性不会再按 span 合并。纯 CWS 空白分隔语料继续使用 unknown type，保持兼容。
+
+### 语法标签识别器
+
+`SyntaxSpanRecognizer` 对长度 `1..max.span` 的每个候选区间执行互斥多分类。类别
+`0` 固定为 `NOT_WORD`，其余类别来自 `data/codes/pos.hx.txt`，例如
+`POS_NOUN`、`POS_VERB`、`POS_PROPN`。模型一次推理同时判断候选是否成词以及成词
+时的词法类型，不依赖 BIO 或 CRF，也不会强制候选区间互斥，仍可召回重叠歧义词。
+
+```bash
+PYTHON=/home/xuen/.venv/bin/python python3 scripts/devel.py syntax-train \
+  --train data/generated/lac-train.txt \
+  --dev data/generated/lac-dev.txt \
+  --device cuda
+
+PYTHON=/home/xuen/.venv/bin/python python3 scripts/devel.py syntax-export \
+  model_bin/syntax/best.pt data/models/neural/syntax.onnx
+```
+
+导出同时生成 `syntax.labels.txt` 和 `syntax.json`。运行时配置示例：
+
+```jsonc
+"neural.syntax": {
+  "type": "OnnxSyntaxRecongnizer",
+  "model.path": "data/models/neural/syntax.onnx",
+  "label.path": "data/models/neural/syntax.labels.txt",
+  "max.span": "5",
+  "threshold": "0.5",
+  "deps": {
+    "wordpiece.name": "wordpiece.dict"
+  }
+}
+```
+
+将 `neural.syntax` 加入具体 mode 的 `recognizers` 后才会实例化模型；默认配置仅声明
+插件，不会在 ONNX 文件尚未导出时影响其他模式。
 
 ### 开发模式
 

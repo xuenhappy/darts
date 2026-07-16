@@ -265,6 +265,63 @@ class SpanRecognizer(nn.Module):
         return outfile
 
 
+class SyntaxSpanRecognizer(nn.Module):
+    """Classify every span as NOT_WORD or one mutually exclusive POS type."""
+
+    def __init__(self, vocab_num, hidden_size, class_num, encoder=None):
+        super().__init__()
+        if class_num < 2:
+            raise ValueError("syntax recognizer requires NOT_WORD and at least one POS class")
+        self.class_num = class_num
+        self.encoder = encoder or WordEncoder(vocab_num, hidden_size, -1)
+        self.classifier = nn.Sequential(nn.Dropout(0.1), nn.Linear(hidden_size, class_num))
+
+    def logits(self, batch_input_idx, batch_lengths, batch_span_info):
+        embeddings = self.encoder(batch_input_idx, batch_lengths, batch_span_info)
+        return self.classifier(embeddings)
+
+    def forward(self, batch_input_idx, batch_lengths, batch_span_info):
+        logits = self.logits(batch_input_idx, batch_lengths, batch_span_info[:, :3])
+        labels = batch_span_info[:, -1]
+        counts = torch.bincount(labels, minlength=self.class_num).clamp_min(1)
+        weights = (labels.numel() / (self.class_num * counts)).to(logits.dtype)
+        # Keep the abundant NOT_WORD class from suppressing sparse POS classes.
+        weights[0] = weights[0].clamp(max=1.0)
+        return F.cross_entropy(logits, labels, weight=weights)
+
+    def export2onnx(self, outfile="syntax.recognizer.onnx"):
+        sents = torch.randint(0, self.encoder.vocab_num, (11,))
+        spans = torch.LongTensor([[0, 0], [0, 1], [2, 4], [5, 10]])
+
+        class Script(nn.Module):
+            def __init__(self, model):
+                super().__init__()
+                self.model = model
+
+            def forward(self, token_ids, span_info):
+                lengths = torch.ones((1,), dtype=torch.long, device=token_ids.device) * token_ids.shape[0]
+                batch_ids = torch.zeros((span_info.shape[0], 1), dtype=torch.long,
+                                        device=span_info.device)
+                batched_spans = torch.cat((batch_ids, span_info), dim=1)
+                logits = self.model.logits(token_ids.unsqueeze(0), lengths, batched_spans)
+                return torch.softmax(logits, dim=-1)
+
+        timestep = torch.export.Dim("timestep", min=1)
+        spans_count = torch.export.Dim("spans", min=1)
+        script = Script(self).eval()
+        torch.onnx.export(
+            script, (sents, spans), outfile, export_params=True, opset_version=18,
+            do_constant_folding=True, input_names=["sents", "spaninfo"],
+            output_names=["class_probabilities"],
+            dynamic_axes={"sents": {0: "timestep"}, "spaninfo": {0: "spans"},
+                          "class_probabilities": {0: "spans"}},
+            dynamic_shapes=({0: timestep}, {0: spans_count}),
+            external_data=False, dynamo=True,
+        )
+        _finalize_onnx(outfile)
+        return outfile
+
+
 class GraphQuantizerTrainer(nn.Module):
     """
     Sparse batched graph trainer.
