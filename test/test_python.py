@@ -92,6 +92,7 @@ class SegmentTests(unittest.TestCase):
             "meeting July 16, 2026 at 9:30pm": {"July16,2026", "9:30pm"},
             "重量12.5公斤容量500ml": {"12.5公斤", "500ml"},
             "需要三百二十个人和2GB内存": {"三百二十个", "2GB"},
+            "温度为-3.5°C，速度达到120km/h": {"-3.5°C", "120km"},
         }
         for text, expected in cases.items():
             _atoms, output = segment.cut(text, max_mode=True)
@@ -204,6 +205,10 @@ class PinyinTests(unittest.TestCase):
 
         readings = self.annotator.readings("银行行长")
         self.assertEqual(readings, ["yín háng", "háng zhǎng"])
+        self.assertEqual(
+            " ".join(self.annotator.readings("音乐会")),
+            "yīn yuè huì",
+        )
 
     def test_non_cjk_policy_and_sentence_format(self):
         self.assertEqual(

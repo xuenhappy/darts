@@ -216,6 +216,12 @@ class TemporalQuantityRecongnizer : public CellRecognizer {
     static size_t consumeNumber(const AtomList& atoms, size_t start) {
         if (start >= atoms.size()) return start;
         size_t index = start;
+        if ((isToken(atoms, index, "-") || isToken(atoms, index, "+")) &&
+            index + 1 < atoms.size() &&
+            (atoms.at(index + 1)->char_type == char_type::NUM ||
+             isChineseNumber(atoms.at(index + 1)->image))) {
+            ++index;
+        }
         if (atoms.at(index)->char_type == char_type::NUM) {
             ++index;
             // Decimal and grouped forms: 12.5, 1,000.25.
@@ -332,7 +338,7 @@ class TemporalQuantityRecongnizer : public CellRecognizer {
         const size_t number_end = consumeNumber(atoms, start);
         if (number_end == start || number_end >= atoms.size()) return start;
         static const std::set<std::string> units = {
-            "%", "‰", "℃", "℉",
+            "%", "‰", "℃", "℉", "°c", "°f",
             "个", "個", "只", "条", "條", "件", "位", "名", "人", "次", "份", "套", "台",
             "辆", "輛", "本", "册", "冊", "页", "頁", "张", "張", "片", "枚", "颗", "顆",
             "公斤", "千克", "克", "毫克", "吨", "噸", "斤", "两", "兩",
@@ -373,8 +379,13 @@ class TemporalQuantityRecongnizer : public CellRecognizer {
         Cursor cursor = path.Head();
         for (size_t start = 0; start < atoms.size(); ++start) {
             const auto& atom = atoms.at(start);
+            const bool signed_number =
+                (atom->image == "-" || atom->image == "+") &&
+                start + 1 < atoms.size() &&
+                (atoms.at(start + 1)->char_type == char_type::NUM ||
+                 isChineseNumber(atoms.at(start + 1)->image));
             const bool numeric_start = atom->char_type == char_type::NUM ||
-                                       isChineseNumber(atom->image);
+                                       isChineseNumber(atom->image) || signed_number;
             const bool month_start = atom->char_type == char_type::ENG &&
                                      isMonthName(atom->image);
             if (!numeric_start && !month_start) continue;
