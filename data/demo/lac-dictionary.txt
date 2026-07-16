@@ -1,0 +1,23 @@
+# LAC DictWordRecongnizer 示例；atom.mode=true 时每个 POS 标签生成独立候选
+<POS_NOUN>:中文分词
+<POS_NOUN>:自然语言处理
+<POS_NOUN>:词表示网络
+<POS_NOUN>:神经网络
+<POS_NOUN>:量化器
+<POS_NOUN>:识别器
+<POS_NOUN>:候选词
+<POS_PROPN>:Transformer
+<POS_PROPN>:GraphLossSparse
+<POS_PROPN>:北京大学
+<POS_PROPN>:清华大学
+<POS_ns>:南京市
+<POS_ns>:重庆市
+<POS_ns>:海淀区
+<POS_ns>:中关村大街
+<POS_NOUN>:长江大桥
+<POS_nt>:中国银行
+<POS_nt>:科技有限公司
+<POS_t>:2026年7月16日
+<POS_VERB>:发布
+<POS_VERB>:训练
+<POS_VERB>:优化

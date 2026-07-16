@@ -355,12 +355,23 @@ class GraphQuantizerTrainer(nn.Module):
 
 
 class JointSegmentationTrainer(nn.Module):
-    """One shared WordEncoder with independent recognizer/quantizer heads."""
+    """One shared WordEncoder with a selectable recognizer and graph quantizer."""
 
-    def __init__(self, vocab_num, hidden_size, wtype_num):
+    def __init__(self, vocab_num, hidden_size, wtype_num,
+                 recognizer_kind="binary", class_num=None):
         super().__init__()
         encoder = WordEncoder(vocab_num, hidden_size, wtype_num)
-        self.recognizer = SpanRecognizer(vocab_num, hidden_size, encoder=encoder)
+        if recognizer_kind == "binary":
+            self.recognizer = SpanRecognizer(vocab_num, hidden_size, encoder=encoder)
+        elif recognizer_kind == "syntax":
+            if class_num is None:
+                raise ValueError("syntax joint training requires class_num")
+            self.recognizer = SyntaxSpanRecognizer(
+                vocab_num, hidden_size, class_num, encoder=encoder
+            )
+        else:
+            raise ValueError(f"unsupported recognizer kind: {recognizer_kind}")
+        self.recognizer_kind = recognizer_kind
         self.graph_quantizer = GraphQuantizerTrainer(
             vocab_num, hidden_size, wtype_num, encoder=encoder
         )

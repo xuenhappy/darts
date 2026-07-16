@@ -155,12 +155,38 @@ class NeuralModelTests(unittest.TestCase):
         self.assertIs(model.recognizer.encoder, model.graph_quantizer.predictor)
         self.assertIs(model.encoder, model.recognizer.encoder)
 
+    def test_syntax_joint_tasks_reference_one_encoder(self):
+        model = self.JointSegmentationTrainer(
+            vocab_num=32, hidden_size=16, wtype_num=5,
+            recognizer_kind="syntax", class_num=5,
+        )
+        self.assertIsInstance(model.recognizer, self.SyntaxSpanRecognizer)
+        self.assertIs(model.recognizer.encoder, model.graph_quantizer.predictor)
+        self.assertIs(model.encoder, model.recognizer.encoder)
+
     def test_both_joint_losses_update_shared_encoder(self):
         model = self.JointSegmentationTrainer(vocab_num=32, hidden_size=16, wtype_num=4)
         token_ids = torch.tensor([[1, 2, 3, 4]])
         lengths = torch.tensor([4])
         spans = torch.tensor([[0, 0, 1, 2, 1], [0, 1, 3, 3, 0]])
         words = torch.tensor([[0, 0, 0, 0], [0, 0, 1, 1], [0, 2, 3, 2], [0, 3, 3, 3]])
+        graph = torch.tensor([[0, 0, 1, 1], [0, 0, 2, 0], [0, 1, 3, 1], [0, 2, 3, 0]])
+        recognizer_loss = model.recognizer(token_ids, lengths, spans)
+        quantizer_loss = model.graph_quantizer(token_ids, lengths, words, graph)
+        (recognizer_loss + quantizer_loss).backward()
+        gradient = model.encoder.vocab_embedding[0].weight.grad
+        self.assertIsNotNone(gradient)
+        self.assertGreater(float(gradient.abs().sum()), 0.0)
+
+    def test_syntax_and_quantizer_losses_update_shared_encoder(self):
+        model = self.JointSegmentationTrainer(
+            vocab_num=32, hidden_size=16, wtype_num=5,
+            recognizer_kind="syntax", class_num=5,
+        )
+        token_ids = torch.tensor([[1, 2, 3, 4]])
+        lengths = torch.tensor([4])
+        spans = torch.tensor([[0, 0, 1, 2, 3], [0, 1, 3, 3, 0]])
+        words = torch.tensor([[0, 0, 0, 0], [0, 0, 1, 3], [0, 2, 3, 2], [0, 3, 3, 3]])
         graph = torch.tensor([[0, 0, 1, 1], [0, 0, 2, 0], [0, 1, 3, 1], [0, 2, 3, 0]])
         recognizer_loss = model.recognizer(token_ids, lengths, spans)
         quantizer_loss = model.graph_quantizer(token_ids, lengths, words, graph)

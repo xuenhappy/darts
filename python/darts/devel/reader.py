@@ -65,7 +65,11 @@ class GraphSampleReader(IterableDataset):
         self.segment = DSegment(config, mode, isdev=True)
         self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
         if type_map is None:
-            type_map = "data/codes/pos.hx.txt" if mode == "lac" else "data/codes/type.hx.txt"
+            type_map = (
+                "data/codes/pos.hx.txt"
+                if mode in ("lac", "lac-nural")
+                else "data/codes/type.hx.txt"
+            )
         self.word_codec = WordCodec({"hx.file": type_map}, "LabelEncoder")
         self.type_codes = {
             self.word_codec.decode(code): code for code in range(self.word_codec.label_nums())

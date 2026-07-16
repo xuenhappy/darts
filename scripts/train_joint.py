@@ -11,14 +11,25 @@ import numpy as np
 import torch
 
 from darts.devel.model import JointSegmentationTrainer
-from darts.devel.reader import GraphSampleReader, SpanSampleReader
+from darts.devel.reader import GraphSampleReader, SpanSampleReader, SyntaxSpanSampleReader
 from train_quantizer import evaluate as evaluate_quantizer
 from train_recognizer import evaluate as evaluate_recognizer, select_device
+from train_syntax_recognizer import evaluate as evaluate_syntax_recognizer
 
 
 def save(model, metadata, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "metadata": metadata}, path)
+
+
+def build_model(metadata):
+    return JointSegmentationTrainer(
+        metadata["vocab_num"],
+        metadata["hidden_size"],
+        metadata["wtype_num"],
+        recognizer_kind=metadata.get("recognizer_kind", "binary"),
+        class_num=metadata.get("class_num"),
+    )
 
 
 def train(args):
@@ -38,12 +49,42 @@ def train(args):
     device = select_device(args.device)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
 
-    span_train = SpanSampleReader(args.train, args.recognizer_batch_size, args.max_span, shuffle=True)
-    span_dev = SpanSampleReader(args.dev, args.recognizer_batch_size, args.max_span)
-    graph_train = GraphSampleReader(args.train, args.config, args.mode, args.quantizer_batch_size,
-                                    args.max_span, shuffle=True)
-    graph_dev = GraphSampleReader(args.dev, args.config, args.mode, args.quantizer_batch_size,
-                                  args.max_span)
+    train_path = args.train or (
+        "data/generated/lac-train.txt"
+        if args.recognizer_kind == "syntax"
+        else "data/generated/cws-train.txt"
+    )
+    dev_path = args.dev or (
+        "data/generated/lac-dev.txt"
+        if args.recognizer_kind == "syntax"
+        else "data/generated/cws-dev.txt"
+    )
+    mode = args.mode or ("lac" if args.recognizer_kind == "syntax" else "hybrid")
+    type_map = args.type_map or (
+        "data/codes/pos.hx.txt"
+        if args.recognizer_kind == "syntax"
+        else "data/codes/type.hx.txt"
+    )
+    if args.recognizer_kind == "syntax":
+        span_train = SyntaxSpanSampleReader(
+            train_path, type_map, args.recognizer_batch_size, args.max_span, shuffle=True
+        )
+        span_dev = SyntaxSpanSampleReader(
+            dev_path, type_map, args.recognizer_batch_size, args.max_span
+        )
+    else:
+        span_train = SpanSampleReader(
+            train_path, args.recognizer_batch_size, args.max_span, shuffle=True
+        )
+        span_dev = SpanSampleReader(dev_path, args.recognizer_batch_size, args.max_span)
+    graph_train = GraphSampleReader(
+        train_path, args.config, mode, args.quantizer_batch_size,
+        args.max_span, shuffle=True, type_map=type_map
+    )
+    graph_dev = GraphSampleReader(
+        dev_path, args.config, mode, args.quantizer_batch_size,
+        args.max_span, type_map=type_map
+    )
     if span_train.wordsize() != graph_train.wordsize():
         raise RuntimeError("recognizer and quantizer must use the same WordPiece vocabulary")
 
@@ -53,17 +94,27 @@ def train(args):
         "hidden_size": args.hidden_size,
         "wtype_num": graph_train.typesize(),
         "max_span": args.max_span,
+        "recognizer_kind": args.recognizer_kind,
+        "class_num": span_train.classsize() if args.recognizer_kind == "syntax" else None,
+        "labels": span_train.labels if args.recognizer_kind == "syntax" else None,
+        "type_map": type_map,
+        "graph_mode": mode,
+        "train_data": train_path,
+        "dev_data": dev_path,
         "quantizer_output": "association_negative_log_probability",
         "seed": args.seed,
     }
-    model = JointSegmentationTrainer(metadata["vocab_num"], metadata["hidden_size"],
-                                     metadata["wtype_num"]).to(device)
+    model = build_model(metadata).to(device)
     if args.resume:
         resumed = torch.load(args.resume, map_location="cpu", weights_only=True)
         resumed_metadata = resumed["metadata"]
         for key in ("vocab_num", "hidden_size", "wtype_num", "max_span"):
             if resumed_metadata[key] != metadata[key]:
                 raise RuntimeError(f"resume checkpoint {key} does not match current training data")
+        if resumed_metadata.get("recognizer_kind", "binary") != args.recognizer_kind:
+            raise RuntimeError("resume checkpoint recognizer kind does not match")
+        if resumed_metadata.get("class_num") != metadata["class_num"]:
+            raise RuntimeError("resume checkpoint class count does not match")
         model.load_state_dict(resumed["state_dict"])
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate,
                                   weight_decay=args.weight_decay)
@@ -76,9 +127,9 @@ def train(args):
     best_objective = float("inf")
     stale = 0
     if not any(True for _ in span_train):
-        raise RuntimeError(f"no recognizer samples were generated from {args.train}")
+        raise RuntimeError(f"no recognizer samples were generated from {train_path}")
     if not any(True for _ in graph_train):
-        raise RuntimeError(f"no quantizer samples were generated from {args.train}")
+        raise RuntimeError(f"no quantizer samples were generated from {train_path}")
 
     for epoch in range(1, args.epochs + 1):
         started = time.perf_counter()
@@ -115,10 +166,15 @@ def train(args):
             recognizer_losses.append(float(recognizer_loss.detach().cpu()))
             quantizer_losses.append(float(quantizer_loss.detach().cpu()))
 
-        recognizer_metrics = evaluate_recognizer(model.recognizer, span_dev, device)
+        if args.recognizer_kind == "syntax":
+            recognizer_metrics = evaluate_syntax_recognizer(model.recognizer, span_dev, device)
+            recognizer_error = 1.0 - recognizer_metrics["word_type_accuracy"]
+        else:
+            recognizer_metrics = evaluate_recognizer(model.recognizer, span_dev, device)
+            recognizer_error = 1.0 - recognizer_metrics["f1"]
         quantizer_dev_loss = evaluate_quantizer(model.graph_quantizer, graph_dev)
         scheduler.step()
-        objective = 1.0 - recognizer_metrics["f1"] + args.quantizer_weight * quantizer_dev_loss
+        objective = recognizer_error + args.quantizer_weight * quantizer_dev_loss
         metrics = {
             "epoch": epoch,
             "recognizer_loss": sum(recognizer_losses) / max(1, len(recognizer_losses)),
@@ -147,23 +203,33 @@ def train(args):
 def export(args):
     saved = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
     metadata = saved["metadata"]
-    model = JointSegmentationTrainer(metadata["vocab_num"], metadata["hidden_size"],
-                                     metadata["wtype_num"])
+    model = build_model(metadata)
     model.load_state_dict(saved["state_dict"])
     model.eval()
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    model.recognizer.export2onnx(str(output / "recognizer.onnx"))
-    model.encoder.export2onnx(str(output / "indicator.onnx"))
-    model.graph_quantizer.quantizer.export2onnx(str(output / "quantizer.onnx"))
+    syntax = metadata.get("recognizer_kind", "binary") == "syntax"
+    recognizer_name = "syntax.onnx" if syntax else "recognizer.onnx"
+    indicator_name = "lac-indicator.onnx" if syntax else "indicator.onnx"
+    quantizer_name = "lac-quantizer.onnx" if syntax else "quantizer.onnx"
+    model.recognizer.export2onnx(str(output / recognizer_name))
+    model.encoder.export2onnx(str(output / indicator_name))
+    model.graph_quantizer.quantizer.export2onnx(str(output / quantizer_name))
+    if syntax:
+        (output / "syntax.labels.txt").write_text(
+            "\n".join(metadata["labels"]) + "\n", encoding="utf-8"
+        )
     thresholds = metadata.get("dev", {}).get("thresholds", {})
     runtime = {
-        "model.path": "recognizer.onnx",
-        "pmodel.path": "indicator.onnx",
-        "qmodel.path": "quantizer.onnx",
+        "model.path": recognizer_name,
+        "pmodel.path": indicator_name,
+        "qmodel.path": quantizer_name,
         "max.span": str(metadata["max_span"]),
         "thresholds": {str(length): str(value) for length, value in thresholds.items()},
     }
+    if syntax:
+        runtime["label.path"] = "syntax.labels.txt"
+        runtime["threshold"] = "0.5"
     (output / "neural.json").write_text(
         json.dumps({**metadata, "runtime": runtime}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -176,18 +242,33 @@ def evaluate(args):
     device = select_device(args.device)
     saved = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
     metadata = saved["metadata"]
-    model = JointSegmentationTrainer(metadata["vocab_num"], metadata["hidden_size"],
-                                     metadata["wtype_num"])
+    model = build_model(metadata)
     model.load_state_dict(saved["state_dict"])
     model.to(device).eval()
-    spans = SpanSampleReader(args.data, args.recognizer_batch_size,
-                             metadata["max_span"])
-    graphs = GraphSampleReader(args.data, args.config, args.mode,
-                               args.quantizer_batch_size, metadata["max_span"])
-    fixed_thresholds = metadata.get("dev", {}).get("thresholds")
-    if not fixed_thresholds:
-        raise RuntimeError("checkpoint has no development-set recognizer thresholds")
-    recognizer_metrics = evaluate_recognizer(model.recognizer, spans, device, fixed_thresholds)
+    syntax = metadata.get("recognizer_kind", "binary") == "syntax"
+    mode = args.mode or metadata.get("graph_mode", "lac" if syntax else "hybrid")
+    type_map = args.type_map or metadata.get(
+        "type_map", "data/codes/pos.hx.txt" if syntax else "data/codes/type.hx.txt"
+    )
+    if syntax:
+        spans = SyntaxSpanSampleReader(
+            args.data, type_map, args.recognizer_batch_size, metadata["max_span"]
+        )
+        recognizer_metrics = evaluate_syntax_recognizer(model.recognizer, spans, device)
+    else:
+        spans = SpanSampleReader(
+            args.data, args.recognizer_batch_size, metadata["max_span"]
+        )
+        fixed_thresholds = metadata.get("dev", {}).get("thresholds")
+        if not fixed_thresholds:
+            raise RuntimeError("checkpoint has no development-set recognizer thresholds")
+        recognizer_metrics = evaluate_recognizer(
+            model.recognizer, spans, device, fixed_thresholds
+        )
+    graphs = GraphSampleReader(
+        args.data, args.config, mode, args.quantizer_batch_size,
+        metadata["max_span"], type_map=type_map
+    )
     quantizer_loss = evaluate_quantizer(model.graph_quantizer, graphs)
     print(json.dumps({"data": args.data, "quantizer_loss": quantizer_loss,
                       **recognizer_metrics}, ensure_ascii=False))
@@ -197,10 +278,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     command = commands.add_parser("train")
-    command.add_argument("--train", default="data/generated/cws-train.txt")
-    command.add_argument("--dev", default="data/generated/cws-dev.txt")
+    command.add_argument("--train")
+    command.add_argument("--dev")
     command.add_argument("--config", default="data/conf.json")
-    command.add_argument("--mode", default="hybrid")
+    command.add_argument("--mode")
+    command.add_argument("--type-map")
+    command.add_argument("--recognizer-kind", choices=("binary", "syntax"), default="binary")
     command.add_argument("--output-dir", default="model_bin/joint")
     command.add_argument("--epochs", type=int, default=20)
     command.add_argument("--patience", type=int, default=4)
@@ -227,7 +310,8 @@ def main():
     command.add_argument("checkpoint")
     command.add_argument("--data", default="data/generated/cws-test.txt")
     command.add_argument("--config", default="data/conf.json")
-    command.add_argument("--mode", default="hybrid")
+    command.add_argument("--mode")
+    command.add_argument("--type-map")
     command.add_argument("--recognizer-batch-size", type=int, default=64)
     command.add_argument("--quantizer-batch-size", type=int, default=16)
     command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")

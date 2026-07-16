@@ -106,6 +106,22 @@ class SegmentTests(unittest.TestCase):
         for mode, value in config["modes"].items():
             self.assertIn("temporal.quantity.rules", value["recognizers"], mode)
 
+    def test_lac_nural_mode_combines_dictionary_and_syntax_model(self):
+        config = json.loads(
+            "\n".join(line for line in CONFIG.read_text(encoding="utf-8").splitlines()
+                      if not line.lstrip().startswith("//"))
+        )
+        mode = config["modes"]["lac-nural"]
+        self.assertEqual(mode["decider"], "lac.neural.decider")
+        self.assertEqual(
+            mode["recognizers"],
+            ["lac.dict", "neural.syntax", "temporal.quantity.rules"],
+        )
+        decider = config["deciders"][mode["decider"]]
+        self.assertEqual(decider["deps"]["tencode.name"], "pos.encoder")
+        self.assertEqual(decider["pmodel.path"], "data/models/neural/lac-indicator.onnx")
+        self.assertEqual(decider["qmodel.path"], "data/models/neural/lac-quantizer.onnx")
+
     def test_cut_exposes_training_atomization_options(self):
         atoms, _words = DSegment(str(CONFIG), "faster").cut(
             "ＡＢＣ １２３", skip_space=True, normal_before=False

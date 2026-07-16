@@ -1,0 +1,9 @@
+# PinyinEncoder 词级消歧示例，格式为 WORD: syllable...
+重庆: chong2 qing4
+重庆市: chong2 qing4 shi4
+银行: yin2 hang2
+行长: hang2 zhang3
+音乐: yin1 yue4
+音乐会: yin1 yue4 hui4
+长江大桥: chang2 jiang1 da4 qiao2
+研究生: yan2 jiu1 sheng1

@@ -98,6 +98,15 @@
                 "tencode.name": "wtype.encoder"
             }
         },
+        "lac.neural.decider": {
+            "type": "OnnxDecider",
+            "pmodel.path": "data/models/neural/lac-indicator.onnx",
+            "qmodel.path": "data/models/neural/lac-quantizer.onnx",
+            "deps": {
+                "wordpiece.name": "wordpiece.dict",
+                "tencode.name": "pos.encoder"
+            }
+        },
         "location.decider": {
             "type": "AddressDecider",
             "dat.path": "data/models/location.bdf",
@@ -131,6 +140,14 @@
             "decider": "hybrid.decider",
             "recognizers": [
                 "lac.dict",
+                "temporal.quantity.rules"
+            ]
+        },
+        "lac-nural": {
+            "decider": "lac.neural.decider",
+            "recognizers": [
+                "lac.dict",
+                "neural.syntax",
                 "temporal.quantity.rules"
             ]
         },

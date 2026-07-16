@@ -1,0 +1,15 @@
+# AddressRecongnizer/AddressDecider 的地址角色词典示例
+<ADDR_PROVINCE>:北京市
+<ADDR_CITY>:北京市
+<ADDR_DISTRICT>:海淀区
+<ADDR_STREET>:中关村大街
+<ADDR_POI>:北京大学
+<ADDR_PROVINCE>:上海市
+<ADDR_CITY>:上海市
+<ADDR_DISTRICT>:浦东新区
+<ADDR_STREET>:世纪大道
+<ADDR_POI>:上海中心大厦
+<ADDR_PROVINCE>:重庆市
+<ADDR_CITY>:重庆市
+<ADDR_DISTRICT>:渝中区
+<ADDR_STREET>:解放碑步行街

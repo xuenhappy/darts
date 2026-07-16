@@ -132,9 +132,18 @@ def quantizer_export(args):
 
 def joint_train(args):
     command = [os.environ.get("PYTHON", "python3"), "scripts/train_joint.py", "train",
-               "--train", args.train, "--dev", args.dev, "--epochs", str(args.epochs),
+               "--epochs", str(args.epochs),
                "--output-dir", args.output_dir, "--max-span", str(args.max_span),
-               "--hidden-size", str(args.hidden_size), "--device", args.device]
+               "--hidden-size", str(args.hidden_size), "--device", args.device,
+               "--recognizer-kind", args.recognizer_kind]
+    if args.train:
+        command.extend(["--train", args.train])
+    if args.dev:
+        command.extend(["--dev", args.dev])
+    if args.mode:
+        command.extend(["--mode", args.mode])
+    if args.type_map:
+        command.extend(["--type-map", args.type_map])
     if args.resume:
         command.extend(["--resume", args.resume])
     if not args.amp:
@@ -151,6 +160,10 @@ def joint_export(args):
 def joint_evaluate(args):
     command = [os.environ.get("PYTHON", "python3"), "scripts/train_joint.py", "evaluate",
                args.checkpoint, "--data", args.data, "--device", args.device]
+    if args.mode:
+        command.extend(["--mode", args.mode])
+    if args.type_map:
+        command.extend(["--type-map", args.type_map])
     subprocess.run(command, cwd=ROOT, check=True)
 
 
@@ -257,8 +270,8 @@ def main():
     command.set_defaults(func=syntax_export)
 
     command = commands.add_parser("quantizer-train", help="train the Transformer graph quantizer")
-    command.add_argument("--train", default="data/generated/cws-train.txt")
-    command.add_argument("--dev", default="data/generated/cws-dev.txt")
+    command.add_argument("--train")
+    command.add_argument("--dev")
     command.add_argument("--output-dir", default="model_bin/quantizer")
     command.add_argument("--epochs", type=int, default=20)
     command.add_argument("--batch-size", type=int, default=8)
@@ -279,6 +292,9 @@ def main():
     command.add_argument("--max-span", type=int, default=5)
     command.add_argument("--hidden-size", type=int, default=128)
     command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.add_argument("--recognizer-kind", choices=("binary", "syntax"), default="binary")
+    command.add_argument("--mode")
+    command.add_argument("--type-map")
     command.add_argument("--resume")
     command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True)
     command.set_defaults(func=joint_train)
@@ -292,6 +308,8 @@ def main():
     command.add_argument("checkpoint")
     command.add_argument("--data", default="data/generated/cws-test.txt")
     command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.add_argument("--mode")
+    command.add_argument("--type-map")
     command.set_defaults(func=joint_evaluate)
 
     command = commands.add_parser("build", help="run the Meson-only build workflow")

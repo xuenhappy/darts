@@ -690,7 +690,10 @@ alternative = tokenizer.sample("南京市长江大桥", temperature=0.5)
 采样器在 DAG 上使用对数空间后向配分动态规划，时间复杂度为 `O(V + E)`，不会枚举
 指数数量的完整路径。`temperature=0` 直接走原确定性路径算法，不引入随机数和配分计算。
 
-默认配置提供 `hybrid`、`faster`、`fast`、`pinyin` 和 `neural`，默认选择 `hybrid`。`pinyin` 共享混合统计分词路径，再以词级短语拼音消除多音字歧义，未命中短语时回退到单字读音；非中文默认保持原分词标签且不添加拼音。`neural` 需要先生成 `data/models/neural/` 下的三个 ONNX 文件。
+默认配置提供 `hybrid`、`faster`、`fast`、`lac`、`lac-nural`、`pinyin` 和
+`neural`，默认选择 `hybrid`。`pinyin` 共享混合统计分词路径，再以词级短语拼音消除
+多音字歧义，未命中短语时回退到单字读音；非中文默认保持原分词标签且不添加拼音。
+`neural` 需要先生成 `data/models/neural/` 下的三个 ONNX 文件。
 
 所有模式默认加载 `TemporalQuantityRecongnizer`。该规则识别器使用有界前视状态机，
 不使用正则表达式，识别 `2026年7月16日`、`2026-07-16`、`July 16, 2026`、
@@ -755,6 +758,61 @@ PYTHON=/home/xuen/.venv/bin/python python3 scripts/devel.py syntax-export \
 
 将 `neural.syntax` 加入具体 mode 的 `recognizers` 后才会实例化模型；默认配置仅声明
 插件，不会在 ONNX 文件尚未导出时影响其他模式。
+
+默认配置中的 `lac-nural` 已组合：
+
+- `lac.dict`：提供高召回、稳定的 LAC/POS 词典候选。
+- `neural.syntax`：补充词典外候选并直接预测 `NOT_WORD + POS` 多分类概率。
+- `temporal.quantity.rules`：覆盖日期、时间、数量和单位规则。
+- `lac.neural.decider`：使用 LAC 专用 indicator 和关联概率负对数量化器选择路径。
+
+`lac.neural.decider` 依赖 `pos.encoder`，不能复用通用 `neural.decider` 的
+`wtype.encoder`。对应模型文件为：
+
+```text
+data/models/neural/lac-indicator.onnx
+data/models/neural/lac-quantizer.onnx
+```
+
+模型导出后可直接调用：
+
+```python
+from darts import Tokenizer
+
+tokenizer = Tokenizer(mode="lac-nural")
+for token in tokenizer.lac("南京市长江大桥在2026年扩建"):
+    print(token.text, token.pos)
+```
+
+`lac-nural` 是显式神经模式，在 `syntax.onnx`、`syntax.labels.txt`、
+`lac-indicator.onnx` 或 `lac-quantizer.onnx` 尚未生成时初始化会失败，但不会影响
+其他模式。决策器输出始终是词关联概率的负对数，不使用 Bigram 或混合统计代价。
+
+联合训练脚本支持两种识别头，两者共享同一个 `WordEncoder` 和同一个图量化器：
+
+```bash
+# 旧版：span 是否成词的二分类识别头
+PYTHON=/home/xuen/.venv/bin/python python3 scripts/devel.py joint-train \
+  --recognizer-kind binary \
+  --train data/generated/cws-train.txt \
+  --dev data/generated/cws-dev.txt
+
+# LAC：NOT_WORD + POS 的多分类识别头
+PYTHON=/home/xuen/.venv/bin/python python3 scripts/devel.py joint-train \
+  --recognizer-kind syntax \
+  --train data/generated/lac-train.txt \
+  --dev data/generated/lac-dev.txt \
+  --output-dir model_bin/lac-joint \
+  --device cuda
+
+PYTHON=/home/xuen/.venv/bin/python python3 scripts/devel.py joint-export \
+  model_bin/lac-joint/best.pt data/models/neural
+```
+
+`binary` 导出 `recognizer.onnx`、`indicator.onnx`、`quantizer.onnx`；`syntax` 导出
+`syntax.onnx`、`syntax.labels.txt`、`lac-indicator.onnx`、
+`lac-quantizer.onnx`。多分类训练默认使用 `lac` 候选图和 `pos.encoder` 对应的
+`data/codes/pos.hx.txt`，也可以通过 `--mode`、`--type-map` 显式覆盖。
 
 ### 开发模式
 
