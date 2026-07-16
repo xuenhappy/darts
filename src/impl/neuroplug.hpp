@@ -2,12 +2,12 @@
  * File: networdqi.hpp
  * Project: impl
  * File Created: Sunday, 2nd January 2022 10:06:07 am
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Sunday, 2nd January 2022 10:06:10 am
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2022 Your Company, Moka
+ * Copyright 2021 - 2022 XuEn
  */
 #ifndef SRC_IMPL_NETWORDQI_HPP_
 #define SRC_IMPL_NETWORDQI_HPP_

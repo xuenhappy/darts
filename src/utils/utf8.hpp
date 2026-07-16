@@ -2,12 +2,12 @@
  * File: utf8.hpp
  * Project: utils
  * File Created: Saturday, 25th December 2021 5:28:33 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 25th December 2021 5:28:40 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2021 Your Company, Moka
+ * Copyright 2021 - 2021 XuEn
  */
 
 #ifndef SRC_UTILS_UTF8_HPP_

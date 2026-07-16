@@ -2,12 +2,12 @@
  * File: darts.h
  * Project: main
  * File Created: Tuesday, 4th January 2022 5:39:25 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Tuesday, 4th January 2022 5:39:28 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2022 Your Company, Moka
+ * Copyright 2021 - 2022 XuEn
  */
 
 #ifndef SRC_MAIN_DARTS_H_

@@ -2,13 +2,13 @@
  * File: bpe_model.hpp
  * Project: impl
  * File Created: Saturday, 24th September 2022 3:17:35 pm
- * Author: dell (xuen@mokar.com)
+ * Author: dell (nanhangxuen@163.com)
  * this module is use for word pice and new word regnizer
  * -----
  * Last Modified: Saturday, 24th September 2022 3:17:39 pm
  * Modified By: dell (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2022 Your Company, Moka
+ * Copyright 2021 - 2022 XuEn
  */
 #ifndef SRC_IMPL_ENCODER_HPP_
 #define SRC_IMPL_ENCODER_HPP_

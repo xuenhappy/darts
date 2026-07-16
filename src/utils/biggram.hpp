@@ -2,12 +2,12 @@
  * File: biggram.hpp
  * Project: utils
  * File Created: Sunday, 20th November 2022 3:27:45 pm
- * Author: dell (xuen@mokar.com)
+ * Author: dell (nanhangxuen@163.com)
  * -----
  * Last Modified: Sunday, 20th November 2022 3:31:20 pm
  * Modified By: dell (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2022 Your Company, Moka
+ * Copyright 2021 - 2022 XuEn
  */
 #ifndef SRC_UTILS_BIGGRAM_HPP_
 #define SRC_UTILS_BIGGRAM_HPP_

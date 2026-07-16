@@ -3,12 +3,12 @@
  * Project: utils
  * 提供一些常用的文件处理工具
  * File Created: Saturday, 11th December 2021 7:54:38 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 11th December 2021 7:55:40 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2021 Your Company, Moka
+ * Copyright 2021 - 2021 XuEn
  */
 
 #ifndef SRC_UTILS_FILE_UTILS_HPP_

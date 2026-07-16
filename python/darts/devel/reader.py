@@ -2,12 +2,12 @@
 File: reader.py
 Project: devel
 File Created: Saturday, 8th January 2022 9:12:42 pm
-Author: Xu En (xuen@mokar.com)
+Author: Xu En (nanhangxuen@163.com)
 -----
 Last Modified: Saturday, 8th January 2022 9:13:03 pm
 Modified By: Xu En (nanhangxuen@163.com)
 -----
-Copyright 2021 - 2022 Your Company, Moka
+Copyright 2021 - 2022 XuEn
 '''
 import torch
 import numpy as np

@@ -2,12 +2,12 @@
  * File: Segment.hpp
  * Project: core
  * File Created: Saturday, 11th December 2021 8:12:54 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 18th December 2021 7:39:14 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2021 Your Company, Moka
+ * Copyright 2021 - 2021 XuEn
  */
 
 #ifndef SRC_CORE_SEGMENT_HPP_

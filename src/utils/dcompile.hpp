@@ -2,12 +2,12 @@
  * File: dregex.cpp
  * Project: utils
  * File Created: Thursday, 30th December 2021 1:53:52 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Thursday, 30th December 2021 1:54:03 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2021 Your Company, Moka
+ * Copyright 2021 - 2021 XuEn
  */
 #ifndef SRC_UTILS_DCOMPILE_HPP_
 #define SRC_UTILS_DCOMPILE_HPP_

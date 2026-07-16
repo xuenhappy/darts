@@ -2,12 +2,12 @@
  * File: quantizer.hpp
  * Project: impl
  * File Created: Saturday, 25th December 2021 11:05:37 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 1st January 2022 7:40:19 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2022 Your Company, Moka
+ * Copyright 2021 - 2022 XuEn
  */
 #ifndef SRC_IMPL_QUANTIZER_HPP_
 #define SRC_IMPL_QUANTIZER_HPP_

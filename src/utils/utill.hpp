@@ -2,12 +2,12 @@
  * File: utils_base.hpp
  * Project: utils
  * File Created: Saturday, 25th December 2021 9:06:57 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 25th December 2021 9:07:01 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2021 Your Company, Moka
+ * Copyright 2021 - 2021 XuEn
  */
 #ifndef SRC_UTILS_UTILS_BASE_HPP_
 #define SRC_UTILS_UTILS_BASE_HPP_

@@ -2,12 +2,12 @@
  * File: jsonconf.hpp
  * Project: impl
  * File Created: Saturday, 1st January 2022 7:06:54 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 1st January 2022 7:06:57 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2022 Your Company, Moka
+ * Copyright 2021 - 2022 XuEn
  */
 #ifndef SRC_IMPL_CONFPARSER_HPP_
 #define SRC_IMPL_CONFPARSER_HPP_

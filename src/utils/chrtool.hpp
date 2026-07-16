@@ -3,12 +3,12 @@
  * Project: utils
  * 字符串规范化工具
  * File Created: Saturday, 25th December 2021 2:40:13 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 25th December 2021 2:40:17 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2021 Your Company, Moka
+ * Copyright 2021 - 2021 XuEn
  */
 #ifndef SRC_UTILS_NORM_CHR_HPP_
 #define SRC_UTILS_NORM_CHR_HPP_

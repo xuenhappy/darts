@@ -2,12 +2,12 @@
  * File: registerer.hpp
  * Project: utils
  * File Created: Saturday, 1st January 2022 5:16:52 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 1st January 2022 5:17:32 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2022 Your Company, Moka
+ * Copyright 2021 - 2022 XuEn
  */
 
 #ifndef SRC_UTILS_REGISTERER_HPP_

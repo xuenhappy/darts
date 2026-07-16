@@ -3,12 +3,12 @@
  * Project: utils
  * 中文字符串拼音工具
  * File Created: Saturday, 25th December 2021 2:37:57 pm
- * Author: Xu En (xuen@mokar.com)
+ * Author: Xu En (nanhangxuen@163.com)
  * -----
  * Last Modified: Saturday, 25th December 2021 2:38:01 pm
  * Modified By: Xu En (nanhangxuen@163.com)
  * -----
- * Copyright 2021 - 2021 Your Company, Moka
+ * Copyright 2021 - 2021 XuEn
  */
 #ifndef SRC_UTILS_PINYIN_HPP_
 #define SRC_UTILS_PINYIN_HPP_
