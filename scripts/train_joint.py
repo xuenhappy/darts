@@ -28,6 +28,13 @@ def train(args):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
         torch.set_float32_matmul_precision("high")
+        # PyTorch's fused efficient SDPA backward can return NaN on some
+        # consumer/Ampere GPUs for heavily padded variable-length batches.
+        # The math kernel is slower but stable and does not change the model
+        # architecture or exported ONNX graph.
+        torch.backends.cuda.enable_flash_sdp(False)
+        torch.backends.cuda.enable_mem_efficient_sdp(False)
+        torch.backends.cuda.enable_math_sdp(True)
     device = select_device(args.device)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
 

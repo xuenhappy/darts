@@ -53,6 +53,19 @@ class NeuralModelTests(unittest.TestCase):
         probability = torch.exp(-model(torch.zeros(1, 8), torch.zeros(1, 8))).item()
         self.assertGreater(probability, 0.8)
 
+    def test_quantizer_zero_projection_has_finite_backward(self):
+        model = self.Quantizer(8, 4)
+        with torch.no_grad():
+            model.Kmap.weight.zero_()
+            model.Kmap.bias.zero_()
+            model.Qmap.weight.zero_()
+            model.Qmap.bias.zero_()
+        inputs = torch.zeros(2, 8, requires_grad=True)
+        model(inputs, inputs).sum().backward()
+        self.assertTrue(torch.isfinite(inputs.grad).all())
+        self.assertTrue(all(parameter.grad is None or torch.isfinite(parameter.grad).all()
+                            for parameter in model.parameters()))
+
     def test_word_encoder_attention_pools_every_position(self):
         encoder = self.WordEncoder(vocab_num=32, hidden_size=16, wtype_num=-1, num_layers=1,
                                    num_heads=4, max_positions=32)

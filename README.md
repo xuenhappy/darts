@@ -640,6 +640,14 @@ build/train-venv/bin/python -c \
 
 识别器输出独立的 `word_probability`，允许同时召回交叠词。量化器输出 `association_nll = -log P(next | previous)`，使用 `GraphLossSparse` 在完整候选 DAG 上优化金标路径条件负对数似然。ONNX 使用 opset 18，并导出为 ONNX Runtime 1.17.3 可加载的 IR 9；项目不提供 CRF/BIO 兼容模型。
 
+CUDA 联合训练默认关闭 PyTorch 的 flash/memory-efficient SDPA 反向内核并使用 math
+SDPA。部分 Ampere 显卡在高度填充的变长批次上会由
+`ScaledDotProductEfficientAttentionBackward` 产生非有限梯度；该设置只影响训练内核，
+不会改变 Transformer 参数结构或 ONNX 推理模型。共享编码器同时关闭 PyTorch
+Transformer 的原型 nested-tensor 快路径，继续使用标准稠密 padding mask。
+量化器余弦归一化使用显式的有限范数下限，防止接近零的 key/query 投影在反向传播中
+产生极大梯度。
+
 ### `modes`
 
 模式把一个 Decider 和一组 Recognizer 组合为可加载流水线：

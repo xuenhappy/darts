@@ -54,8 +54,13 @@ class WordEncoder(nn.Module):
             batch_first=True,
             norm_first=False,
         )
-        self.transformer = nn.TransformerEncoder(layer, num_layers=num_layers,
-                                                 norm=nn.LayerNorm(hidden_size))
+        # The prototype nested-tensor fast path is unstable for the highly
+        # variable padded batches produced by segmentation corpora and has
+        # yielded NaN in both efficient-attention and pooling backward kernels.
+        self.transformer = nn.TransformerEncoder(
+            layer, num_layers=num_layers, norm=nn.LayerNorm(hidden_size),
+            enable_nested_tensor=False,
+        )
         self.word_content_attention = nn.Linear(hidden_size, 1, bias=False)
         self.word_position_attention = nn.Embedding(max_word_positions, 1)
         self.word_pool_normal = nn.LayerNorm(hidden_size)
@@ -167,8 +172,11 @@ class Quantizer(nn.Module):
         self.logit_scale = nn.Parameter(torch.tensor(np.log(np.sqrt(hidden_size)), dtype=torch.float32))
 
     def forward(self, x, y):
-        keys = F.normalize(self.Kmap(x), dim=-1)
-        queries = F.normalize(self.Qmap(y), dim=-1)
+        # The default eps=1e-12 makes gradients explode when a projection is
+        # close to the zero vector. Such vectors occur naturally early in graph
+        # training; a bounded denominator keeps association NLL differentiable.
+        keys = F.normalize(self.Kmap(x), dim=-1, eps=1e-4)
+        queries = F.normalize(self.Qmap(y), dim=-1, eps=1e-4)
         scale = self.logit_scale.exp().clamp(max=100.0)
         association_logit = torch.sum(keys * queries, dim=-1) * scale
         # softplus(-x) is the stable form of -log(sigmoid(x)).
