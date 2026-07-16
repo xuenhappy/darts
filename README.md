@@ -689,6 +689,12 @@ alternative = tokenizer.sample("南京市长江大桥", temperature=0.5)
 
 默认配置提供 `hybrid`、`faster`、`fast`、`pinyin` 和 `neural`，默认选择 `hybrid`。`pinyin` 共享混合统计分词路径，再以词级短语拼音消除多音字歧义，未命中短语时回退到单字读音；非中文默认保持原分词标签且不添加拼音。`neural` 需要先生成 `data/models/neural/` 下的三个 ONNX 文件。
 
+所有模式默认加载 `TemporalQuantityRecongnizer`。该规则识别器使用有界前视状态机，
+不使用正则表达式，识别 `2026年7月16日`、`2026-07-16`、`July 16, 2026`、
+`14:30:20`、`9点30分` 等中英文日期时间，以及 `12.5公斤`、`500ml`、
+`2GB`、`三百二十个` 等数字量词和常见公制、时间、货币、存储单位。状态机直接在
+AtomList 上运行，候选位置与训练、量化器和 `best_path` 使用同一 Atom 索引。
+
 ### 开发模式
 
 C API 的 `load_segment(..., isdevel=true)` 或 Python 的 `DSegment(..., isdev=True)` 不加载 Decider。此时配合 `max_mode=True` 可以保留 Recognizer 产生的全部候选，主要用于训练图构建和调试。
@@ -723,7 +729,8 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 | 路径 | 用途 |
 | --- | --- |
 | `data/conf.json` | 默认插件与模式配置 |
-| `data/kernel/chars.tmap` | 字符类型映射 |
+| `data/kernel/chars.tmap` | 运行时字符类型映射，由人工规则与 FineFreq 高频字符生成 |
+| `data/kernel/chars.manual.tmap` | 不应被频率数据覆盖的人工字符语义分类 |
 | `data/kernel/confuse.json` | 归一化/易混字符映射 |
 | `data/kernel/pinyin.txt` | 拼音数据 |
 | `data/kernel/pinyin-phrases.txt` | 与核心词典对齐的词级拼音消歧数据 |
@@ -738,6 +745,20 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 | `data/demo/` | 神经训练、词典和模式编译示例数据 |
 
 不要在不了解格式的情况下修改 `data/kernel/`。模型、词典、编码表和配置必须保持版本一致，否则可能出现模型输入维度、标签编号或 Trie 标签不匹配。
+
+`chars.tmap` 可使用 FineFreq 的普通话与英文字符频率文件重建：
+
+```bash
+python scripts/devel.py tmap-build \
+  --finefreq /path/to/FineFreq/csv/cmn_Hani.csv \
+  --finefreq /path/to/FineFreq/csv/eng_Latn.csv
+```
+
+生成器默认仅选择总频次不低于 `100000` 的前 4096 个安全字符。人工映射优先，
+但会把旧 `RUSH` 分类中的高频拉丁变音字纠正为 `ENG`，避免 `café` 一类单词在音标处
+断开。FineFreq 只补齐拉丁扩展字母、十进制数字、标点和符号。CJK 字符不会写入映射，
+仍由内置 Unicode CJK 区间逐字编码，避免高频汉字被合并成单个 Atom。其他文字系统
+保持 `WUNK`，不会因为英文网页中的噪声字符改变默认语言边界。
 
 ## 开发工具
 

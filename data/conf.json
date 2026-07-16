@@ -47,6 +47,9 @@
         },
         "location.components": {
             "type": "AddressRecongnizer"
+        },
+        "temporal.quantity.rules": {
+            "type": "TemporalQuantityRecongnizer"
         }
     },
     // all the deciders plugins
@@ -87,40 +90,46 @@
         "faster": {
             "decider": "mini.decider",
             "recognizers": [
-                "inner.dict"
+                "inner.dict",
+                "temporal.quantity.rules"
             ]
         },
         "fast": {
             "decider": "ngram.decider",
             "recognizers": [
-                "inner.dict"
+                "inner.dict",
+                "temporal.quantity.rules"
             ]
         },
         "hybrid": {
             "decider": "hybrid.decider",
             "recognizers": [
-                "inner.dict"
+                "inner.dict",
+                "temporal.quantity.rules"
             ]
         },
         "pinyin": {
             "decider": "hybrid.decider",
             "recognizers": [
                 "inner.dict",
-                "pinyin.dict"
+                "pinyin.dict",
+                "temporal.quantity.rules"
             ]
         },
         "neural": {
             "decider": "neural.decider",
             "recognizers": [
                 "inner.dict",
-                "neural.span"
+                "neural.span",
+                "temporal.quantity.rules"
             ]
         },
         "location": {
             "decider": "location.decider",
             "recognizers": [
                 "location.dict",
-                "location.components"
+                "location.components",
+                "temporal.quantity.rules"
             ]
         }
     },

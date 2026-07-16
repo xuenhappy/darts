@@ -147,6 +147,16 @@ def data(args):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def tmap_build(args):
+    command = [os.environ.get("PYTHON", "python3"), "scripts/build_tmap.py",
+               "--manual", args.manual, "--output", args.output,
+               "--min-frequency", str(args.min_frequency),
+               "--max-new-characters", str(args.max_new_characters)]
+    for path in args.finefreq:
+        command.extend(["--finefreq", path])
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
 def location_build(args):
     command = [os.environ.get("PYTHON", "python3"), "scripts/location_data.py",
                "--source", args.source, "--poi", args.poi,
@@ -251,6 +261,16 @@ def main():
     command = commands.add_parser("data", help="download, prepare, or build reproducible open data")
     command.add_argument("action", choices=("download", "prepare", "build-models"))
     command.set_defaults(func=data)
+
+    command = commands.add_parser(
+        "tmap-build", help="build chars.tmap from curated and FineFreq character data"
+    )
+    command.add_argument("--manual", default="data/kernel/chars.manual.tmap")
+    command.add_argument("--finefreq", action="append", default=[])
+    command.add_argument("--output", default="data/kernel/chars.tmap")
+    command.add_argument("--min-frequency", type=int, default=100_000)
+    command.add_argument("--max-new-characters", type=int, default=4096)
+    command.set_defaults(func=tmap_build)
 
     command = commands.add_parser("location-build", help="build address dictionary and quantizer data")
     command.add_argument("--source", default="data/external/province-city-china/data.csv")

@@ -83,6 +83,27 @@ class SegmentTests(unittest.TestCase):
         self.assert_contiguous_cover("hybrid", text)
         self.assert_contiguous_cover("", text)
 
+    def test_temporal_and_quantity_rule_candidates(self):
+        segment = DSegment(str(CONFIG), "faster")
+        cases = {
+            "发布于2026年7月16日14:30": {"2026年7月16日", "14:30", "2026年7月16日14:30"},
+            "meeting July 16, 2026 at 9:30pm": {"July16,2026", "9:30pm"},
+            "重量12.5公斤容量500ml": {"12.5公斤", "500ml"},
+            "需要三百二十个人和2GB内存": {"三百二十个", "2GB"},
+        }
+        for text, expected in cases.items():
+            _atoms, output = segment.cut(text, max_mode=True)
+            candidates = {word.image for word in output.tolist()}
+            self.assertTrue(expected <= candidates, (text, expected - candidates))
+
+    def test_temporal_quantity_rules_are_enabled_for_every_mode(self):
+        config = json.loads(
+            "\n".join(line for line in CONFIG.read_text(encoding="utf-8").splitlines()
+                      if not line.lstrip().startswith("//"))
+        )
+        for mode, value in config["modes"].items():
+            self.assertIn("temporal.quantity.rules", value["recognizers"], mode)
+
     def test_cut_exposes_training_atomization_options(self):
         atoms, _words = DSegment(str(CONFIG), "faster").cut(
             "ＡＢＣ １２３", skip_space=True, normal_before=False
