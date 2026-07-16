@@ -17,11 +17,13 @@
 #include <darts.pb.h>
 #include <math.h>
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include "./cedar.hpp"
+#include "./codecvt.hpp"
 #include "./filetool.hpp"
 #include "./strtool.hpp"
 #include "./zipfile.hpp"
@@ -42,16 +44,129 @@ class BigramDict {
     cedar::da<int> idx;
     std::unordered_map<uint64_t, bigram_data> bigrams;
     std::vector<size_t> freqs;
+    std::vector<std::string> words;
+    std::vector<uint32_t> word_first_char;
+    std::vector<uint32_t> word_last_char;
+    std::vector<uint64_t> history_total;
+    std::vector<uint32_t> history_types;
+    std::vector<uint32_t> continuation_types;
+    std::unordered_map<uint32_t, uint64_t> char_freqs;
+    std::unordered_map<uint64_t, uint64_t> char_bigrams;
+    std::unordered_map<uint32_t, uint64_t> char_history_total;
+    std::unordered_map<uint32_t, uint32_t> char_history_types;
+    std::unordered_map<uint32_t, uint32_t> char_continuation_types;
 
     size_t avg_single_freq = 0;
     size_t max_single_freq = 0;
     size_t avg_union_freq  = 0;
+    uint64_t total_unigram_freq = 0;
+    uint64_t total_bigram_types = 0;
+    uint64_t total_char_freq = 0;
+    uint64_t total_char_bigram_types = 0;
+    double discount = 0.5;
+    double char_discount = 0.5;
+    bool smoothed = false;
 
     static uint64_t makeBigramKey(uint32_t first, uint32_t second) {
         return (static_cast<uint64_t>(first) << 32) | second;
     }
 
+    static double safeNll(double probability) {
+        return -std::log(std::max(probability, 1e-15));
+    }
+
+    double unigramProbability(int word_idx) const {
+        const double denominator = static_cast<double>(total_unigram_freq) + freqs.size();
+        if (word_idx < 0 || static_cast<size_t>(word_idx) >= freqs.size() || denominator <= 0.0)
+            return 1.0 / std::max(1.0, denominator);
+        return (freqs[word_idx] + 1.0) / denominator;
+    }
+
+    double charContinuation(uint32_t codepoint) const {
+        auto it = char_continuation_types.find(codepoint);
+        if (it == char_continuation_types.end() || total_char_bigram_types == 0)
+            return 1.0 / std::max<size_t>(1, char_freqs.size());
+        return static_cast<double>(it->second) / total_char_bigram_types;
+    }
+
+    double charConditional(uint32_t left, uint32_t right) const {
+        auto total = char_history_total.find(left);
+        if (total == char_history_total.end() || total->second == 0) return charContinuation(right);
+        const auto count = char_bigrams.find(makeBigramKey(left, right));
+        const double observed = count == char_bigrams.end() ? 0.0 :
+            std::max(0.0, static_cast<double>(count->second) - char_discount) / total->second;
+        const auto types = char_history_types.find(left);
+        const double gamma = char_discount * (types == char_history_types.end() ? 0 : types->second) / total->second;
+        return observed + gamma * charContinuation(right);
+    }
+
+    static bool isAsciiLetter(uint32_t codepoint) {
+        return (codepoint >= 'a' && codepoint <= 'z') || (codepoint >= 'A' && codepoint <= 'Z');
+    }
+
+    double oovProbability(const std::string& word) const {
+        if (word.empty()) return 1e-15;
+        const auto chars = to_utf32(word);
+        if (chars.empty()) return 1e-15;
+        bool all_digits = true;
+        bool all_letters = true;
+        for (uint32_t codepoint : chars) {
+            all_digits = all_digits && codepoint >= '0' && codepoint <= '9';
+            all_letters = all_letters && isAsciiLetter(codepoint);
+        }
+        if (all_digits) {
+            // Numeric values are open-class; model their length rather than identity.
+            return std::max(1e-15, 0.02 * std::pow(0.55, static_cast<double>(chars.size() - 1)));
+        }
+        double probability = charContinuation(chars.front());
+        for (size_t i = 1; i < chars.size(); ++i) probability *= charConditional(chars[i - 1], chars[i]);
+        const double length_decay = all_letters ? 0.92 : 0.80;
+        probability *= std::pow(length_decay, static_cast<double>(chars.size() - 1));
+        return std::max(probability, 1e-15);
+    }
+
+    double continuationProbability(int word_idx, const std::string* word = nullptr) const {
+        if (word_idx >= 0 && static_cast<size_t>(word_idx) < continuation_types.size() &&
+            total_bigram_types > 0 && continuation_types[word_idx] > 0)
+            return static_cast<double>(continuation_types[word_idx]) / total_bigram_types;
+        return word ? oovProbability(*word) : unigramProbability(word_idx);
+    }
+
+    double knProbability(int left, int right, const std::string* left_word,
+                         const std::string* right_word) const {
+        if (left < 0) return right >= 0 ? unigramProbability(right) :
+            (right_word ? oovProbability(*right_word) : unigramProbability(-1));
+        if (static_cast<size_t>(left) >= history_total.size() || history_total[left] == 0)
+            return right >= 0 ? unigramProbability(right) :
+                (right_word ? oovProbability(*right_word) : unigramProbability(-1));
+
+        const auto found = right >= 0 ? bigrams.find(makeBigramKey(left, right)) : bigrams.end();
+        const double observed = found == bigrams.end() ? 0.0 :
+            std::max(0.0, static_cast<double>(found->second.count) - discount) / history_total[left];
+        double backoff = continuationProbability(right, right_word);
+        if (found == bigrams.end()) {
+            uint32_t left_boundary = 0, right_boundary = 0;
+            if (left >= 0 && static_cast<size_t>(left) < word_last_char.size()) {
+                left_boundary = word_last_char[left];
+            } else if (left_word && !left_word->empty()) {
+                const auto chars = to_utf32(*left_word);
+                if (!chars.empty()) left_boundary = chars.back();
+            }
+            if (right >= 0 && static_cast<size_t>(right) < word_first_char.size()) {
+                right_boundary = word_first_char[right];
+            } else if (right_word && !right_word->empty()) {
+                const auto chars = to_utf32(*right_word);
+                if (!chars.empty()) right_boundary = chars.front();
+            }
+            if (left_boundary && right_boundary)
+                backoff = 0.8 * backoff + 0.2 * charConditional(left_boundary, right_boundary);
+        }
+        const double gamma = discount * history_types[left] / history_total[left];
+        return observed + gamma * backoff;
+    }
+
     double getSingleNlogProp(int widx) const {
+        if (smoothed) return safeNll(unigramProbability(widx));
         if (widx < 0) return log((1000.0 + max_single_freq) / (1.0 + avg_single_freq * 1.0 / 2));
         return log((1000.0 + max_single_freq) / (1.0 + freqs.at(widx)));
     }
@@ -63,10 +178,12 @@ class BigramDict {
      * @return double
      */
     double getSingleNlogProp(const std::string& word) const {
-        // using word key
-        return getSingleNlogProp(getWordKey(word));
+        const int key = getWordKey(word);
+        if (smoothed && key < 0) return safeNll(oovProbability(word));
+        return getSingleNlogProp(key);
     }
     double getNlogProp(int a_widx, int b_widx) const {
+        if (smoothed) return safeNll(knProbability(a_widx, b_widx, nullptr, nullptr));
         double a = 0.0, b = 0.0, n_ij = 0.0;
         if (a_widx < 0 || b_widx < 0) {
             if (a_widx < 0) {
@@ -99,6 +216,7 @@ class BigramDict {
      */
     double getNlogProp(const std::string& word, const std::string& next) const {
         int a_widx = getWordKey(word), b_widx = getWordKey(next);
+        if (smoothed) return safeNll(knProbability(a_widx, b_widx, &word, &next));
         return getNlogProp(a_widx, b_widx);
     }
 
@@ -114,12 +232,39 @@ class BigramDict {
         this->avg_single_freq = dat.avg_single_freq();
         this->avg_union_freq  = dat.avg_union_freq();
         this->max_single_freq = dat.max_single_freq();
+        smoothed = dat.format_version() >= 2 && dat.history_total_size() > 0;
 
         const auto& freq = dat.freq();
         size_t max_index = 0;
         for (const auto& entry : freq) max_index = std::max(max_index, static_cast<size_t>(entry.first));
         this->freqs.assign(freq.empty() ? 0 : max_index + 1, 0);
         for (const auto& entry : freq) this->freqs[entry.first] = entry.second;
+        words.assign(dat.words().begin(), dat.words().end());
+        word_first_char.reserve(words.size());
+        word_last_char.reserve(words.size());
+        for (const auto& word : words) {
+            const auto chars = to_utf32(word);
+            word_first_char.push_back(chars.empty() ? 0 : chars.front());
+            word_last_char.push_back(chars.empty() ? 0 : chars.back());
+        }
+        history_total.assign(dat.history_total().begin(), dat.history_total().end());
+        history_types.assign(dat.history_types().begin(), dat.history_types().end());
+        continuation_types.assign(dat.continuation_types().begin(), dat.continuation_types().end());
+        discount = dat.discount() > 0.0 ? dat.discount() : 0.5;
+        total_unigram_freq = dat.total_unigram_freq();
+        total_bigram_types = dat.total_bigram_types();
+        char_discount = dat.char_discount() > 0.0 ? dat.char_discount() : 0.5;
+        total_char_freq = dat.total_char_freq();
+        total_char_bigram_types = dat.total_char_bigram_types();
+        for (const auto& item : dat.chars()) {
+            char_freqs[item.codepoint()] = item.freq();
+            char_history_types[item.codepoint()] = item.history_types();
+            char_continuation_types[item.codepoint()] = item.continuation_types();
+        }
+        for (const auto& item : dat.char_table()) {
+            char_bigrams[makeBigramKey(item.x(), item.y())] = item.freq();
+            char_history_total[item.x()] += item.freq();
+        }
 
         auto size = dat.table_size();
         this->bigrams.reserve(size);
@@ -141,6 +286,31 @@ class BigramDict {
         dat.set_avg_single_freq(this->avg_single_freq);
         dat.set_avg_union_freq(this->avg_union_freq);
         dat.set_max_single_freq(this->max_single_freq);
+        dat.set_format_version(2);
+        dat.set_discount(discount);
+        dat.set_total_unigram_freq(total_unigram_freq);
+        dat.set_total_bigram_types(total_bigram_types);
+        dat.set_char_discount(char_discount);
+        dat.set_total_char_freq(total_char_freq);
+        dat.set_total_char_bigram_types(total_char_bigram_types);
+        for (const auto& word : words) dat.add_words(word);
+        for (auto value : history_total) dat.add_history_total(value);
+        for (auto value : history_types) dat.add_history_types(value);
+        for (auto value : continuation_types) dat.add_continuation_types(value);
+        for (const auto& item : char_freqs) {
+            auto* value = dat.add_chars();
+            value->set_codepoint(item.first);
+            value->set_freq(item.second);
+            value->set_history_types(char_history_types.count(item.first) ? char_history_types.at(item.first) : 0);
+            value->set_continuation_types(
+                char_continuation_types.count(item.first) ? char_continuation_types.at(item.first) : 0);
+        }
+        for (const auto& item : char_bigrams) {
+            auto* value = dat.add_char_table();
+            value->set_x(item.first >> 32);
+            value->set_y(item.first & 0xffffffffu);
+            value->set_freq(item.second);
+        }
 
         auto freq = dat.mutable_freq();
         for (size_t i = 0; i < this->freqs.size(); ++i) (*freq)[i] = this->freqs[i];
@@ -260,6 +430,17 @@ class BigramDict {
             if (freq > max_freq) max_freq = freq;
             this->idx.update(word.c_str(), word.length(), n++);
             this->freqs.push_back(freq);
+            this->words.push_back(word);
+            total_unigram_freq += freq;
+            const auto chars = to_utf32(word);
+            word_first_char.push_back(chars.empty() ? 0 : chars.front());
+            word_last_char.push_back(chars.empty() ? 0 : chars.back());
+            for (uint32_t codepoint : chars) {
+                char_freqs[codepoint] += freq;
+                total_char_freq += freq;
+            }
+            for (size_t i = 1; i < chars.size(); ++i)
+                char_bigrams[makeBigramKey(chars[i - 1], chars[i])] += freq;
         }
         idx_in.close();
 
@@ -313,6 +494,36 @@ class BigramDict {
             unum++;
         }
         table_in.close();
+        history_total.assign(freqs.size(), 0);
+        history_types.assign(freqs.size(), 0);
+        continuation_types.assign(freqs.size(), 0);
+        size_t count_of_one = 0, count_of_two = 0;
+        for (const auto& item : bigrams) {
+            const uint32_t left = item.first >> 32;
+            const uint32_t right = item.first & 0xffffffffu;
+            history_total[left] += item.second.count;
+            history_types[left]++;
+            continuation_types[right]++;
+            if (item.second.count == 1) count_of_one++;
+            else if (item.second.count == 2) count_of_two++;
+        }
+        total_bigram_types = bigrams.size();
+        discount = count_of_one + 2 * count_of_two > 0 ?
+            static_cast<double>(count_of_one) / (count_of_one + 2.0 * count_of_two) : 0.5;
+        size_t char_count_one = 0, char_count_two = 0;
+        for (const auto& item : char_bigrams) {
+            const uint32_t left = item.first >> 32;
+            const uint32_t right = item.first & 0xffffffffu;
+            char_history_total[left] += item.second;
+            char_history_types[left]++;
+            char_continuation_types[right]++;
+            if (item.second == 1) char_count_one++;
+            else if (item.second == 2) char_count_two++;
+        }
+        total_char_bigram_types = char_bigrams.size();
+        char_discount = char_count_one + 2 * char_count_two > 0 ?
+            static_cast<double>(char_count_one) / (char_count_one + 2.0 * char_count_two) : 0.5;
+        smoothed = true;
         // set static info
         this->avg_single_freq = freq_sum / (1 + n);
         this->avg_union_freq  = union_freq_sum / (1 + unum);
@@ -358,6 +569,15 @@ class BigramDict {
         return getNlogProp(pre, next);
     }
 
+    double wordDist(const std::string* pre, const std::string* next) const {
+        if (!pre || !next) {
+            if (pre) return getSingleNlogProp(*pre);
+            if (next) return getSingleNlogProp(*next);
+            return 0.0;
+        }
+        return getNlogProp(*pre, *next);
+    }
+
     double wordDist(int pre_idx, int next_idx) const {
         if (pre_idx < 0 || next_idx < 0) {
             if (pre_idx >= 0) return getSingleNlogProp(pre_idx);
@@ -367,10 +587,30 @@ class BigramDict {
         return getNlogProp(pre_idx, next_idx);
     }
 
+    double wordDist(int pre_idx, int next_idx, const std::string* pre, const std::string* next) const {
+        if (!smoothed) return wordDist(pre_idx, next_idx);
+        if (pre_idx < 0 && pre == nullptr) {
+            if (next_idx < 0 && next == nullptr) return 0.0;
+            return safeNll(next_idx >= 0 ? unigramProbability(next_idx) : oovProbability(*next));
+        }
+        if (next_idx < 0 && next == nullptr) {
+            return safeNll(pre_idx >= 0 ? unigramProbability(pre_idx) : oovProbability(*pre));
+        }
+        return safeNll(knProbability(pre_idx, next_idx, pre, next));
+    }
+
     ~BigramDict() {
         idx.clear();
         bigrams.clear();
         freqs.clear();
+        words.clear();
+        word_first_char.clear();
+        word_last_char.clear();
+        history_total.clear();
+        history_types.clear();
+        continuation_types.clear();
+        char_freqs.clear();
+        char_bigrams.clear();
     }
 };
 const char* BigramDict::KEY_IDX_FILE = "words.da";

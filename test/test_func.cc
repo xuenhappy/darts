@@ -158,6 +158,30 @@ void testBigramUnknownCost() {
     CHECK(dict.wordDist(-1, -1) > 0.0);
 }
 
+void testSmoothedBigramModel() {
+    const auto path = std::filesystem::temp_directory_path() / "darts-smoothed-bigram.bdf";
+    darts::BigramDict model;
+    CHECK(model.loadDictFromTxt("data/demo/bigram_persenter_freq.txt",
+                                "data/demo/bigram_persenter_freqR.txt") == EXIT_SUCCESS);
+    CHECK(model.saveDict(path.string()) == EXIT_SUCCESS);
+
+    darts::BigramDict loaded;
+    CHECK(loaded.loadDict(path.string()) == EXIT_SUCCESS);
+    const std::string known_left = "我们";
+    const std::string known_right = "可以";
+    const std::string chinese_oov = "量子芯片";
+    const std::string english_oov = "OpenAI";
+    const std::string number_oov = "2026";
+    CHECK(std::isfinite(loaded.wordDist(&known_left, &known_right)));
+    CHECK(std::isfinite(loaded.wordDist(&known_left, &chinese_oov)));
+    CHECK(std::isfinite(loaded.wordDist(&english_oov, &number_oov)));
+    CHECK(loaded.wordDist(&known_left, &known_right) >= 0.0);
+    CHECK(loaded.wordDist(&known_left, &chinese_oov) >= 0.0);
+
+    std::error_code error;
+    std::filesystem::remove(path, error);
+}
+
 void testDictionaryRoundTrip() {
     DictionaryFixture fixture({{{"中", "文"}, {"LANG"}},
                                {{"文", "分", "词"}, {"NLP", "TECH"}},
@@ -212,6 +236,7 @@ int main() {
     testGraphSelection();
     testGraphBoltzmannSampling();
     testBigramUnknownCost();
+    testSmoothedBigramModel();
     testDictionaryRoundTrip();
     testConfiguredSegment();
     if (failures != 0) {

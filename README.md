@@ -632,7 +632,7 @@ build/train-venv/bin/python -c \
 | `OnnxDecider` | `deps.wordpiece.name` | WordPiece 服务依赖 |
 | `OnnxDecider` | `deps.tencode.name` | 词类型编码服务依赖 |
 
-`MinCoverDecider` 不需要统计模型，用于偏 precision 的 `faster` 模式；`BigramDecider` 用于兼容 `fast` 模式。默认 `hybrid` 使用 `HybridStatDecider`，将平滑 Bigram、词长先验和 OOV 惩罚组合为非负图边代价。参数由 `scripts/tune_decider.py` 在 dev 集搜索，禁止使用 test 集调参。
+`MinCoverDecider` 不需要统计模型，用于偏 precision 的 `faster` 模式；`BigramDecider` 用于兼容 `fast` 模式。默认 `hybrid` 使用 `HybridStatDecider`，将平滑 Bigram、词长先验和 OOV 惩罚组合为非负图边代价。词级概率采用插值 Kneser-Ney：根据出现一次/两次的 bigram 数量估计绝对折扣，未见搭配回退到 continuation probability，并融合较低权重的词尾/词首字符条件概率。中文 OOV 使用字符 bigram，英文使用字母字符模型与长度衰减，纯数字使用开放类长度模型。所有输出均为 `-log P`。参数由 `scripts/tune_decider.py` 在 dev 集搜索，禁止使用 test 集调参。
 
 ### Transformer 神经模型
 
@@ -741,6 +741,12 @@ python scripts/devel.py dict-compile data/demo/dregex_pattern_file.txt /tmp/demo
 
 # 无需原始文本，将旧词典转换为 v2；先执行一次 Meson 构建
 python scripts/devel.py dict-repack data/models/panda.pbs /tmp/panda-v2.pbs
+
+# 编译 Kneser-Ney + 字符/OOV 回退统计模型
+python scripts/devel.py bigram-compile \
+  data/generated/bigram-single.txt \
+  data/generated/bigram-union.txt \
+  data/models/ngram_dict.bdf
 
 # 测量词典加载和匹配吞吐
 python scripts/devel.py dict-benchmark /tmp/panda-v2.pbs --repeat 10000

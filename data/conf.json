@@ -61,8 +61,8 @@
         "hybrid.decider": {
             "type": "HybridStatDecider",
             "dat.path": "data/models/ngram_dict.bdf",
-            "bigram.weight": "2.0",
-            "length.weight": "15.0",
+            "bigram.weight": "4.0",
+            "length.weight": "10.0",
             "length.power": "1.0",
             "token.penalty": "0.0",
             "unknown.penalty": "20.0"

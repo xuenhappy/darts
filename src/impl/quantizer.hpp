@@ -109,7 +109,10 @@ class HybridStatDecider : public Decider {
     double ranging(const std::shared_ptr<Word> pre, const std::shared_ptr<Word> next) const override {
         const int pre_idx = pre && !pre->isStSpecial() ? pre->vocab_id : -1;
         const int next_idx = next && !next->isEtSpecial() ? next->vocab_id : -1;
-        return bigram_weight * ngdict.wordDist(pre_idx, next_idx) + wordCost(pre) + wordCost(next);
+        const std::string* pre_text = pre && !pre->isStSpecial() && pre_idx < 0 ? &pre->text() : nullptr;
+        const std::string* next_text = next && !next->isEtSpecial() && next_idx < 0 ? &next->text() : nullptr;
+        return bigram_weight * ngdict.wordDist(pre_idx, next_idx, pre_text, next_text) +
+               wordCost(pre) + wordCost(next);
     }
 };
 
@@ -215,7 +218,11 @@ class AddressDecider : public Decider {
         const double role_nll = -std::log(probability(roleOf(previous), roleOf(next)));
         const int previous_id = previous && !previous->isStSpecial() ? previous->vocab_id : -1;
         const int next_id = next && !next->isEtSpecial() ? next->vocab_id : -1;
-        return role_nll + ruleNll(next) + lexical_weight * dictionary.wordDist(previous_id, next_id);
+        const std::string* previous_text =
+            previous && !previous->isStSpecial() && previous_id < 0 ? &previous->text() : nullptr;
+        const std::string* next_text = next && !next->isEtSpecial() && next_id < 0 ? &next->text() : nullptr;
+        return role_nll + ruleNll(next) +
+               lexical_weight * dictionary.wordDist(previous_id, next_id, previous_text, next_text);
     }
 };
 REGISTER_Decider(AddressDecider);
@@ -291,7 +298,9 @@ class BigramDecider : public Decider {
         if (next != nullptr && !next->isEtSpecial()) {
             nidx = next->vocab_id;
         }
-        return ngdict.wordDist(pidx, nidx);
+        const std::string* previous_text = pre && !pre->isStSpecial() && pidx < 0 ? &pre->text() : nullptr;
+        const std::string* next_text = next && !next->isEtSpecial() && nidx < 0 ? &next->text() : nullptr;
+        return ngdict.wordDist(pidx, nidx, previous_text, next_text);
     }
 
     ~BigramDecider() {}

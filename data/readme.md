@@ -49,7 +49,7 @@ python scripts/data_pipeline.py evaluate data/generated/cws-test.txt --mode fast
 | `sources.json` | 固定版本的上游数据清单 |
 | `sources.lock.json` | 已下载文件的大小与 SHA-256 |
 | `models/panda.pbs` | 开放词典编译后的紧凑 Trie |
-| `models/ngram_dict.bdf` | UD 训练集生成的 Bigram 数据 |
+| `models/ngram_dict.bdf` | UD 训练集生成的词级 Kneser-Ney、字符级回退及英文/数字 OOV 统计模型 |
 | `models/location.pbs` | 四级行政区划、地址后缀和可选 POI 的专用 Trie |
 | `models/location.bdf` | 地址层级与 POI 角色转移量化器词面统计 |
 | `models/neural/recognizer.onnx` | 2~5 Atom 可重叠候选的成词概率模型 |

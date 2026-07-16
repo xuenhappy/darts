@@ -36,4 +36,28 @@ message BigramDat{
     int64 avg_single_freq = 3;
     int64 max_single_freq = 4;
     int64 avg_union_freq = 5;
+    repeated string words = 6;
+    repeated uint64 history_total = 7 [packed=true];
+    repeated uint32 history_types = 8 [packed=true];
+    repeated uint32 continuation_types = 9 [packed=true];
+    double discount = 10;
+    uint64 total_unigram_freq = 11;
+    uint64 total_bigram_types = 12;
+    message char_count {
+        uint32 codepoint = 1;
+        uint64 freq = 2;
+        uint32 history_types = 3;
+        uint32 continuation_types = 4;
+    }
+    repeated char_count chars = 13;
+    message char_bigram {
+        uint32 x = 1;
+        uint32 y = 2;
+        uint64 freq = 3;
+    }
+    repeated char_bigram char_table = 14;
+    double char_discount = 15;
+    uint64 total_char_freq = 16;
+    uint64 total_char_bigram_types = 17;
+    uint32 format_version = 18;
 }

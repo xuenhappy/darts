@@ -72,6 +72,16 @@ def dict_benchmark(args):
     )
 
 
+def bigram_compile(args):
+    from darts import build_gramdict_fromfile
+
+    started = time.perf_counter()
+    build_gramdict_fromfile(args.single, args.bigram, args.output)
+    elapsed = time.perf_counter() - started
+    size = Path(args.output).stat().st_size
+    print(f"compiled={args.output} size={size} bytes elapsed={elapsed:.3f}s")
+
+
 def model_train(args):
     command = [os.environ.get("PYTHON", "python3"), "scripts/train_recognizer.py", "train",
                "--train", args.sample, "--dev", args.dev, "--epochs", str(args.epochs),
@@ -171,6 +181,14 @@ def main():
     command.add_argument("--repeat", type=int, default=10000)
     command.add_argument("--warmup", type=int, default=100)
     command.set_defaults(func=dict_benchmark)
+
+    command = commands.add_parser(
+        "bigram-compile", help="compile unigram/bigram counts into a smoothed .bdf model"
+    )
+    command.add_argument("single", help="tab-separated WORD/FREQUENCY file")
+    command.add_argument("bigram", help="tab-separated LEFT-RIGHT/FREQUENCY file")
+    command.add_argument("output")
+    command.set_defaults(func=bigram_compile)
 
     command = commands.add_parser("model-train", help="train the overlapping-span Transformer recognizer")
     command.add_argument("sample")
