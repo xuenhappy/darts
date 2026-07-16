@@ -181,7 +181,7 @@ def data(args):
 
 def tmap_build(args):
     command = [os.environ.get("PYTHON", "python3"), "scripts/build_tmap.py",
-               "--manual", args.manual, "--output", args.output,
+               "--input", args.input, "--output", args.output,
                "--min-frequency", str(args.min_frequency),
                "--max-new-characters", str(args.max_new_characters)]
     for path in args.finefreq:
@@ -321,9 +321,9 @@ def main():
     command.set_defaults(func=data)
 
     command = commands.add_parser(
-        "tmap-build", help="build chars.tmap from curated and FineFreq character data"
+        "tmap-build", help="update the canonical chars.tmap with FineFreq character data"
     )
-    command.add_argument("--manual", default="data/kernel/chars.manual.tmap")
+    command.add_argument("--input", default="data/kernel/chars.tmap")
     command.add_argument("--finefreq", action="append", default=[])
     command.add_argument("--output", default="data/kernel/chars.tmap")
     command.add_argument("--min-frequency", type=int, default=100_000)

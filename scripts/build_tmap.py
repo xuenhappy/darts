@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the runtime character-type map from curated and frequency data."""
+"""Update the runtime character-type map with optional frequency data."""
 
 import argparse
 import csv
@@ -8,8 +8,7 @@ import unicodedata
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MANUAL = ROOT / "data" / "kernel" / "chars.manual.tmap"
-DEFAULT_OUTPUT = ROOT / "data" / "kernel" / "chars.tmap"
+DEFAULT_TMAP = ROOT / "data" / "kernel" / "chars.tmap"
 TYPE_ORDER = ("SYMBOLS", "POS", "ARROW", "FACE", "RUSH", "ORDER",
               "MOTH", "DAY", "TIME", "ENG", "NUM")
 PUNCTUATION_CATEGORIES = {"Pc", "Pd", "Pe", "Pf", "Pi", "Po", "Ps"}
@@ -123,22 +122,23 @@ def write_tmap(mapping, path, line_width=96):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manual", default=DEFAULT_MANUAL)
+    parser.add_argument("--input", default=DEFAULT_TMAP,
+                        help="existing canonical tmap used as the update baseline")
     parser.add_argument("--finefreq", action="append", default=[],
                         help="FineFreq CSV; may be specified more than once")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", default=DEFAULT_TMAP)
     parser.add_argument("--min-frequency", type=int, default=100_000)
     parser.add_argument("--max-new-characters", type=int, default=4096)
     args = parser.parse_args()
 
-    mapping = read_tmap(args.manual)
-    manual_count = len(mapping)
+    mapping = read_tmap(args.input)
+    baseline_count = len(mapping)
     added = add_finefreq(
         mapping, args.finefreq, args.min_frequency, args.max_new_characters
     )
     write_tmap(mapping, Path(args.output))
     print(
-        f"tmap={args.output} manual={manual_count} finefreq={added} "
+        f"tmap={args.output} baseline={baseline_count} finefreq={added} "
         f"total={len(mapping)} bytes={Path(args.output).stat().st_size}"
     )
 

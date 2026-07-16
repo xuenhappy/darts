@@ -12,8 +12,8 @@ SPEC.loader.exec_module(BUILD_TMAP)
 
 
 class CharacterMapTests(unittest.TestCase):
-    def test_manual_map_has_no_duplicate_effective_characters(self):
-        mapping = BUILD_TMAP.read_tmap(ROOT / "data" / "kernel" / "chars.manual.tmap")
+    def test_runtime_map_has_no_duplicate_effective_characters(self):
+        mapping = BUILD_TMAP.read_tmap(ROOT / "data" / "kernel" / "chars.tmap")
         self.assertGreater(len(mapping), 1000)
         self.assertNotIn("中", mapping)
         self.assertEqual(mapping["😀"], "FACE")
@@ -66,6 +66,15 @@ class CharacterMapTests(unittest.TestCase):
                 output.read_bytes(),
                 (ROOT / "data" / "kernel" / "chars.tmap").read_bytes(),
             )
+
+    def test_in_place_update_preserves_mapping_without_frequency_inputs(self):
+        source = ROOT / "data" / "kernel" / "chars.tmap"
+        expected = BUILD_TMAP.read_tmap(source)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "chars.tmap"
+            output.write_bytes(source.read_bytes())
+            BUILD_TMAP.write_tmap(BUILD_TMAP.read_tmap(output), output)
+            self.assertEqual(BUILD_TMAP.read_tmap(output), expected)
 
 
 if __name__ == "__main__":

@@ -849,7 +849,6 @@ export DARTS_CONF_PATH=/srv/darts-runtime
 | --- | --- |
 | `data/conf.json` | 默认插件与模式配置 |
 | `data/kernel/chars.tmap` | 运行时字符类型映射，由人工规则与 FineFreq 高频字符生成 |
-| `data/kernel/chars.manual.tmap` | 不应被频率数据覆盖的人工字符语义分类 |
 | `data/kernel/confuse.json` | 归一化/易混字符映射 |
 | `data/kernel/pinyin.txt` | 拼音数据 |
 | `data/kernel/pinyin-phrases.txt` | 与核心词典对齐的词级拼音消歧数据 |
@@ -878,6 +877,16 @@ python scripts/devel.py tmap-build \
 断开。FineFreq 只补齐拉丁扩展字母、十进制数字、标点和符号。CJK 字符不会写入映射，
 仍由内置 Unicode CJK 区间逐字编码，避免高频汉字被合并成单个 Atom。其他文字系统
 保持 `WUNK`，不会因为英文网页中的噪声字符改变默认语言边界。
+
+项目只保留一份规范文件 `data/kernel/chars.tmap`。构建脚本先完整读取当前映射，再
+合并 FineFreq 字符并重写文件，因此默认可以安全原地更新。需要生成对比文件时使用：
+
+```bash
+python scripts/devel.py tmap-build \
+  --input data/kernel/chars.tmap \
+  --output /tmp/chars.tmap \
+  --finefreq /path/to/FineFreq/csv/cmn_Hani.csv
+```
 
 ## 开发工具
 
