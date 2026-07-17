@@ -11,6 +11,7 @@ import torch
 
 from darts.devel.model import SpanRecognizer
 from darts.devel.reader import SpanSampleReader
+from darts.devel.utils import stable_clip_grad_norm_
 
 
 @torch.no_grad()
@@ -118,7 +119,7 @@ def train(args):
                 loss = model(word_ids, lengths, span_info)
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+            stable_clip_grad_norm_(model.parameters(), args.clip_grad)
             scaler.step(optimizer)
             scaler.update()
             losses.append(float(loss.detach().cpu()))

@@ -11,6 +11,7 @@ import torch
 
 from darts.devel.model import SyntaxSpanRecognizer
 from darts.devel.reader import SyntaxSpanSampleReader
+from darts.devel.utils import stable_clip_grad_norm_
 from train_recognizer import checkpoint, select_device
 
 
@@ -64,7 +65,7 @@ def train(args):
             optimizer.zero_grad(set_to_none=True)
             loss = model(word_ids.to(device), lengths.to(device), spans.to(device))
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+            stable_clip_grad_norm_(model.parameters(), args.clip_grad)
             optimizer.step()
             losses.append(float(loss.detach()))
         metrics = evaluate(model, dev_reader, device)

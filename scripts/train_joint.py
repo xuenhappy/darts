@@ -12,6 +12,7 @@ import torch
 
 from darts.devel.model import JointSegmentationTrainer
 from darts.devel.reader import GraphSampleReader, SpanSampleReader, SyntaxSpanSampleReader
+from darts.devel.utils import stable_clip_grad_norm_
 from train_quantizer import evaluate as evaluate_quantizer
 from train_recognizer import evaluate as evaluate_recognizer, select_device
 from train_syntax_recognizer import evaluate as evaluate_syntax_recognizer
@@ -159,8 +160,7 @@ def train(args):
                              if parameter.grad is not None and not torch.isfinite(parameter.grad).all()]
             if bad_gradients:
                 raise RuntimeError(f"non-finite gradients in {bad_gradients}")
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad,
-                                           error_if_nonfinite=True)
+            stable_clip_grad_norm_(model.parameters(), args.clip_grad)
             scaler.step(optimizer)
             scaler.update()
             recognizer_losses.append(float(recognizer_loss.detach().cpu()))

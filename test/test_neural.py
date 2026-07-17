@@ -29,12 +29,14 @@ class NeuralModelTests(unittest.TestCase):
             WordEncoder,
         )
         from darts.devel.utils import GraphLossSparse
+        from darts.devel.utils import stable_clip_grad_norm_
 
         cls.Quantizer = Quantizer
         cls.SpanRecognizer = SpanRecognizer
         cls.SyntaxSpanRecognizer = SyntaxSpanRecognizer
         cls.WordEncoder = WordEncoder
         cls.GraphLossSparse = GraphLossSparse
+        cls.stable_clip_grad_norm = staticmethod(stable_clip_grad_norm_)
         cls.JointSegmentationTrainer = JointSegmentationTrainer
 
     def test_quantizer_returns_association_negative_log_probability(self):
@@ -72,6 +74,14 @@ class NeuralModelTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(inputs.grad).all())
         self.assertTrue(all(parameter.grad is None or torch.isfinite(parameter.grad).all()
                             for parameter in model.parameters()))
+
+    def test_stable_gradient_clipping_handles_fp32_norm_overflow(self):
+        parameter = torch.nn.Parameter(torch.zeros(4))
+        parameter.grad = torch.full_like(parameter, 1e30)
+        original_norm = self.stable_clip_grad_norm([parameter], 1.0)
+        self.assertTrue(math.isfinite(original_norm))
+        self.assertAlmostEqual(float(torch.linalg.vector_norm(parameter.grad.double())), 1.0,
+                               places=5)
 
     def test_word_encoder_attention_pools_every_position(self):
         encoder = self.WordEncoder(vocab_num=32, hidden_size=16, wtype_num=-1, num_layers=1,

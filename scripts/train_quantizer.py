@@ -16,6 +16,7 @@ import torch
 
 from darts.devel.model import GraphQuantizerTrainer
 from darts.devel.reader import GraphSampleReader
+from darts.devel.utils import stable_clip_grad_norm_
 
 
 @torch.no_grad()
@@ -70,7 +71,7 @@ def train(args):
                 loss = model(*batch)
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+            stable_clip_grad_norm_(model.parameters(), args.clip_grad)
             scaler.step(optimizer)
             scaler.update()
             losses.append(float(loss.detach().cpu()))

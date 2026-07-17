@@ -4,6 +4,35 @@ import torch
 import torch.nn as nn
 
 
+@torch.no_grad()
+def stable_clip_grad_norm_(parameters, max_norm):
+    """Clip finite gradients without overflowing the norm reduction in FP32."""
+    gradients = [
+        parameter.grad for parameter in parameters
+        if parameter.grad is not None
+    ]
+    if not gradients:
+        return 0.0
+    non_finite = [gradient for gradient in gradients if not torch.isfinite(gradient).all()]
+    if non_finite:
+        raise RuntimeError("cannot clip non-finite gradients")
+    max_abs = max(float(gradient.detach().abs().max()) for gradient in gradients)
+    if max_abs == 0.0:
+        return 0.0
+    # Scaling before squaring avoids FP32 overflow; FP64 preserves the sum for
+    # large candidate graphs with many individually finite gradient elements.
+    scaled_square_sum = sum(
+        float(((gradient.detach().double() / max_abs) ** 2).sum())
+        for gradient in gradients
+    )
+    total_norm = max_abs * scaled_square_sum ** 0.5
+    clip_coefficient = min(1.0, float(max_norm) / (total_norm + 1e-12))
+    if clip_coefficient < 1.0:
+        for gradient in gradients:
+            gradient.mul_(clip_coefficient)
+    return total_norm
+
+
 class GraphLossSparse(nn.Module):
     """Conditional path NLL with O(E) memory for a batch of candidate DAGs.
 
