@@ -1,0 +1,4 @@
+# Framework-independent neural data and ONNX export dependencies.
+numpy>=1.26
+onnx>=1.16
+onnxscript>=0.1

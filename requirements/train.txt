@@ -1,0 +1,4 @@
+# Neural training and ONNX export. Install the matching PyTorch CUDA wheel
+# first when GPU training is required; pip will retain that compatible build.
+-r train-common.txt
+torch>=2.7

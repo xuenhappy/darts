@@ -116,6 +116,7 @@ WordList 分词结果
 │   ├── pyproject.toml        PEP 517 隔离构建依赖
 │   └── setup.py             Meson 驱动的 wheel 打包逻辑
 ├── scripts/                 依赖引导、ONNX Runtime 下载和一键构建
+├── requirements/            构建、训练和完整开发环境的 pip 依赖
 ├── test/                    C++ 功能测试
 ├── meson.build              原生构建入口
 └── meson_options.txt        Meson 构建选项
@@ -164,6 +165,42 @@ meson --version
 pkg-config --version
 protoc --version
 ```
+
+### 同步 Python 与 C++ 开发环境
+
+`requirements/` 将 pip 依赖按用途拆分：
+
+- `build.txt`：与 `python/pyproject.toml` 对齐的 Meson、Ninja、Cython 和 wheel 工具。
+- `train-common.txt`：NumPy 与 ONNX 等框架无关依赖。
+- `train.txt`：聚合训练公共依赖并安装 PyTorch。
+- `devel.txt`：完整开发环境，聚合前两项。
+
+推荐使用引导脚本建立共享环境。它会准备 C++ sysroot 和 ONNX Runtime，
+安装相同虚拟环境中的 Meson/Cython/训练依赖，并生成统一路径配置
+`build/devel-env.sh`：
+
+```bash
+./scripts/bootstrap_devel_env.sh \
+  --python python3.12 \
+  --torch-spec "torch==2.7.1" \
+  --torch-index-url https://download.pytorch.org/whl/cu128
+
+source build/devel-env.sh
+meson setup "$DARTS_MESON_BUILD_DIR" . \
+  -Dbuild-python=true \
+  -Donnxruntime-dir="$DARTS_ONNXRUNTIME_DIR"
+meson compile -C "$DARTS_MESON_BUILD_DIR"
+```
+
+只安装 pip 依赖、不准备 C++ 依赖时可以直接执行：
+
+```bash
+python -m pip install -r requirements/devel.txt
+```
+
+PyTorch CUDA wheel 必须先按驱动和 GPU 能力从官方索引安装。引导脚本随后安装
+`requirements/devel.txt` 时会复用已经满足版本要求的 GPU wheel，不会替换为
+其他 CUDA 版本。
 
 ## 一键编译、打包和测试
 
