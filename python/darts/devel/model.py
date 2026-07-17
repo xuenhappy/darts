@@ -220,10 +220,14 @@ class SpanRecognizer(nn.Module):
     span tensor.
     """
 
-    def __init__(self, vocab_num, hidden_size, encoder=None):
+    def __init__(self, vocab_num, hidden_size, encoder=None, positive_weight=None,
+                 pu_target=0.0, pu_weight=0.0):
         super().__init__()
         self.encoder = encoder or WordEncoder(vocab_num, hidden_size, -1)
         self.probability_head = nn.Sequential(nn.Dropout(0.1), nn.Linear(hidden_size, 1))
+        self.positive_weight = positive_weight
+        self.pu_target = pu_target
+        self.pu_weight = pu_weight
 
     def logits(self, batch_input_idx, batch_lengths, batch_span_info):
         embeddings = self.encoder(batch_input_idx, batch_lengths, batch_span_info)
@@ -231,11 +235,33 @@ class SpanRecognizer(nn.Module):
 
     def forward(self, batch_input_idx, batch_lengths, batch_span_info):
         logits = self.logits(batch_input_idx, batch_lengths, batch_span_info[:, :3])
-        labels = batch_span_info[:, -1].to(logits.dtype)
-        positives = labels.sum().clamp_min(1.0)
-        negatives = (1.0 - labels).sum().clamp_min(1.0)
-        positive_weight = (negatives / positives).clamp(max=20.0)
-        return F.binary_cross_entropy_with_logits(logits, labels, pos_weight=positive_weight)
+        # Evaluation readers append a gold-lexicon validity column after the
+        # annotated label. Legacy/manual five-column tensors remain supported.
+        label_column = -2 if batch_span_info.shape[1] > 5 else -1
+        labels = batch_span_info[:, label_column].to(logits.dtype)
+        targets = labels
+        weights = torch.ones_like(labels)
+        if self.pu_weight > 0 and batch_span_info.shape[1] > 5:
+            lexicon_unlabelled = batch_span_info[:, -1].bool() & ~labels.bool()
+            targets = torch.where(
+                lexicon_unlabelled, logits.new_tensor(self.pu_target), labels
+            )
+            weights = torch.where(
+                lexicon_unlabelled, logits.new_tensor(self.pu_weight), weights
+            )
+        if self.positive_weight is None:
+            positives = labels.sum().clamp_min(1.0)
+            negatives = (1.0 - labels).sum().clamp_min(1.0)
+            positive_weight = (negatives / positives).clamp(max=20.0)
+        else:
+            # A corpus-level prior keeps the logit scale identical across
+            # batches. Per-batch weighting makes exported probabilities depend
+            # on the accidental class mixture of every optimizer step.
+            positive_weight = logits.new_tensor(self.positive_weight)
+        losses = F.binary_cross_entropy_with_logits(
+            logits, targets, pos_weight=positive_weight, reduction="none"
+        )
+        return (losses * weights).sum() / weights.sum().clamp_min(1.0)
 
     def export2onnx(self, outfile="span.recognizer.onnx"):
         sents = torch.randint(0, self.encoder.vocab_num, (11,))
@@ -274,13 +300,16 @@ class SpanRecognizer(nn.Module):
 class SyntaxSpanRecognizer(nn.Module):
     """Classify every span as NOT_WORD or one mutually exclusive POS type."""
 
-    def __init__(self, vocab_num, hidden_size, class_num, encoder=None):
+    def __init__(self, vocab_num, hidden_size, class_num, encoder=None,
+                 pu_target=0.0, pu_weight=0.0):
         super().__init__()
         if class_num < 2:
             raise ValueError("syntax recognizer requires NOT_WORD and at least one POS class")
         self.class_num = class_num
         self.encoder = encoder or WordEncoder(vocab_num, hidden_size, -1)
         self.classifier = nn.Sequential(nn.Dropout(0.1), nn.Linear(hidden_size, class_num))
+        self.pu_target = pu_target
+        self.pu_weight = pu_weight
 
     def logits(self, batch_input_idx, batch_lengths, batch_span_info):
         embeddings = self.encoder(batch_input_idx, batch_lengths, batch_span_info)
@@ -288,7 +317,8 @@ class SyntaxSpanRecognizer(nn.Module):
 
     def forward(self, batch_input_idx, batch_lengths, batch_span_info):
         logits = self.logits(batch_input_idx, batch_lengths, batch_span_info[:, :3])
-        labels = batch_span_info[:, -1]
+        label_column = -2 if batch_span_info.shape[1] > 5 else -1
+        labels = batch_span_info[:, label_column]
         is_word = labels != 0
         # Compare the aggregate POS mass against NOT_WORD. This directly trains
         # candidate recall/precision without letting sparse POS reweighting
@@ -296,10 +326,22 @@ class SyntaxSpanRecognizer(nn.Module):
         word_logits = torch.logsumexp(logits[:, 1:], dim=-1) - logits[:, 0]
         positives = is_word.sum().clamp_min(1)
         negatives = (~is_word).sum().clamp_min(1)
-        word_loss = F.binary_cross_entropy_with_logits(
-            word_logits, is_word.to(logits.dtype),
+        word_targets = is_word.to(logits.dtype)
+        word_weights = torch.ones_like(word_targets)
+        if self.pu_weight > 0 and batch_span_info.shape[1] > 5:
+            lexicon_unlabelled = batch_span_info[:, -1].bool() & ~is_word
+            word_targets = torch.where(
+                lexicon_unlabelled, logits.new_tensor(self.pu_target), word_targets
+            )
+            word_weights = torch.where(
+                lexicon_unlabelled, logits.new_tensor(self.pu_weight), word_weights
+            )
+        word_losses = F.binary_cross_entropy_with_logits(
+            word_logits, word_targets,
             pos_weight=(negatives / positives).clamp(max=12.0),
+            reduction="none",
         )
+        word_loss = (word_losses * word_weights).sum() / word_weights.sum().clamp_min(1.0)
         if not is_word.any():
             return word_loss
         # POS classification is conditioned on known word spans, so it cannot
@@ -376,16 +418,21 @@ class JointSegmentationTrainer(nn.Module):
     """One shared WordEncoder with a selectable recognizer and graph quantizer."""
 
     def __init__(self, vocab_num, hidden_size, wtype_num,
-                 recognizer_kind="binary", class_num=None):
+                 recognizer_kind="binary", class_num=None, positive_weight=None,
+                 pu_target=0.0, pu_weight=0.0):
         super().__init__()
         encoder = WordEncoder(vocab_num, hidden_size, wtype_num)
         if recognizer_kind == "binary":
-            self.recognizer = SpanRecognizer(vocab_num, hidden_size, encoder=encoder)
+            self.recognizer = SpanRecognizer(
+                vocab_num, hidden_size, encoder=encoder, positive_weight=positive_weight,
+                pu_target=pu_target, pu_weight=pu_weight,
+            )
         elif recognizer_kind == "syntax":
             if class_num is None:
                 raise ValueError("syntax joint training requires class_num")
             self.recognizer = SyntaxSpanRecognizer(
-                vocab_num, hidden_size, class_num, encoder=encoder
+                vocab_num, hidden_size, class_num, encoder=encoder,
+                pu_target=pu_target, pu_weight=pu_weight,
             )
         else:
             raise ValueError(f"unsupported recognizer kind: {recognizer_kind}")
@@ -397,3 +444,24 @@ class JointSegmentationTrainer(nn.Module):
     @property
     def encoder(self):
         return self.recognizer.encoder
+
+    def set_training_stage(self, stage):
+        """Select trainable parameters without breaking the shared encoder."""
+        if stage not in ("joint", "recognizer", "quantizer"):
+            raise ValueError(f"unsupported training stage: {stage}")
+        for parameter in self.parameters():
+            parameter.requires_grad_(stage == "joint")
+        if stage == "recognizer":
+            for parameter in self.recognizer.parameters():
+                parameter.requires_grad_(True)
+        elif stage == "quantizer":
+            # Stage two consumes the fixed recognizer representation and only
+            # adapts the association head plus type-only features. Recognizer
+            # spans omit the type column, so these parameters cannot alter its
+            # probabilities but must not remain at random initialization.
+            for parameter in self.graph_quantizer.quantizer.parameters():
+                parameter.requires_grad_(True)
+            for parameter in self.encoder.type_embedding.parameters():
+                parameter.requires_grad_(True)
+            for parameter in self.encoder.type_normal.parameters():
+                parameter.requires_grad_(True)

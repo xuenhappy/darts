@@ -19,19 +19,23 @@ def evaluate(model, reader, device, fixed_thresholds=None):
     """Evaluate spans, calibrating thresholds only when none are supplied."""
     model.eval()
     probabilities = []
-    labels = []
+    annotated_labels = []
+    valid_labels = []
     span_lengths = []
     for word_ids, lengths, span_info in reader:
         word_ids = word_ids.to(device)
         lengths = lengths.to(device)
         span_info = span_info.to(device)
         probabilities.append(torch.sigmoid(model.logits(word_ids, lengths, span_info[:, :3])).cpu())
-        span_lengths.append(span_info[:, -2].cpu())
-        labels.append(span_info[:, -1].bool().cpu())
+        has_validity = span_info.shape[1] > 5
+        span_lengths.append(span_info[:, -3 if has_validity else -2].cpu())
+        annotated_labels.append(span_info[:, -2 if has_validity else -1].bool().cpu())
+        valid_labels.append(span_info[:, -1].bool().cpu())
     if not probabilities:
         raise RuntimeError(f"no recognizer samples were generated from {reader.sample}")
     probabilities = torch.cat(probabilities)
-    labels = torch.cat(labels)
+    annotated_labels = torch.cat(annotated_labels)
+    valid_labels = torch.cat(valid_labels)
     span_lengths = torch.cat(span_lengths)
     thresholds = dict(fixed_thresholds or {})
     if fixed_thresholds is None:
@@ -39,18 +43,20 @@ def evaluate(model, reader, device, fixed_thresholds=None):
         # stricter threshold. Select each length only on development data.
         for length in sorted(span_lengths.unique().tolist()):
             mask = span_lengths == length
-            if not labels[mask].any():
+            if not annotated_labels[mask].any():
                 thresholds[str(length)] = 0.95
                 continue
             best_length = None
             for threshold in np.arange(0.10, 0.96, 0.05):
                 predicted = probabilities[mask] >= threshold
-                gold = labels[mask]
-                true_positive = int((predicted & gold).sum())
+                annotated = annotated_labels[mask]
+                valid = valid_labels[mask]
+                valid_positive = int((predicted & valid).sum())
+                annotated_positive = int((predicted & annotated).sum())
                 predicted_total = int(predicted.sum())
-                gold_total = int(gold.sum())
-                precision = true_positive / predicted_total if predicted_total else 0.0
-                recall = true_positive / gold_total if gold_total else 0.0
+                gold_total = int(annotated.sum())
+                precision = valid_positive / predicted_total if predicted_total else 0.0
+                recall = annotated_positive / gold_total if gold_total else 0.0
                 f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
                 if best_length is None or f1 > best_length["f1"] or (
                         f1 == best_length["f1"] and threshold > best_length["threshold"]):
@@ -61,13 +67,21 @@ def evaluate(model, reader, device, fixed_thresholds=None):
         raise RuntimeError(f"missing fixed recognizer thresholds for atom lengths {missing}")
     selected = torch.tensor([thresholds[str(int(length))] for length in span_lengths])
     predicted = probabilities >= selected
-    true_positive = int((predicted & labels).sum())
+    valid_positive = int((predicted & valid_labels).sum())
+    annotated_positive = int((predicted & annotated_labels).sum())
     predicted_total = int(predicted.sum())
-    gold_total = int(labels.sum())
-    precision = true_positive / predicted_total if predicted_total else 0.0
-    recall = true_positive / gold_total if gold_total else 0.0
+    gold_total = int(annotated_labels.sum())
+    precision = valid_positive / predicted_total if predicted_total else 0.0
+    recall = annotated_positive / gold_total if gold_total else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    return {"thresholds": thresholds, "precision": precision, "recall": recall, "f1": f1}
+    return {
+        "thresholds": thresholds,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "precision_standard": "training_dictionary_or_annotated_word",
+        "recall_standard": "annotated_span",
+    }
 
 
 def checkpoint(model, metadata, path):
@@ -93,7 +107,10 @@ def train(args):
     device = select_device(args.device)
     train_reader = SpanSampleReader(args.train, batch_size=args.batch_size, max_span=args.max_span,
                                     shuffle=True)
-    dev_reader = SpanSampleReader(args.dev, batch_size=args.batch_size, max_span=args.max_span)
+    dev_reader = SpanSampleReader(
+        args.dev, batch_size=args.batch_size, max_span=args.max_span,
+        gold_config=args.config, gold_mode=args.gold_mode,
+    )
     metadata = {"vocab_num": train_reader.wordsize(), "hidden_size": args.hidden_size,
                 "max_span": args.max_span, "architecture": "transformer-span-recognizer",
                 "output": "word_probability", "seed": args.seed}
@@ -159,6 +176,8 @@ def main():
     command = commands.add_parser("train")
     command.add_argument("--train", default="data/generated/cws-train.txt")
     command.add_argument("--dev", default="data/generated/cws-dev.txt")
+    command.add_argument("--config", default="data/conf.json")
+    command.add_argument("--gold-mode", default="hybrid")
     command.add_argument("--output-dir", default="model_bin/recognizer")
     command.add_argument("--epochs", type=int, default=20)
     command.add_argument("--patience", type=int, default=4)

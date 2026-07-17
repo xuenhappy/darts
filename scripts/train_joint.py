@@ -30,10 +30,17 @@ def build_model(metadata):
         metadata["wtype_num"],
         recognizer_kind=metadata.get("recognizer_kind", "binary"),
         class_num=metadata.get("class_num"),
+        positive_weight=metadata.get("positive_weight"),
+        pu_target=metadata.get("pu_target", 0.0),
+        pu_weight=metadata.get("pu_weight", 0.0),
     )
 
 
 def train(args):
+    if not 0.0 <= args.pu_target <= 1.0:
+        raise ValueError("--pu-target must be between 0 and 1")
+    if args.pu_weight < 0.0:
+        raise ValueError("--pu-weight must be non-negative")
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -68,17 +75,27 @@ def train(args):
     )
     if args.recognizer_kind == "syntax":
         span_train = SyntaxSpanSampleReader(
-            train_path, type_map, args.recognizer_batch_size, args.max_span, shuffle=True
+            train_path, type_map, args.recognizer_batch_size, args.max_span, shuffle=True,
+            gold_config=args.config if args.pu_weight > 0 else None, gold_mode=mode,
         )
         span_dev = SyntaxSpanSampleReader(
             dev_path, type_map, args.recognizer_batch_size, args.max_span,
-            labels=span_train.labels
+            labels=span_train.labels, gold_config=args.config, gold_mode=mode
         )
     else:
         span_train = SpanSampleReader(
-            train_path, args.recognizer_batch_size, args.max_span, shuffle=True
+            train_path, args.recognizer_batch_size, args.max_span, shuffle=True,
+            gold_config=args.config if args.pu_weight > 0 else None, gold_mode=mode,
         )
-        span_dev = SpanSampleReader(dev_path, args.recognizer_batch_size, args.max_span)
+        span_dev = SpanSampleReader(
+            dev_path, args.recognizer_batch_size, args.max_span,
+            gold_config=args.config, gold_mode=mode,
+        )
+        negative_spans, positive_spans = span_train.class_counts()
+        positive_weight = min(
+            args.max_positive_weight,
+            negative_spans / max(1, positive_spans),
+        )
     graph_train = GraphSampleReader(
         train_path, args.config, mode, args.quantizer_batch_size,
         args.max_span, shuffle=True, type_map=type_map
@@ -98,6 +115,10 @@ def train(args):
         "max_span": args.max_span,
         "recognizer_kind": args.recognizer_kind,
         "class_num": span_train.classsize() if args.recognizer_kind == "syntax" else None,
+        "positive_weight": positive_weight if args.recognizer_kind == "binary" else None,
+        "pu_target": args.pu_target,
+        "pu_weight": args.pu_weight,
+        "training_stage": args.training_stage,
         "labels": span_train.labels if args.recognizer_kind == "syntax" else None,
         "type_map": type_map,
         "graph_mode": mode,
@@ -118,8 +139,11 @@ def train(args):
         if resumed_metadata.get("class_num") != metadata["class_num"]:
             raise RuntimeError("resume checkpoint class count does not match")
         model.load_state_dict(resumed["state_dict"])
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate,
-                                  weight_decay=args.weight_decay)
+    model.set_training_stage(args.training_stage)
+    optimizer = torch.optim.AdamW(
+        (parameter for parameter in model.parameters() if parameter.requires_grad),
+        lr=args.learning_rate, weight_decay=args.weight_decay,
+    )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=max(1, args.epochs), eta_min=1e-6
     )
@@ -137,30 +161,53 @@ def train(args):
         started = time.perf_counter()
         if device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(device)
-        model.train()
-        recognizer_iterator = iter(span_train)
+        if args.training_stage == "quantizer":
+            model.eval()
+            model.graph_quantizer.quantizer.train()
+        else:
+            model.train()
         recognizer_losses = []
         quantizer_losses = []
         skipped_nonfinite = 0
-        # The graph task determines epoch length. Restarting the cheaper span
-        # iterator balances task update counts without retaining yielded batches.
-        for graph_batch in graph_train:
-            try:
-                span_batch = next(recognizer_iterator)
-            except StopIteration:
-                recognizer_iterator = iter(span_train)
-                span_batch = next(recognizer_iterator)
+        if args.training_stage == "recognizer":
+            batches = ((span_batch, None) for span_batch in span_train)
+        elif args.training_stage == "quantizer":
+            batches = ((None, graph_batch) for graph_batch in graph_train)
+        else:
+            recognizer_iterator = iter(span_train)
+
+            def joint_batches():
+                nonlocal recognizer_iterator
+                for graph_batch in graph_train:
+                    try:
+                        span_batch = next(recognizer_iterator)
+                    except StopIteration:
+                        recognizer_iterator = iter(span_train)
+                        span_batch = next(recognizer_iterator)
+                    yield span_batch, graph_batch
+
+            batches = joint_batches()
+        for span_batch, graph_batch in batches:
             optimizer.zero_grad(set_to_none=True)
-            span_batch = tuple(tensor.to(device) for tensor in span_batch)
-            with torch.amp.autocast("cuda", enabled=amp_enabled):
-                recognizer_loss = model.recognizer(*span_batch)
+            recognizer_loss = None
+            quantizer_loss = None
+            if span_batch is not None:
+                span_batch = tuple(tensor.to(device) for tensor in span_batch)
+                with torch.amp.autocast("cuda", enabled=amp_enabled):
+                    recognizer_loss = model.recognizer(*span_batch)
             # GraphLossSparse repeatedly combines path log probabilities. Keep
             # the graph encoder and K/Q projections in FP32; FP16 autocast can
             # overflow their gradients on large candidate DAGs even when every
             # forward association NLL is finite.
-            with torch.amp.autocast("cuda", enabled=False):
-                quantizer_loss = model.graph_quantizer(*graph_batch)
-            loss = recognizer_loss + args.quantizer_weight * quantizer_loss
+            if graph_batch is not None:
+                with torch.amp.autocast("cuda", enabled=False):
+                    quantizer_loss = model.graph_quantizer(*graph_batch)
+            if recognizer_loss is None:
+                loss = quantizer_loss
+            elif quantizer_loss is None:
+                loss = recognizer_loss
+            else:
+                loss = recognizer_loss + args.quantizer_weight * quantizer_loss
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             bad_gradients = [name for name, parameter in model.named_parameters()
@@ -182,8 +229,10 @@ def train(args):
             stable_clip_grad_norm_(model.parameters(), args.clip_grad)
             scaler.step(optimizer)
             scaler.update()
-            recognizer_losses.append(float(recognizer_loss.detach().cpu()))
-            quantizer_losses.append(float(quantizer_loss.detach().cpu()))
+            if recognizer_loss is not None:
+                recognizer_losses.append(float(recognizer_loss.detach().cpu()))
+            if quantizer_loss is not None:
+                quantizer_losses.append(float(quantizer_loss.detach().cpu()))
 
         if args.recognizer_kind == "syntax":
             recognizer_metrics = evaluate_syntax_recognizer(model.recognizer, span_dev, device)
@@ -194,13 +243,28 @@ def train(args):
         else:
             recognizer_metrics = evaluate_recognizer(model.recognizer, span_dev, device)
             recognizer_error = 1.0 - recognizer_metrics["f1"]
-        quantizer_dev_loss = evaluate_quantizer(model.graph_quantizer, graph_dev)
+        quantizer_dev_loss = (
+            None if args.training_stage == "recognizer"
+            else evaluate_quantizer(model.graph_quantizer, graph_dev)
+        )
         scheduler.step()
-        objective = recognizer_error + args.quantizer_weight * quantizer_dev_loss
+        if args.training_stage == "recognizer":
+            objective = recognizer_error
+        elif args.training_stage == "quantizer":
+            objective = quantizer_dev_loss
+        else:
+            objective = recognizer_error + args.quantizer_weight * quantizer_dev_loss
         metrics = {
             "epoch": epoch,
-            "recognizer_loss": sum(recognizer_losses) / max(1, len(recognizer_losses)),
-            "quantizer_loss": sum(quantizer_losses) / max(1, len(quantizer_losses)),
+            "training_stage": args.training_stage,
+            "recognizer_loss": (
+                sum(recognizer_losses) / len(recognizer_losses)
+                if recognizer_losses else None
+            ),
+            "quantizer_loss": (
+                sum(quantizer_losses) / len(quantizer_losses)
+                if quantizer_losses else None
+            ),
             "quantizer_dev_loss": quantizer_dev_loss,
             "learning_rate": scheduler.get_last_lr()[0],
             "elapsed_seconds": time.perf_counter() - started,
@@ -277,7 +341,7 @@ def evaluate(args):
     if syntax:
         spans = SyntaxSpanSampleReader(
             args.data, type_map, args.recognizer_batch_size, metadata["max_span"],
-            labels=metadata["labels"]
+            labels=metadata["labels"], gold_config=args.config, gold_mode=mode
         )
         recognizer_metrics = evaluate_syntax_recognizer(
             model.recognizer, spans, device,
@@ -285,7 +349,8 @@ def evaluate(args):
         )
     else:
         spans = SpanSampleReader(
-            args.data, args.recognizer_batch_size, metadata["max_span"]
+            args.data, args.recognizer_batch_size, metadata["max_span"],
+            gold_config=args.config, gold_mode=mode,
         )
         fixed_thresholds = metadata.get("dev", {}).get("thresholds")
         if not fixed_thresholds:
@@ -322,6 +387,14 @@ def main():
     command.add_argument("--learning-rate", type=float, default=3e-4)
     command.add_argument("--weight-decay", type=float, default=1e-2)
     command.add_argument("--quantizer-weight", type=float, default=0.5)
+    command.add_argument("--max-positive-weight", type=float, default=20.0,
+                         help="cap the corpus-level binary positive-class weight")
+    command.add_argument("--pu-target", type=float, default=0.0,
+                         help="soft target for lexicon words absent from the annotated path")
+    command.add_argument("--pu-weight", type=float, default=0.0,
+                         help="loss weight for lexicon words absent from the annotated path")
+    command.add_argument("--training-stage", choices=("joint", "recognizer", "quantizer"),
+                         default="joint", help="joint training or one frozen staged task")
     command.add_argument("--clip-grad", type=float, default=1.0)
     command.add_argument("--resume", help="initialize model parameters from a compatible checkpoint")
     command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True,

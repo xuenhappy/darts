@@ -121,6 +121,46 @@ class NeuralModelTests(unittest.TestCase):
         self.assertEqual(loss.ndim, 0)
         self.assertTrue(torch.isfinite(loss))
 
+    def test_span_recognizer_uses_fixed_corpus_positive_weight(self):
+        model = self.SpanRecognizer(vocab_num=32, hidden_size=16, positive_weight=3.5)
+        with torch.no_grad():
+            model.probability_head[1].weight.zero_()
+            model.probability_head[1].bias.zero_()
+        token_ids = torch.tensor([[1, 2, 3, 4]])
+        lengths = torch.tensor([4])
+        spans = torch.tensor([
+            [0, 0, 1, 2, 1],
+            [0, 1, 2, 2, 0],
+            [0, 2, 3, 2, 0],
+        ])
+        loss = model(token_ids, lengths, spans)
+        expected = torch.nn.functional.binary_cross_entropy_with_logits(
+            torch.zeros(3), spans[:, -1].float(), pos_weight=torch.tensor(3.5)
+        )
+        self.assertAlmostEqual(float(loss.detach()), float(expected), places=6)
+
+    def test_span_recognizer_downweights_lexicon_pu_targets(self):
+        model = self.SpanRecognizer(
+            vocab_num=32, hidden_size=16, positive_weight=1.0,
+            pu_target=0.2, pu_weight=0.25,
+        )
+        with torch.no_grad():
+            model.probability_head[1].weight.zero_()
+            model.probability_head[1].bias.zero_()
+        token_ids = torch.tensor([[1, 2, 3, 4]])
+        lengths = torch.tensor([4])
+        spans = torch.tensor([
+            [0, 0, 1, 2, 1, 1],  # annotated word
+            [0, 1, 2, 2, 0, 1],  # lexicon word outside annotated path
+            [0, 2, 3, 2, 0, 0],  # hard negative
+        ])
+        loss = model(token_ids, lengths, spans)
+        raw = torch.nn.functional.binary_cross_entropy_with_logits(
+            torch.zeros(3), torch.tensor([1.0, 0.2, 0.0]), reduction="none"
+        )
+        expected = (raw * torch.tensor([1.0, 0.25, 1.0])).sum() / 2.25
+        self.assertAlmostEqual(float(loss.detach()), float(expected), places=6)
+
     def test_syntax_recognizer_classifies_not_word_and_pos(self):
         model = self.SyntaxSpanRecognizer(vocab_num=32, hidden_size=16, class_num=5)
         token_ids = torch.tensor([[1, 2, 3, 4]])
@@ -206,6 +246,25 @@ class NeuralModelTests(unittest.TestCase):
         self.assertIsNotNone(gradient)
         self.assertGreater(float(gradient.abs().sum()), 0.0)
 
+    def test_quantizer_stage_freezes_context_but_trains_type_features(self):
+        model = self.JointSegmentationTrainer(vocab_num=32, hidden_size=16, wtype_num=4)
+        model.set_training_stage("quantizer")
+        token_ids = torch.tensor([[1, 2, 3, 4]])
+        lengths = torch.tensor([4])
+        words = torch.tensor([
+            [0, 0, 0, 0], [0, 0, 1, 1], [0, 2, 3, 2], [0, 3, 3, 3],
+        ])
+        graph = torch.tensor([
+            [0, 0, 1, 1], [0, 0, 2, 0], [0, 1, 3, 1], [0, 2, 3, 0],
+        ])
+        model.graph_quantizer(token_ids, lengths, words, graph).backward()
+        self.assertIsNone(model.encoder.vocab_embedding[0].weight.grad)
+        self.assertIsNotNone(model.encoder.type_embedding[0].weight.grad)
+        self.assertTrue(any(
+            parameter.grad is not None
+            for parameter in model.graph_quantizer.quantizer.parameters()
+        ))
+
     @unittest.skipUnless(onnx is not None, "ONNX and onnxscript are optional export dependencies")
     def test_onnx_exports_have_real_dynamic_axes_and_runtime_ir(self):
         model = self.JointSegmentationTrainer(vocab_num=32, hidden_size=16, wtype_num=4).eval()
@@ -250,6 +309,38 @@ class NeuralReaderTests(unittest.TestCase):
         split_atoms = atom_list("ABC 123", skip_space=True, normal_before=False)
         self.assertEqual(reader._gold_spans(["ABC", "123"], split_atoms), [(0, 1), (1, 2)])
 
+    def test_span_reader_class_counts_match_enumerated_labels(self):
+        try:
+            from darts.devel.reader import SpanSampleReader
+        except (ImportError, OSError) as error:
+            self.skipTest(f"native darts training reader unavailable: {error}")
+        with tempfile.TemporaryDirectory() as directory:
+            sample = Path(directory) / "sample.txt"
+            sample.write_text("南京 市 长江 大桥\n中文 分词\n", encoding="utf-8")
+            reader = SpanSampleReader(str(sample), batch_size=2, max_span=5)
+            negatives, positives = reader.class_counts()
+            labels = [
+                span[-2]
+                for _codes, spans in reader._samples
+                for span in spans
+            ]
+            self.assertEqual(positives, sum(labels))
+            self.assertEqual(negatives, len(labels) - sum(labels))
+
+    def test_binary_precision_gold_accepts_dictionary_word_off_annotated_path(self):
+        try:
+            from darts.devel.reader import SpanSampleReader
+        except (ImportError, OSError) as error:
+            self.skipTest(f"native darts training reader unavailable: {error}")
+        reader = SpanSampleReader(
+            "data/generated/cws-dev.txt", batch_size=1, max_span=5,
+            gold_config="data/conf.json", gold_mode="hybrid",
+        )
+        _codes, spans = reader._sample(["南京", "市"])
+        full_span = next(span for span in spans if span[2] == 3)
+        self.assertEqual(full_span[-2], 0)
+        self.assertEqual(full_span[-1], 1)
+
     def test_corpus_whitespace_is_not_part_of_atom_indexes(self):
         atom_list, reader, _piece_bounds = self._reader_types()
         tokens = "南京市   长江\t大桥".split()
@@ -286,9 +377,23 @@ class NeuralReaderTests(unittest.TestCase):
             "data/generated/lac-dev.txt", batch_size=1, max_span=5
         )
         _codes, spans = reader._sample(["研究/POS_NOUN", "工作/POS_NOUN"])
-        labels = [span[-1] for span in spans]
+        labels = [span[-2] for span in spans]
         self.assertEqual(sum(label != 0 for label in labels), 2)
         self.assertIn(0, labels)
+
+    def test_syntax_precision_gold_is_separate_from_pos_annotation(self):
+        try:
+            from darts.devel.reader import SyntaxSpanSampleReader
+        except (ImportError, OSError) as error:
+            self.skipTest(f"native darts training reader unavailable: {error}")
+        reader = SyntaxSpanSampleReader(
+            "data/generated/lac-dev.txt", batch_size=1, max_span=5,
+            gold_config="data/conf.json", gold_mode="lac",
+        )
+        _codes, spans = reader._sample(["南京/POS_PROPN", "市/POS_PART"])
+        full_span = next(span for span in spans if span[2] == 3)
+        self.assertEqual(full_span[-2], 0)
+        self.assertEqual(full_span[-1], 1)
 
 
 if __name__ == "__main__":

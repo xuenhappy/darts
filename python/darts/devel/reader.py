@@ -232,7 +232,8 @@ class SpanSampleReader(IterableDataset):
     WordPiece bounds for WordEncoder and the exported ONNX model.
     """
 
-    def __init__(self, sample, batch_size=32, max_span=5, shuffle=False):
+    def __init__(self, sample, batch_size=32, max_span=5, shuffle=False,
+                 gold_config=None, gold_mode="hybrid"):
         super().__init__()
         self.sample = sample
         self.batch_size = batch_size
@@ -240,33 +241,60 @@ class SpanSampleReader(IterableDataset):
         self.shuffle = shuffle
         self._samples = None
         self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
+        self.gold_segment = (
+            DSegment(gold_config, gold_mode, isdev=True) if gold_config else None
+        )
 
     def wordsize(self):
         return self.atom_codec.label_nums()
 
+    def class_counts(self):
+        """Return stable corpus-level negative/positive span counts."""
+        self._ensure_samples()
+        positives = sum(
+            label
+            for _codes, spans in self._samples
+            for span in spans
+            for label in [span[-2]]
+        )
+        total = sum(len(spans) for _codes, spans in self._samples)
+        return total - positives, positives
+
     def _sample(self, tokens):
         # Keep this contract identical to GraphSampleReader.
         text = " ".join(tokens)
-        atoms = PyAtomList(text, skip_space=True, normal_before=False)
+        if self.gold_segment is None:
+            atoms = PyAtomList(text, skip_space=True, normal_before=False)
+            valid = set()
+        else:
+            atoms, candidates = self.gold_segment.cut(
+                text, max_mode=True, skip_space=True, normal_before=False
+            )
+            valid = {(word.atom_s, word.atom_e) for word in candidates.tolist()}
         codes = self.atom_codec.encode(atoms)
         code_ids = [item[0] for item in codes]
         starts, ends = piece_bounds(codes, len(atoms))
         gold = set(GraphSampleReader._gold_spans(tokens, atoms))
+        valid.update(gold)
         spans = []
         for start in range(len(atoms)):
             for end in range(start + 2, min(len(atoms), start + self.max_span) + 1):
-                spans.append((starts[start], ends[end - 1], end - start, int((start, end) in gold)))
+                annotated = int((start, end) in gold)
+                spans.append((
+                    starts[start], ends[end - 1], end - start,
+                    annotated, int((start, end) in valid),
+                ))
         return code_ids, spans
 
     def _batch(self, samples):
         code_ids, lengths = d2list2array([sample[0] for sample in samples])
-        spans = [(batch_id, start, end, atom_length, label)
+        spans = [(batch_id, *span)
                  for batch_id, (_codes, sample_spans) in enumerate(samples)
-                 for start, end, atom_length, label in sample_spans]
+                 for span in sample_spans]
         return (torch.from_numpy(code_ids).long(), torch.from_numpy(lengths).long(),
                 torch.tensor(spans, dtype=torch.long))
 
-    def __iter__(self):
+    def _ensure_samples(self):
         if self._samples is None:
             with open(self.sample, encoding="utf-8") as stream:
                 lines = list(stream)
@@ -278,6 +306,9 @@ class SpanSampleReader(IterableDataset):
                 sample = self._sample(tokens)
                 if sample[1]:
                     self._samples.append(sample)
+
+    def __iter__(self):
+        self._ensure_samples()
         ordered = list(self._samples)
         if self.shuffle:
             random.shuffle(ordered)
@@ -289,7 +320,8 @@ class SyntaxSpanSampleReader(IterableDataset):
     """Generate span classes where 0 is NOT_WORD and 1..N are POS labels."""
 
     def __init__(self, sample, type_map="data/codes/pos.hx.txt", batch_size=32,
-                 max_span=5, shuffle=False, labels=None):
+                 max_span=5, shuffle=False, labels=None, gold_config=None,
+                 gold_mode="lac"):
         super().__init__()
         self.sample = sample
         self.batch_size = batch_size
@@ -297,6 +329,9 @@ class SyntaxSpanSampleReader(IterableDataset):
         self.shuffle = shuffle
         self._samples = None
         self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
+        self.gold_segment = (
+            DSegment(gold_config, gold_mode, isdev=True) if gold_config else None
+        )
         if labels is None:
             observed = set()
             with open(sample, encoding="utf-8") as stream:
@@ -323,7 +358,19 @@ class SyntaxSpanSampleReader(IterableDataset):
     def _sample(self, items):
         tokens, tags = GraphSampleReader._tagged_tokens(items)
         text = " ".join(tokens)
-        atoms = PyAtomList(text, skip_space=True, normal_before=False)
+        if self.gold_segment is None:
+            atoms = PyAtomList(text, skip_space=True, normal_before=False)
+            valid = set()
+        else:
+            atoms, candidates = self.gold_segment.cut(
+                text, max_mode=True, skip_space=True, normal_before=False
+            )
+            base_labels = {"CJK", "ENG", "NUM", "POS", "SYMBOLS"}
+            valid = {
+                (word.atom_s, word.atom_e)
+                for word in candidates.tolist()
+                if word.atom_e - word.atom_s > 1 or set(word.labels) - base_labels
+            }
         codes = self.atom_codec.encode(atoms)
         code_ids = [item[0] for item in codes]
         starts, ends = piece_bounds(codes, len(atoms))
@@ -331,18 +378,21 @@ class SyntaxSpanSampleReader(IterableDataset):
             span: self.label_codes.get(tag, 0)
             for span, tag in zip(GraphSampleReader._gold_spans(tokens, atoms), tags)
         }
+        valid.update(gold)
         spans = []
         for start in range(len(atoms)):
             for end in range(start + 1, min(len(atoms), start + self.max_span) + 1):
-                spans.append((starts[start], ends[end - 1], end - start,
-                              gold.get((start, end), 0)))
+                spans.append((
+                    starts[start], ends[end - 1], end - start,
+                    gold.get((start, end), 0), int((start, end) in valid),
+                ))
         return code_ids, spans
 
     def _batch(self, samples):
         code_ids, lengths = d2list2array([sample[0] for sample in samples])
-        spans = [(batch_id, start, end, atom_length, label)
+        spans = [(batch_id, *span)
                  for batch_id, (_codes, sample_spans) in enumerate(samples)
-                 for start, end, atom_length, label in sample_spans]
+                 for span in sample_spans]
         return (torch.from_numpy(code_ids).long(), torch.from_numpy(lengths).long(),
                 torch.tensor(spans, dtype=torch.long))
 

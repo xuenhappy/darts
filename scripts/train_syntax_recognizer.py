@@ -21,15 +21,19 @@ def evaluate(model, reader, device, fixed_threshold=None):
     probabilities = []
     predictions = []
     labels = []
+    valid_labels = []
     for word_ids, lengths, spans in reader:
         word_ids, lengths, spans = word_ids.to(device), lengths.to(device), spans.to(device)
         probability = torch.softmax(model.logits(word_ids, lengths, spans[:, :3]), dim=-1)
         probabilities.append(probability[:, 1:].max(dim=-1).values.cpu())
         predictions.append(probability[:, 1:].argmax(dim=-1).add(1).cpu())
-        labels.append(spans[:, -1].cpu())
+        has_validity = spans.shape[1] > 5
+        labels.append(spans[:, -2 if has_validity else -1].cpu())
+        valid_labels.append(spans[:, -1].bool().cpu())
     probabilities = torch.cat(probabilities)
     predictions = torch.cat(predictions)
     labels = torch.cat(labels)
+    valid_labels = torch.cat(valid_labels)
     gold_word = labels != 0
     thresholds = [fixed_threshold] if fixed_threshold is not None else [
         round(value, 2) for value in np.arange(0.05, 0.96, 0.05)
@@ -37,11 +41,12 @@ def evaluate(model, reader, device, fixed_threshold=None):
     best = None
     for threshold in thresholds:
         predicted_word = probabilities >= threshold
-        true_positive = int((predicted_word & gold_word).sum())
+        valid_positive = int((predicted_word & valid_labels).sum())
+        annotated_positive = int((predicted_word & gold_word).sum())
         predicted_total = int(predicted_word.sum())
         gold_total = int(gold_word.sum())
-        precision = true_positive / predicted_total if predicted_total else 0.0
-        recall = true_positive / gold_total if gold_total else 0.0
+        precision = valid_positive / predicted_total if predicted_total else 0.0
+        recall = annotated_positive / gold_total if gold_total else 0.0
         f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
         row = {"threshold": float(threshold), "word_precision": precision,
                "word_recall": recall, "word_f1": f1}
@@ -49,9 +54,19 @@ def evaluate(model, reader, device, fixed_threshold=None):
             best = row
     word_total = int(gold_word.sum())
     word_correct = int(((predictions == labels) & gold_word).sum())
+    selected_word = probabilities >= best["threshold"]
+    recognized_gold = selected_word & gold_word
+    recognized_total = int(recognized_gold.sum())
+    recognized_correct = int(((predictions == labels) & recognized_gold).sum())
     return {
         **best,
         "word_type_accuracy": word_correct / word_total if word_total else 0.0,
+        "recognized_word_type_accuracy": (
+            recognized_correct / recognized_total if recognized_total else 0.0
+        ),
+        "word_precision_standard": "training_dictionary_or_annotated_word",
+        "word_recall_standard": "annotated_span",
+        "word_type_standard": "annotated_span",
     }
 
 
@@ -63,7 +78,8 @@ def train(args):
     train_reader = SyntaxSpanSampleReader(args.train, args.type_map, args.batch_size,
                                           args.max_span, shuffle=True)
     dev_reader = SyntaxSpanSampleReader(
-        args.dev, args.type_map, args.batch_size, args.max_span, labels=train_reader.labels
+        args.dev, args.type_map, args.batch_size, args.max_span, labels=train_reader.labels,
+        gold_config=args.config, gold_mode=args.gold_mode,
     )
     metadata = {
         "architecture": "transformer-syntax-span-recognizer",
@@ -123,6 +139,8 @@ def main():
     command = sub.add_parser("train")
     command.add_argument("--train", default="data/generated/lac-train.txt")
     command.add_argument("--dev", default="data/generated/lac-dev.txt")
+    command.add_argument("--config", default="data/conf.json")
+    command.add_argument("--gold-mode", default="lac")
     command.add_argument("--type-map", default="data/codes/pos.hx.txt")
     command.add_argument("--output-dir", default="model_bin/syntax")
     command.add_argument("--epochs", type=int, default=20)
