@@ -190,6 +190,48 @@ class SegmentTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 DSegment(str(path), "broken")
 
+    def test_atom_mode_keeps_highest_information_labels(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dictionary = root / "labels.pbs"
+            Dregex.compile(str(dictionary), iter([
+                (["中", "文"], ["POS_LOW", "POS_HIGH", "POS_MID"]),
+            ]))
+            hx = root / "labels.hx"
+            hx.write_text(
+                "POS_LOW#0.2\nPOS_HIGH#4.0\nPOS_MID#2.0\n", encoding="utf-8"
+            )
+            config = {
+                "dservices": {
+                    "labels": {"type": "LabelEncoder", "hx.file": str(hx)},
+                },
+                "recognizers": {
+                    "dictionary": {
+                        "type": "DictWordRecongnizer",
+                        "pbfile.path": str(dictionary),
+                        "atom.mode": "true",
+                        "topn": "2",
+                        "deps": {"label.encoder": "labels"},
+                    },
+                },
+                "deciders": {"minimum": {"type": "MinCoverDecider"}},
+                "modes": {
+                    "test": {"decider": "minimum", "recognizers": ["dictionary"]},
+                },
+                "default.mode": "test",
+            }
+            path = root / "config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            _atoms, output = DSegment(str(path), "test", isdev=True).cut(
+                "中文", max_mode=True
+            )
+            labels = [
+                next(iter(word.labels))
+                for word in output.tolist()
+                if word.atom_s == 0 and word.atom_e == 2 and word.labels
+            ]
+            self.assertEqual(labels, ["POS_HIGH", "POS_MID"])
+
 
 class PinyinTests(unittest.TestCase):
     def setUp(self):

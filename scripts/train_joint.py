@@ -140,6 +140,7 @@ def train(args):
         recognizer_iterator = iter(span_train)
         recognizer_losses = []
         quantizer_losses = []
+        skipped_nonfinite = 0
         # The graph task determines epoch length. Restarting the cheaper span
         # iterator balances task update counts without retaining yielded batches.
         for graph_batch in graph_train:
@@ -152,14 +153,31 @@ def train(args):
             span_batch = tuple(tensor.to(device) for tensor in span_batch)
             with torch.amp.autocast("cuda", enabled=amp_enabled):
                 recognizer_loss = model.recognizer(*span_batch)
+            # GraphLossSparse repeatedly combines path log probabilities. Keep
+            # the graph encoder and K/Q projections in FP32; FP16 autocast can
+            # overflow their gradients on large candidate DAGs even when every
+            # forward association NLL is finite.
+            with torch.amp.autocast("cuda", enabled=False):
                 quantizer_loss = model.graph_quantizer(*graph_batch)
-                loss = recognizer_loss + args.quantizer_weight * quantizer_loss
+            loss = recognizer_loss + args.quantizer_weight * quantizer_loss
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             bad_gradients = [name for name, parameter in model.named_parameters()
                              if parameter.grad is not None and not torch.isfinite(parameter.grad).all()]
             if bad_gradients:
-                raise RuntimeError(f"non-finite gradients in {bad_gradients}")
+                optimizer.zero_grad(set_to_none=True)
+                skipped_nonfinite += 1
+                print(json.dumps({
+                    "warning": "skipped_nonfinite_batch",
+                    "epoch": epoch,
+                    "count": skipped_nonfinite,
+                    "parameters": bad_gradients,
+                }))
+                if skipped_nonfinite > args.max_nonfinite_batches:
+                    raise RuntimeError(
+                        f"too many non-finite batches in epoch {epoch}: {skipped_nonfinite}"
+                    )
+                continue
             stable_clip_grad_norm_(model.parameters(), args.clip_grad)
             scaler.step(optimizer)
             scaler.update()
@@ -184,6 +202,7 @@ def train(args):
             "elapsed_seconds": time.perf_counter() - started,
             "peak_gpu_mb": (torch.cuda.max_memory_allocated(device) / 1024**2
                             if device.type == "cuda" else 0.0),
+            "skipped_nonfinite_batches": skipped_nonfinite,
             **recognizer_metrics,
         }
         print(json.dumps(metrics))
@@ -299,6 +318,7 @@ def main():
     command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True,
                          help="enable CUDA automatic mixed precision; use --no-amp for older GPUs")
     command.add_argument("--detect-anomaly", action="store_true")
+    command.add_argument("--max-nonfinite-batches", type=int, default=8)
     command.add_argument("--seed", type=int, default=20260715)
     command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
     command.set_defaults(func=train)

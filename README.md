@@ -593,6 +593,8 @@ build/train-venv/bin/python -c \
 | --- | --- | --- |
 | `DictWordRecongnizer` | `pbfile.path` | 编译后的词典文件 |
 | `DictWordRecongnizer` | `atom.mode` | 字符串 `"true"` 时按每个标签生成独立候选 |
+| `DictWordRecongnizer` | `topn` | `atom.mode=true` 时每个 span 最多保留的信息量最高标签数；`0` 表示不裁剪 |
+| `DictWordRecongnizer` | `deps.label.encoder` | 可选 `LabelEncoder`；提供标签信息量并用于 `atom.mode=true` 的标签排序 |
 | `OnnxRecongnizer` | `model.path` | 输出各候选成词概率的 ONNX span 模型 |
 | `OnnxRecongnizer` | `max.span` | 最大候选 Atom 长度，默认 `5` |
 | `OnnxRecongnizer` | `threshold` / `threshold.N` | 全局及按长度覆盖的成词概率阈值 |
@@ -723,6 +725,23 @@ for token in Tokenizer(mode="lac").lac("中文分词在2026年发布"):
 
 量化器训练图以 `(atom_start, atom_end, pos_type)` 标识节点，同一词面的多个候选
 词性不会再按 span 合并。纯 CWS 空白分隔语料继续使用 unknown type，保持兼容。
+
+`data/codes/*.hx.txt` 中 `#` 后的数值表示标签信息量，而不是类别编号：
+
+```text
+I(label) = -ln P(label)
+```
+
+`scripts/devel.py label-info` 使用加一平滑从训练语料和词典重算该值。高频、低区分度
+标签的信息量较低，未知标签、CJK 等回退类型的信息量为 `0`；稀有且更具体的标签
+信息量较高。`lac.dict` 通过 `deps.label.encoder=pos.encoder` 获取该值，并在
+`atom.mode=true` 时按信息量降序排列同一 span 的标签。默认 `topn=2`，只保留前两个
+独立候选；该裁剪不影响普通 `atom.mode=false` 词典，也不裁剪训练读取器额外生成的
+`1..max_span` 未知类型候选包络。
+
+```bash
+PYTHON=/home/xuen/.venv/bin/python python3 scripts/devel.py label-info
+```
 
 ### 语法标签识别器
 

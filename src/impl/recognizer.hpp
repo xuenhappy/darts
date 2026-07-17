@@ -57,9 +57,13 @@ class DictWordRecongnizer : public CellRecognizer {
    private:
     static const char* PB_FILE_KEY;
     static const char* ATOM_MODE_KEY;
+    static const char* TOPN_KEY;
+    static const char* LABEL_ENCODER_PARAM;
 
     dregex::Trie trie;
     bool atom_mode;
+    size_t topn = 0;
+    std::shared_ptr<LabelEncoder> label_encoder;
 
    public:
     DictWordRecongnizer() : atom_mode(false) {}
@@ -70,6 +74,19 @@ class DictWordRecongnizer : public CellRecognizer {
         auto it = param.find(ATOM_MODE_KEY);
         if (it != param.end() && "true" == it->second) {
             atom_mode = true;
+        }
+        it = param.find(TOPN_KEY);
+        if (it != param.end()) {
+            try {
+                topn = std::stoul(it->second);
+            } catch (const std::exception&) {
+                return EXIT_FAILURE;
+            }
+        }
+        auto dependency = dicts.find(LABEL_ENCODER_PARAM);
+        if (dependency != dicts.end()) {
+            label_encoder = std::dynamic_pointer_cast<LabelEncoder>(dependency->second);
+            if (!label_encoder) return EXIT_FAILURE;
         }
         auto iter = param.find(PB_FILE_KEY);
         if (iter == param.end()) {
@@ -86,16 +103,25 @@ class DictWordRecongnizer : public CellRecognizer {
         if (atom_mode) {
             auto hit = [&](size_t s, size_t e, const std::vector<int64_t>* labels) -> bool {
                 if (!labels) return false;
-                int feat = -1;
+                std::vector<const char*> tags;
+                tags.reserve(labels->size());
                 for (auto tidx : *labels) {
                     auto tag = this->trie.getLabel(tidx);
-                    if (tag && *tag) {
-                        auto word = std::make_shared<Word>(dstSrc, s, e);
-                        word->addLabel(tag);
-                        word->feat = feat;
-                        feat--;
-                        cur = cmap.addCell(word, cur);
-                    }
+                    if (tag && *tag) tags.push_back(tag);
+                }
+                if (label_encoder) {
+                    std::stable_sort(tags.begin(), tags.end(), [this](const char* left, const char* right) {
+                        return label_encoder->labelH(left) > label_encoder->labelH(right);
+                    });
+                }
+                if (topn > 0 && tags.size() > topn) tags.resize(topn);
+                int feat = -1;
+                for (auto tag : tags) {
+                    auto word = std::make_shared<Word>(dstSrc, s, e);
+                    word->addLabel(tag);
+                    word->feat = feat;
+                    feat--;
+                    cur = cmap.addCell(word, cur);
                 }
                 return false;
             };
@@ -117,6 +143,8 @@ class DictWordRecongnizer : public CellRecognizer {
 };
 const char* DictWordRecongnizer::PB_FILE_KEY   = "pbfile.path";
 const char* DictWordRecongnizer::ATOM_MODE_KEY = "atom.mode";
+const char* DictWordRecongnizer::TOPN_KEY = "topn";
+const char* DictWordRecongnizer::LABEL_ENCODER_PARAM = "label.encoder";
 REGISTER_Recognizer(DictWordRecongnizer);
 
 /** Recognize numeric address components that are unsuitable for a finite POI dictionary. */

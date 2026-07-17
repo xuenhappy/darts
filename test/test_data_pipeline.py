@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import math
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +12,15 @@ SPEC.loader.exec_module(PIPELINE)
 
 
 class DataPipelineTest(unittest.TestCase):
+    def test_pos_hx_contains_finite_information_values(self):
+        values = {}
+        for line in (ROOT / "data/codes/pos.hx.txt").read_text(encoding="utf-8").splitlines():
+            label, value = line.split("#", 1)
+            values[label] = float(value)
+        self.assertTrue(values)
+        self.assertTrue(all(math.isfinite(value) and value >= 0 for value in values.values()))
+        self.assertGreater(values["POS_nr"], values["POS_NOUN"])
+
     @staticmethod
     def demo_lines(name):
         return [

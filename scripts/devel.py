@@ -189,6 +189,17 @@ def tmap_build(args):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def label_info(args):
+    command = [
+        os.environ.get("PYTHON", "python3"), "scripts/build_label_info.py",
+        "--type-hx", args.type_hx, "--pos-hx", args.pos_hx,
+        "--dictionary", args.dictionary, "--lac-corpus", args.lac_corpus,
+        "--lac-dictionary", args.lac_dictionary,
+        "--smoothing", str(args.smoothing),
+    ]
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
 def location_build(args):
     command = [os.environ.get("PYTHON", "python3"), "scripts/location_data.py",
                "--source", args.source, "--poi", args.poi,
@@ -329,6 +340,17 @@ def main():
     command.add_argument("--min-frequency", type=int, default=100_000)
     command.add_argument("--max-new-characters", type=int, default=4096)
     command.set_defaults(func=tmap_build)
+
+    command = commands.add_parser(
+        "label-info", help="estimate smoothed label information values for hx files"
+    )
+    command.add_argument("--type-hx", default="data/codes/type.hx.txt")
+    command.add_argument("--pos-hx", default="data/codes/pos.hx.txt")
+    command.add_argument("--dictionary", default="data/generated/dictionary.txt")
+    command.add_argument("--lac-corpus", default="data/generated/lac-train.txt")
+    command.add_argument("--lac-dictionary", default="data/demo/lac-dictionary.txt")
+    command.add_argument("--smoothing", type=float, default=1.0)
+    command.set_defaults(func=label_info)
 
     command = commands.add_parser("location-build", help="build address dictionary and quantizer data")
     command.add_argument("--source", default="data/external/province-city-china/data.csv")

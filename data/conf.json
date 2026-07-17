@@ -28,7 +28,11 @@
         "lac.dict": {
             "type": "DictWordRecongnizer",
             "pbfile.path": "data/models/lac.pbs",
-            "atom.mode": "true"
+            "atom.mode": "true",
+            "topn": "2",
+            "deps": {
+                "label.encoder": "pos.encoder"
+            }
         },
         "pinyin.dict": {
             "type": "PinyinRecongnizer",

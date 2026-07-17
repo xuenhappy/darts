@@ -1,0 +1,47 @@
+{
+  "architecture": "joint-transformer-segmentation",
+  "vocab_num": 23514,
+  "hidden_size": 32,
+  "wtype_num": 66,
+  "max_span": 5,
+  "recognizer_kind": "binary",
+  "class_num": null,
+  "labels": null,
+  "type_map": "data/codes/type.hx.txt",
+  "graph_mode": "hybrid",
+  "train_data": "data/generated/cws-train.txt",
+  "dev_data": "data/generated/cws-dev.txt",
+  "quantizer_output": "association_negative_log_probability",
+  "seed": 20260715,
+  "dev": {
+    "epoch": 3,
+    "recognizer_loss": 1.0201191020011902,
+    "quantizer_loss": 24.578662551879884,
+    "quantizer_dev_loss": 25.503227055072784,
+    "learning_rate": 5.0499999999999994e-05,
+    "elapsed_seconds": 111.23431244899984,
+    "peak_gpu_mb": 0.0,
+    "skipped_nonfinite_batches": 0,
+    "thresholds": {
+      "2": 0.4,
+      "3": 0.6,
+      "4": 0.6,
+      "5": 0.75
+    },
+    "precision": 0.2132100609633009,
+    "recall": 0.8963000678886626,
+    "f1": 0.34447669678092685
+  },
+  "runtime": {
+    "model.path": "recognizer.onnx",
+    "pmodel.path": "indicator.onnx",
+    "qmodel.path": "quantizer.onnx",
+    "max.span": "5",
+    "thresholds": {
+      "2": "0.4",
+      "3": "0.6",
+      "4": "0.6",
+      "5": "0.75"
+    }
+  }
+}
