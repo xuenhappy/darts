@@ -45,10 +45,10 @@
             "model.path": "data/models/neural/recognizer.onnx",
             "max.span": "5",
             "threshold": "0.5",
-            "threshold.2": "0.5",
-            "threshold.3": "0.5",
-            "threshold.4": "0.5",
-            "threshold.5": "0.5",
+            "threshold.2": "0.96",
+            "threshold.3": "0.96",
+            "threshold.4": "0.96",
+            "threshold.5": "0.96",
             "deps": {
                 "wordpiece.name": "wordpiece.dict"
             }
@@ -58,7 +58,7 @@
             "model.path": "data/models/neural/syntax.onnx",
             "label.path": "data/models/neural/syntax.labels.txt",
             "max.span": "5",
-            "threshold": "0.5",
+            "threshold": "0.7",
             "deps": {
                 "wordpiece.name": "wordpiece.dict"
             }

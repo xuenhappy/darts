@@ -14,23 +14,23 @@
   "quantizer_output": "association_negative_log_probability",
   "seed": 20260715,
   "dev": {
-    "epoch": 3,
-    "recognizer_loss": 1.0201191020011902,
-    "quantizer_loss": 24.578662551879884,
-    "quantizer_dev_loss": 25.503227055072784,
-    "learning_rate": 5.0499999999999994e-05,
-    "elapsed_seconds": 111.23431244899984,
+    "epoch": 6,
+    "recognizer_loss": 0.5613486125032501,
+    "quantizer_loss": 4.24096420377788,
+    "quantizer_dev_loss": 7.6437108516693115,
+    "learning_rate": 1e-06,
+    "elapsed_seconds": 122.55013250800039,
     "peak_gpu_mb": 0.0,
     "skipped_nonfinite_batches": 0,
     "thresholds": {
-      "2": 0.4,
-      "3": 0.6,
-      "4": 0.6,
-      "5": 0.75
+      "2": 0.8,
+      "3": 0.3,
+      "4": 0.2,
+      "5": 0.1
     },
-    "precision": 0.2132100609633009,
-    "recall": 0.8963000678886626,
-    "f1": 0.34447669678092685
+    "precision": 0.3650705784666482,
+    "recall": 0.8954514596062457,
+    "f1": 0.5186787259142744
   },
   "runtime": {
     "model.path": "recognizer.onnx",
@@ -38,10 +38,17 @@
     "qmodel.path": "quantizer.onnx",
     "max.span": "5",
     "thresholds": {
-      "2": "0.4",
-      "3": "0.6",
-      "4": "0.6",
-      "5": "0.75"
+      "2": "0.96",
+      "3": "0.96",
+      "4": "0.96",
+      "5": "0.96"
     }
+  },
+  "runtime_calibration": {
+    "corpus": "data/generated/cws-dev.txt",
+    "objective": "best_path_boundary_f1",
+    "precision": 0.8830455883522953,
+    "recall": 0.9123715577476367,
+    "f1": 0.8974690709145307
   }
 }

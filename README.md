@@ -965,7 +965,12 @@ python scripts/devel.py build --test
 
 ### 开放数据流水线
 
-`data/sources.json` 固定 UD Chinese GSD 2.18 与 jieba 0.42.1 的下载地址和许可；`data/sources.lock.json` 记录实际文件大小和 SHA-256。原始文件下载到被 Git 忽略的 `data/external/`，训练切分和中间文本生成到 `data/generated/`。下载器继承 `HTTP_PROXY`/`HTTPS_PROXY`，支持 `.part` 断点续传和已有文件校验。
+`data/sources.json` 固定 UD Chinese GSD、PUD、HK、CFL 2.18 与 jieba 0.42.1
+的下载地址和许可；`data/sources.lock.json` 记录实际文件大小和 SHA-256。PUD、
+HK、CFL 仅扩充训练集，开发集和测试集始终使用未混入训练的 GSD 官方切分，避免
+数据泄漏。原始文件下载到被 Git 忽略的 `data/external/`，训练切分和中间文本生成到
+`data/generated/`。下载器继承 `HTTP_PROXY`/`HTTPS_PROXY`，支持 `.part` 断点续传
+和已有文件校验。
 
 ```bash
 python scripts/data_pipeline.py download
@@ -984,6 +989,21 @@ python scripts/tune_decider.py --fine
 在 UD Chinese GSD dev 的 500 句上，调优后的 `faster` 模式边界 precision 为 0.8856、recall 为 0.9434、F1 为 0.9136；历史内置模型同模式 F1 为 0.7993。该结果是单一语料域基线，不代表新闻、医疗或社交文本的泛化质量。
 
 混合统计量化器在 dev 上取得 precision 0.8830、recall 0.9568、F1 0.9185；未参与调参的 test 上取得 precision 0.8634、recall 0.9436、F1 0.9017、整句准确率 0.112。相同 test 上 `faster` 的 F1 为 0.8971、整句准确率为 0.094。若业务更重视 precision，可显式选择 `faster`。
+
+联合 Transformer 模型使用扩充后的 6452 句训练语料。候选识别阈值必须在 dev 上以
+最终 `best_path` 边界 F1 校准，不能直接复用局部 span 分类 F1 的最优阈值：弱候选会
+改变图结构，即使量化器能压低其关联概率，仍可能扰乱最短路径。当前配置的
+`neural.span` 长度阈值均为 0.96，`neural.syntax` 阈值为 0.7。未参与调参的 GSD test
+500 句结果如下：
+
+| 模式 | precision | recall | F1 | 整句准确率 |
+| --- | ---: | ---: | ---: | ---: |
+| `neural` | 0.8653 | 0.8950 | 0.8799 | 0.056 |
+| `lac-nural` | 0.8632 | 0.9016 | 0.8819 | 0.060 |
+
+`lac-nural` 在边界对齐词上的 POS 精确率为 0.7811，单进程 ONNX Runtime 测得约
+382 句/秒、9576 词/秒。该结果证明当前配置可用于通用中文基线，但训练规模仍小，
+社交文本、医学和专名密集领域应使用对应领域语料重新训练并只在独立 dev 上校准阈值。
 
 词典 v2 使用差分 ZigZag 状态数组和最高级别 Deflate 压缩，同时保留旧 `.pbs` 的读取兼容。最高压缩会增加词典生成时间，但不影响运行时识别速度。`darts-dict-repack` 要求输入和输出路径不同，以免损坏原文件。
 
