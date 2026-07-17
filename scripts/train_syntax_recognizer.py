@@ -16,20 +16,41 @@ from train_recognizer import checkpoint, select_device
 
 
 @torch.no_grad()
-def evaluate(model, reader, device):
+def evaluate(model, reader, device, fixed_threshold=None):
     model.eval()
-    correct = total = word_correct = word_total = 0
+    probabilities = []
+    predictions = []
+    labels = []
     for word_ids, lengths, spans in reader:
         word_ids, lengths, spans = word_ids.to(device), lengths.to(device), spans.to(device)
-        predicted = model.logits(word_ids, lengths, spans[:, :3]).argmax(dim=-1)
-        gold = spans[:, -1]
-        correct += int((predicted == gold).sum())
-        total += gold.numel()
-        mask = gold != 0
-        word_correct += int(((predicted == gold) & mask).sum())
-        word_total += int(mask.sum())
+        probability = torch.softmax(model.logits(word_ids, lengths, spans[:, :3]), dim=-1)
+        probabilities.append(probability[:, 1:].max(dim=-1).values.cpu())
+        predictions.append(probability[:, 1:].argmax(dim=-1).add(1).cpu())
+        labels.append(spans[:, -1].cpu())
+    probabilities = torch.cat(probabilities)
+    predictions = torch.cat(predictions)
+    labels = torch.cat(labels)
+    gold_word = labels != 0
+    thresholds = [fixed_threshold] if fixed_threshold is not None else [
+        round(value, 2) for value in np.arange(0.05, 0.96, 0.05)
+    ]
+    best = None
+    for threshold in thresholds:
+        predicted_word = probabilities >= threshold
+        true_positive = int((predicted_word & gold_word).sum())
+        predicted_total = int(predicted_word.sum())
+        gold_total = int(gold_word.sum())
+        precision = true_positive / predicted_total if predicted_total else 0.0
+        recall = true_positive / gold_total if gold_total else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        row = {"threshold": float(threshold), "word_precision": precision,
+               "word_recall": recall, "word_f1": f1}
+        if best is None or (row["word_f1"], row["threshold"]) > (best["word_f1"], best["threshold"]):
+            best = row
+    word_total = int(gold_word.sum())
+    word_correct = int(((predictions == labels) & gold_word).sum())
     return {
-        "accuracy": correct / total if total else 0.0,
+        **best,
         "word_type_accuracy": word_correct / word_total if word_total else 0.0,
     }
 
@@ -41,7 +62,9 @@ def train(args):
     device = select_device(args.device)
     train_reader = SyntaxSpanSampleReader(args.train, args.type_map, args.batch_size,
                                           args.max_span, shuffle=True)
-    dev_reader = SyntaxSpanSampleReader(args.dev, args.type_map, args.batch_size, args.max_span)
+    dev_reader = SyntaxSpanSampleReader(
+        args.dev, args.type_map, args.batch_size, args.max_span, labels=train_reader.labels
+    )
     metadata = {
         "architecture": "transformer-syntax-span-recognizer",
         "vocab_num": train_reader.wordsize(),

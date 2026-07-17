@@ -88,6 +88,7 @@ class SegmentTests(unittest.TestCase):
     def test_temporal_and_quantity_rule_candidates(self):
         segment = DSegment(str(CONFIG), "faster")
         cases = {
+            "项目于2026年发布": {"2026年"},
             "发布于2026年7月16日14:30": {"2026年7月16日", "14:30", "2026年7月16日14:30"},
             "meeting July 16, 2026 at 9:30pm": {"July16,2026", "9:30pm"},
             "重量12.5公斤容量500ml": {"12.5公斤", "500ml"},
@@ -96,8 +97,14 @@ class SegmentTests(unittest.TestCase):
         }
         for text, expected in cases.items():
             _atoms, output = segment.cut(text, max_mode=True)
-            candidates = {word.image for word in output.tolist()}
+            words = output.tolist()
+            candidates = {word.image for word in words}
             self.assertTrue(expected <= candidates, (text, expected - candidates))
+            for word in words:
+                if word.image in expected and "DATE" in word.labels:
+                    self.assertIn("POS_t", word.labels)
+                if word.image in expected and "DIGIT" in word.labels:
+                    self.assertIn("POS_NUM", word.labels)
 
     def test_temporal_quantity_rules_are_enabled_for_every_mode(self):
         config = json.loads(

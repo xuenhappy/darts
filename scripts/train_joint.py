@@ -71,7 +71,8 @@ def train(args):
             train_path, type_map, args.recognizer_batch_size, args.max_span, shuffle=True
         )
         span_dev = SyntaxSpanSampleReader(
-            dev_path, type_map, args.recognizer_batch_size, args.max_span
+            dev_path, type_map, args.recognizer_batch_size, args.max_span,
+            labels=span_train.labels
         )
     else:
         span_train = SpanSampleReader(
@@ -186,7 +187,10 @@ def train(args):
 
         if args.recognizer_kind == "syntax":
             recognizer_metrics = evaluate_syntax_recognizer(model.recognizer, span_dev, device)
-            recognizer_error = 1.0 - recognizer_metrics["word_type_accuracy"]
+            recognizer_error = (
+                1.0 - recognizer_metrics["word_f1"] +
+                0.25 * (1.0 - recognizer_metrics["word_type_accuracy"])
+            )
         else:
             recognizer_metrics = evaluate_recognizer(model.recognizer, span_dev, device)
             recognizer_error = 1.0 - recognizer_metrics["f1"]
@@ -248,8 +252,9 @@ def export(args):
     }
     if syntax:
         runtime["label.path"] = "syntax.labels.txt"
-        runtime["threshold"] = "0.5"
-    (output / "neural.json").write_text(
+        runtime["threshold"] = str(metadata.get("dev", {}).get("threshold", 0.5))
+    metadata_name = "lac.json" if syntax else "neural.json"
+    (output / metadata_name).write_text(
         json.dumps({**metadata, "runtime": runtime}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -271,9 +276,13 @@ def evaluate(args):
     )
     if syntax:
         spans = SyntaxSpanSampleReader(
-            args.data, type_map, args.recognizer_batch_size, metadata["max_span"]
+            args.data, type_map, args.recognizer_batch_size, metadata["max_span"],
+            labels=metadata["labels"]
         )
-        recognizer_metrics = evaluate_syntax_recognizer(model.recognizer, spans, device)
+        recognizer_metrics = evaluate_syntax_recognizer(
+            model.recognizer, spans, device,
+            fixed_threshold=metadata.get("dev", {}).get("threshold"),
+        )
     else:
         spans = SpanSampleReader(
             args.data, args.recognizer_batch_size, metadata["max_span"]

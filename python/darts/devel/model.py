@@ -63,6 +63,7 @@ class WordEncoder(nn.Module):
         )
         self.word_content_attention = nn.Linear(hidden_size, 1, bias=False)
         self.word_position_attention = nn.Embedding(max_word_positions, 1)
+        self.word_length_embedding = nn.Embedding(max_word_positions, hidden_size)
         self.word_pool_normal = nn.LayerNorm(hidden_size)
 
         if wtype_num > 0:
@@ -105,7 +106,12 @@ class WordEncoder(nn.Module):
         # [steps, hidden] BMM, but avoids unstable cuBLAS BMM backward kernels
         # observed with variable-length span batches on sm_86 GPUs.
         word_embedding = (attention.unsqueeze(-1) * sentence_embedding[word_batches]).sum(dim=1)
-        word_embedding = self.word_pool_normal(word_embedding)
+        word_lengths = (batch_word_info[:, 2] - batch_word_info[:, 1] + 1).clamp(
+            1, self.max_word_positions
+        )
+        word_embedding = self.word_pool_normal(
+            word_embedding + self.word_length_embedding(word_lengths - 1)
+        )
         # In joint training recognizer spans omit the optional type column,
         # while graph nodes include it. The contextual/position parameters are
         # shared in both cases; only graph calls add the type representation.
@@ -283,11 +289,23 @@ class SyntaxSpanRecognizer(nn.Module):
     def forward(self, batch_input_idx, batch_lengths, batch_span_info):
         logits = self.logits(batch_input_idx, batch_lengths, batch_span_info[:, :3])
         labels = batch_span_info[:, -1]
-        counts = torch.bincount(labels, minlength=self.class_num).clamp_min(1)
-        weights = (labels.numel() / (self.class_num * counts)).to(logits.dtype)
-        # Keep the abundant NOT_WORD class from suppressing sparse POS classes.
-        weights[0] = weights[0].clamp(max=1.0)
-        return F.cross_entropy(logits, labels, weight=weights)
+        is_word = labels != 0
+        # Compare the aggregate POS mass against NOT_WORD. This directly trains
+        # candidate recall/precision without letting sparse POS reweighting
+        # suppress the abundant and important NOT_WORD class.
+        word_logits = torch.logsumexp(logits[:, 1:], dim=-1) - logits[:, 0]
+        positives = is_word.sum().clamp_min(1)
+        negatives = (~is_word).sum().clamp_min(1)
+        word_loss = F.binary_cross_entropy_with_logits(
+            word_logits, is_word.to(logits.dtype),
+            pos_weight=(negatives / positives).clamp(max=12.0),
+        )
+        if not is_word.any():
+            return word_loss
+        # POS classification is conditioned on known word spans, so it cannot
+        # trade word recall against rare-class weights.
+        pos_loss = F.cross_entropy(logits[is_word, 1:], labels[is_word] - 1)
+        return word_loss + pos_loss
 
     def export2onnx(self, outfile="syntax.recognizer.onnx"):
         sents = torch.randint(0, self.encoder.vocab_num, (11,))

@@ -276,6 +276,18 @@ class TemporalQuantityRecongnizer : public CellRecognizer {
         return months.find(asciiLower(value)) != months.end();
     }
 
+    static bool isCalendarYear(const AtomList& atoms, size_t start, size_t number_end) {
+        if (number_end != start + 1 || atoms.at(start)->char_type != char_type::NUM) return false;
+        const std::string& value = atoms.at(start)->image;
+        if (value.size() != 4 ||
+            !std::all_of(value.begin(), value.end(), [](unsigned char character) {
+                return std::isdigit(character);
+            }))
+            return false;
+        const int year = std::stoi(value);
+        return year >= 1000 && year <= 2999;
+    }
+
     static size_t consumeDate(const AtomList& atoms, size_t start) {
         const size_t first_end = consumeNumber(atoms, start);
         if (first_end > start) {
@@ -290,6 +302,8 @@ class TemporalQuantityRecongnizer : public CellRecognizer {
                         return day_end + 1;
                     return month_end + 1;
                 }
+                // A four-digit calendar year is temporal even without a month.
+                if (isCalendarYear(atoms, start, first_end)) return first_end + 1;
             }
             if (isToken(atoms, first_end, "月")) {
                 const size_t day_end = consumeNumber(atoms, first_end + 1);
@@ -390,10 +404,14 @@ class TemporalQuantityRecongnizer : public CellRecognizer {
     }
 
     static void addCandidate(const AtomList& atoms, SegPath& path, Cursor& cursor,
-                             size_t start, size_t end, const char* label) {
+                             size_t start, size_t end, const char* label,
+                             const char* pos_label) {
         if (end <= start + 1) return;
         auto word = std::make_shared<Word>(atoms, start, end);
         word->addLabel(label);
+        // Keep the semantic label for generic modes and expose a POS label so
+        // the LAC quantizer does not encode deterministic rule hits as unknown.
+        word->addLabel(pos_label);
         cursor = path.addCell(word, cursor);
     }
 
@@ -421,9 +439,10 @@ class TemporalQuantityRecongnizer : public CellRecognizer {
             const size_t date_end = consumeDate(atoms, start);
             const size_t time_end = numeric_start ? consumeTime(atoms, start) : start;
             const size_t quantity_end = numeric_start ? consumeQuantity(atoms, start) : start;
-            addCandidate(atoms, path, cursor, start, date_end, "DATE");
-            addCandidate(atoms, path, cursor, start, time_end, "DATE");
-            addCandidate(atoms, path, cursor, start, quantity_end, "DIGIT");
+            addCandidate(atoms, path, cursor, start, date_end, "DATE", "POS_t");
+            addCandidate(atoms, path, cursor, start, time_end, "DATE", "POS_t");
+            if (quantity_end != date_end)
+                addCandidate(atoms, path, cursor, start, quantity_end, "DIGIT", "POS_NUM");
 
             if (date_end > start) {
                 size_t time_start = date_end;
@@ -431,7 +450,7 @@ class TemporalQuantityRecongnizer : public CellRecognizer {
                     ++time_start;
                 const size_t date_time_end = consumeTime(atoms, time_start);
                 if (date_time_end > time_start)
-                    addCandidate(atoms, path, cursor, start, date_time_end, "DATE");
+                    addCandidate(atoms, path, cursor, start, date_time_end, "DATE", "POS_t");
             }
         }
     }

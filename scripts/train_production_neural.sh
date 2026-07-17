@@ -11,16 +11,17 @@ PYTHON="${PYTHON:-/home/xuen/.venv/bin/python}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-model_bin}"
 MODEL_DIR="${MODEL_DIR:-data/models/neural}"
 HIDDEN_SIZE="${HIDDEN_SIZE:-32}"
-EPOCHS="${EPOCHS:-4}"
-PATIENCE="${PATIENCE:-2}"
-RECOGNIZER_BATCH_SIZE="${RECOGNIZER_BATCH_SIZE:-16}"
-QUANTIZER_BATCH_SIZE="${QUANTIZER_BATCH_SIZE:-8}"
-LEARNING_RATE="${LEARNING_RATE:-1e-4}"
-QUANTIZER_WEIGHT="${QUANTIZER_WEIGHT:-0.01}"
+EPOCHS="${EPOCHS:-8}"
+PATIENCE="${PATIENCE:-3}"
+RECOGNIZER_BATCH_SIZE="${RECOGNIZER_BATCH_SIZE:-32}"
+QUANTIZER_BATCH_SIZE="${QUANTIZER_BATCH_SIZE:-16}"
+LEARNING_RATE="${LEARNING_RATE:-2e-4}"
+QUANTIZER_WEIGHT="${QUANTIZER_WEIGHT:-0.1}"
+DEVICE="${DEVICE:-cpu}"
 
 mkdir -p "$OUTPUT_ROOT/neural-joint" "$OUTPUT_ROOT/lac-joint" "$MODEL_DIR"
 
-echo "stage=neural-binary cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
+echo "stage=neural-binary device=$DEVICE cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
 "$PYTHON" scripts/train_joint.py train \
   --recognizer-kind binary \
   --train data/generated/cws-train.txt \
@@ -35,9 +36,9 @@ echo "stage=neural-binary cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
   --hidden-size "$HIDDEN_SIZE" \
   --learning-rate "$LEARNING_RATE" \
   --quantizer-weight "$QUANTIZER_WEIGHT" \
-  --max-nonfinite-batches 8 \
+  --max-nonfinite-batches 0 \
   --max-span 5 \
-  --device cuda \
+  --device "$DEVICE" \
   --no-amp
 
 "$PYTHON" scripts/train_joint.py evaluate \
@@ -45,12 +46,12 @@ echo "stage=neural-binary cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
   --data data/generated/cws-test.txt \
   --mode hybrid \
   --type-map data/codes/type.hx.txt \
-  --device cuda
+  --device "$DEVICE"
 
 "$PYTHON" scripts/train_joint.py export \
   "$OUTPUT_ROOT/neural-joint/best.pt" "$MODEL_DIR"
 
-echo "stage=lac-syntax cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
+echo "stage=lac-syntax device=$DEVICE cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
 "$PYTHON" scripts/train_joint.py train \
   --recognizer-kind syntax \
   --train data/generated/lac-train.txt \
@@ -65,9 +66,9 @@ echo "stage=lac-syntax cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
   --hidden-size "$HIDDEN_SIZE" \
   --learning-rate "$LEARNING_RATE" \
   --quantizer-weight "$QUANTIZER_WEIGHT" \
-  --max-nonfinite-batches 8 \
+  --max-nonfinite-batches 0 \
   --max-span 5 \
-  --device cuda \
+  --device "$DEVICE" \
   --no-amp
 
 "$PYTHON" scripts/train_joint.py evaluate \
@@ -75,7 +76,7 @@ echo "stage=lac-syntax cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
   --data data/generated/lac-test.txt \
   --mode lac \
   --type-map data/codes/pos.hx.txt \
-  --device cuda
+  --device "$DEVICE"
 
 "$PYTHON" scripts/train_joint.py export \
   "$OUTPUT_ROOT/lac-joint/best.pt" "$MODEL_DIR"

@@ -100,6 +100,13 @@ def write_segmented(source, target):
     return count
 
 
+def write_segmented_sentences(sentences, target):
+    with open(target, "w", encoding="utf-8") as output:
+        for sentence in sentences:
+            output.write(" ".join(word for word, _pos in sentence) + "\n")
+    return len(sentences)
+
+
 def normalize_pos(pos, source):
     """Map corpus/lexicon tags into a namespaced Darts POS label."""
     clean = pos.replace("<", "").replace(">", "")
@@ -113,8 +120,22 @@ def prepare(args):
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     splits = {}
-    train_sentences = list(read_conllu(raw_dir / "ud-chinese-gsd" / "train.conllu"))
-    for split in ("train", "dev", "test"):
+    train_sources = [raw_dir / "ud-chinese-gsd" / "train.conllu"]
+    train_sources.extend(
+        path for path in (
+            raw_dir / "ud-chinese-pud" / "train-extra.conllu",
+            raw_dir / "ud-chinese-hk" / "train-extra.conllu",
+            raw_dir / "ud-chinese-cfl" / "train-extra.conllu",
+        )
+        if path.exists()
+    )
+    train_sentences = [
+        sentence for source in train_sources for sentence in read_conllu(source)
+    ]
+    splits["train"] = write_segmented_sentences(
+        train_sentences, output_dir / "cws-train.txt"
+    )
+    for split in ("dev", "test"):
         source = raw_dir / "ud-chinese-gsd" / f"{split}.conllu"
         target = output_dir / f"cws-{split}.txt"
         splits[split] = write_segmented(source, target)
@@ -157,10 +178,12 @@ def prepare(args):
             selected_words.add(word)
 
     for split in ("train", "dev", "test"):
-        source = raw_dir / "ud-chinese-gsd" / f"{split}.conllu"
         target = output_dir / f"lac-{split}.txt"
+        sentences = train_sentences if split == "train" else read_conllu(
+            raw_dir / "ud-chinese-gsd" / f"{split}.conllu"
+        )
         with open(target, "w", encoding="utf-8") as output:
-            for sentence in read_conllu(source):
+            for sentence in sentences:
                 output.write(" ".join(
                     f"{word}/{normalize_pos(pos, 'ud')}" for word, pos in sentence
                 ) + "\n")
@@ -199,7 +222,8 @@ def prepare(args):
         "jieba_min_frequency": args.jieba_min_frequency,
         "max_word_length": args.max_word_length,
         "pinyin_phrase_entries": phrase_entries,
-        "licenses": ["UD Chinese GSD: CC BY-SA 4.0", "jieba dictionary: MIT",
+        "training_sources": [str(path.relative_to(raw_dir)) for path in train_sources],
+        "licenses": ["UD Chinese GSD/PUD/HK/CFL: CC BY-SA 4.0", "jieba dictionary: MIT",
                      "phrase-pinyin-data: MIT"],
     }
     (output_dir / "metadata.json").write_text(

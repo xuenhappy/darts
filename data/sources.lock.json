@@ -37,6 +37,33 @@
       "sha256": "899b1804a12ebc090b96339614eede1b64b686721b650a71430b55b5235f7f79"
     },
     {
+      "name": "ud-chinese-pud-train-extra",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-PUD/r2.18/zh_pud-ud-test.conllu",
+      "target": "ud-chinese-pud/train-extra.conllu",
+      "bytes": 2199911,
+      "sha256": "e12582af2e2bbc2e27155ca7dc12b6fc4a037dbc716e1f805d67e34ffb2596b3"
+    },
+    {
+      "name": "ud-chinese-hk-train-extra",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-HK/r2.18/zh_hk-ud-test.conllu",
+      "target": "ud-chinese-hk/train-extra.conllu",
+      "bytes": 942232,
+      "sha256": "a71ff348dd1e45c2cd525ed537a78d6c4b6c5edc15a19641bedc0a8465de820e"
+    },
+    {
+      "name": "ud-chinese-cfl-train-extra",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-CFL/r2.18/zh_cfl-ud-test.conllu",
+      "target": "ud-chinese-cfl/train-extra.conllu",
+      "bytes": 651965,
+      "sha256": "5eb666265585bc1cd1a04ea5ca2d94f2ddc6f00b782ae7dfe815e08504879923"
+    },
+    {
       "name": "jieba-dictionary",
       "version": "v0.42.1",
       "license": "MIT",

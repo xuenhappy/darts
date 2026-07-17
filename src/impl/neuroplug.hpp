@@ -478,6 +478,12 @@ class OnnxDecider : public Decider {
     OnnxQuantizer quantizer;
     OnnxIndicator indicator;
 
+    static bool isDeterministicRule(const std::shared_ptr<Word>& word) {
+        if (!word) return false;
+        const auto& labels = word->getLabels();
+        return labels.find("DATE") != labels.end() || labels.find("DIGIT") != labels.end();
+    }
+
    public:
     /**
      * @brief init this
@@ -520,7 +526,16 @@ class OnnxDecider : public Decider {
     void rangingBatch(
         const std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>>& pairs,
         std::vector<double>& weights) const override {
+        const size_t offset = weights.size();
         quantizer.rangingBatch(pairs, weights);
+        // Neural probabilities may be poorly calibrated for deterministic
+        // date/time/unit rules. Preserve neural ordering while strongly
+        // preferring paths through those high-confidence rule candidates.
+        for (size_t index = 0; index < pairs.size(); ++index) {
+            if (isDeterministicRule(pairs[index].first) ||
+                isDeterministicRule(pairs[index].second))
+                weights[offset + index] *= 0.05;
+        }
     }
 
     ~OnnxDecider() {}
@@ -803,8 +818,12 @@ class OnnxSyntaxRecongnizer : public CellRecognizer {
 
     int validator() {
         if (session->GetInputCount() != 2 || session->GetOutputCount() != 1) return EXIT_FAILURE;
-        auto span_info = session->GetInputTypeInfo(1).GetTensorTypeAndShapeInfo();
-        auto output_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        // TensorTypeAndShapeInfo is an unowned view. Keep its parent TypeInfo
+        // alive until all shape and element-type checks have completed.
+        auto span_type = session->GetInputTypeInfo(1);
+        auto output_type = session->GetOutputTypeInfo(0);
+        auto span_info = span_type.GetTensorTypeAndShapeInfo();
+        auto output_info = output_type.GetTensorTypeAndShapeInfo();
         const auto span_shape = span_info.GetShape();
         const auto output_shape = output_info.GetShape();
         if (span_shape.size() != 2 || span_shape[1] != 2 ||

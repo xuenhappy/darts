@@ -104,6 +104,7 @@ class NeuralModelTests(unittest.TestCase):
         output = encoder(token_ids, lengths, words)
         output.sum().backward()
         self.assertTrue(torch.isfinite(output).all())
+        self.assertIsNotNone(encoder.word_length_embedding.weight.grad)
         self.assertTrue(all(parameter.grad is None or torch.isfinite(parameter.grad).all()
                             for parameter in encoder.parameters()))
 
@@ -265,6 +266,16 @@ class NeuralReaderTests(unittest.TestCase):
         )
         research_types = {node[2] for node in nodes if node[3:5] == (0, 2)}
         self.assertGreaterEqual(len(research_types), 2)
+
+    def test_binary_graph_uses_runtime_candidate_types_without_unknown_duplicates(self):
+        _atom_list, reader_type, _piece_bounds = self._reader_types()
+        reader = reader_type(
+            "data/generated/cws-dev.txt", mode="hybrid", batch_size=1, max_span=5
+        )
+        _codes, nodes, _edges = reader._sample(["𠀀𠀁"])
+        span_nodes = [node for node in nodes if node[3:5] == (0, 2)]
+        self.assertEqual(len(span_nodes), 1)
+        self.assertEqual(reader.word_codec.decode(span_nodes[0][2]), "_NWORD")
 
     def test_syntax_reader_generates_pos_and_not_word_classes(self):
         try:

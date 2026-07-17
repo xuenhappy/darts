@@ -142,19 +142,32 @@ class GraphSampleReader(IterableDataset):
         code_ids = [value[0] for value in codes]
         starts, ends = piece_bounds(codes, len(atoms))
 
-        # Dictionary labels provide known type features.  Add the complete span
-        # envelope used by the recognizer so the quantizer also sees OOV words;
-        # type 0 is the LabelEncoder's unknown fallback.
+        # Match runtime candidate types. Dictionary/base candidates keep their
+        # encoded type; missing binary-recognizer spans use _NWORD rather than
+        # an artificial unknown duplicate.
         candidates_by_node = {}
+        types_by_span = {}
         for word, type_code in zip(words, types):
             candidates_by_node[(word.atom_s, word.atom_e, type_code)] = None
+            types_by_span.setdefault((word.atom_s, word.atom_e), []).append(type_code)
+        syntax_mode = any(tag is not None for tag in gold_tags)
+        neural_type = 0 if syntax_mode else self.type_codes.get("_NWORD", 0)
         for start in range(len(atoms)):
-            for end in range(start + 1, min(len(atoms), start + self.max_span) + 1):
-                candidates_by_node.setdefault((start, end, 0), None)
+            minimum_end = start + 1 if syntax_mode else start + 2
+            for end in range(minimum_end, min(len(atoms), start + self.max_span) + 1):
+                span = (start, end)
+                if span not in types_by_span:
+                    candidates_by_node[(start, end, neural_type)] = None
+                    types_by_span[span] = [neural_type]
         gold_spans = self._gold_spans(tokens, atoms)
         gold_nodes_by_span = []
         for span, tag in zip(gold_spans, gold_tags):
-            type_code = self.type_codes.get(tag, 0) if tag else 0
+            if tag:
+                type_code = self.type_codes.get(tag, 0)
+            else:
+                # A runtime dictionary hit is one typed node, not a parallel
+                # unknown gold node. OOV spans use the neural recognizer type.
+                type_code = types_by_span.get(span, [neural_type])[0]
             node_key = (*span, type_code)
             candidates_by_node.setdefault(node_key, None)
             gold_nodes_by_span.append(node_key)
@@ -276,7 +289,7 @@ class SyntaxSpanSampleReader(IterableDataset):
     """Generate span classes where 0 is NOT_WORD and 1..N are POS labels."""
 
     def __init__(self, sample, type_map="data/codes/pos.hx.txt", batch_size=32,
-                 max_span=5, shuffle=False):
+                 max_span=5, shuffle=False, labels=None):
         super().__init__()
         self.sample = sample
         self.batch_size = batch_size
@@ -284,9 +297,21 @@ class SyntaxSpanSampleReader(IterableDataset):
         self.shuffle = shuffle
         self._samples = None
         self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
-        self.labels = ["NOT_WORD"]
-        with open(type_map, encoding="utf-8") as stream:
-            self.labels.extend(line.split("#", 1)[0].strip() for line in stream if "#" in line)
+        if labels is None:
+            observed = set()
+            with open(sample, encoding="utf-8") as stream:
+                for line in stream:
+                    _tokens, tags = GraphSampleReader._tagged_tokens(line.split())
+                    observed.update(tag for tag in tags if tag)
+            with open(type_map, encoding="utf-8") as stream:
+                ordered = [
+                    line.split("#", 1)[0].strip()
+                    for line in stream if "#" in line
+                ]
+            labels = ["NOT_WORD", *(label for label in ordered if label in observed)]
+        self.labels = list(labels)
+        if not self.labels or self.labels[0] != "NOT_WORD":
+            raise ValueError("syntax labels must start with NOT_WORD")
         self.label_codes = {label: index for index, label in enumerate(self.labels)}
 
     def wordsize(self):
