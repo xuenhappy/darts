@@ -41,6 +41,10 @@ def train(args):
         raise ValueError("--pu-target must be between 0 and 1")
     if args.pu_weight < 0.0:
         raise ValueError("--pu-weight must be non-negative")
+    if args.graph_auxiliary_weight < 0.0:
+        raise ValueError("--graph-auxiliary-weight must be non-negative")
+    if not 0.0 <= args.graph_auxiliary_unlabelled_weight <= 1.0:
+        raise ValueError("--graph-auxiliary-unlabelled-weight must be between 0 and 1")
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -125,6 +129,12 @@ def train(args):
         "train_data": train_path,
         "dev_data": dev_path,
         "quantizer_output": "association_negative_log_probability",
+        "joint_update_mode": args.joint_update_mode,
+        "quantizer_encoder_gradient": (
+            device.type != "cuda" or args.joint_update_mode == "combined"
+        ),
+        "graph_auxiliary_weight": args.graph_auxiliary_weight,
+        "graph_auxiliary_unlabelled_weight": args.graph_auxiliary_unlabelled_weight,
         "seed": args.seed,
     }
     model = build_model(metadata).to(device)
@@ -184,7 +194,15 @@ def train(args):
                     except StopIteration:
                         recognizer_iterator = iter(span_train)
                         span_batch = next(recognizer_iterator)
-                    yield span_batch, graph_batch
+                    if args.joint_update_mode == "alternating":
+                        # Keep only one shared-encoder autograd graph alive per
+                        # optimizer step. Both tasks still update the same
+                        # parameters, but their heterogeneous backward graphs
+                        # never merge in one CUDA engine traversal.
+                        yield span_batch, None
+                        yield None, graph_batch
+                    else:
+                        yield span_batch, graph_batch
 
             batches = joint_batches()
         for span_batch, graph_batch in batches:
@@ -201,9 +219,21 @@ def train(args):
             # forward association NLL is finite.
             if graph_batch is not None:
                 with torch.amp.autocast("cuda", enabled=False):
-                    quantizer_loss = model.graph_quantizer(*graph_batch)
+                    quantizer_loss = model.graph_quantizer(
+                        *graph_batch,
+                        detach_context=(
+                            device.type == "cuda"
+                            and args.training_stage == "joint"
+                            and args.joint_update_mode == "alternating"
+                        ),
+                        auxiliary_weight=args.graph_auxiliary_weight,
+                        auxiliary_unlabelled_weight=args.graph_auxiliary_unlabelled_weight,
+                    )
             if recognizer_loss is None:
-                loss = quantizer_loss
+                loss = (
+                    args.quantizer_weight * quantizer_loss
+                    if args.training_stage == "joint" else quantizer_loss
+                )
             elif quantizer_loss is None:
                 loss = recognizer_loss
             else:
@@ -395,6 +425,18 @@ def main():
                          help="loss weight for lexicon words absent from the annotated path")
     command.add_argument("--training-stage", choices=("joint", "recognizer", "quantizer"),
                          default="joint", help="joint training or one frozen staged task")
+    command.add_argument(
+        "--joint-update-mode", choices=("alternating", "combined"), default="alternating",
+        help="alternate task optimizer steps or backpropagate both task graphs together",
+    )
+    command.add_argument(
+        "--graph-auxiliary-weight", type=float, default=0.1,
+        help="local edge loss weight used to train the encoder in alternating mode",
+    )
+    command.add_argument(
+        "--graph-auxiliary-unlabelled-weight", type=float, default=0.05,
+        help="PU weight for non-gold edges in the local encoder auxiliary loss",
+    )
     command.add_argument("--clip-grad", type=float, default=1.0)
     command.add_argument("--resume", help="initialize model parameters from a compatible checkpoint")
     command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True,

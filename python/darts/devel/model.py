@@ -74,7 +74,8 @@ class WordEncoder(nn.Module):
             )
             self.type_normal = nn.LayerNorm(hidden_size)
 
-    def forward(self, batch_input_idx, batch_lengths, batch_word_info):
+    def forward(self, batch_input_idx, batch_lengths, batch_word_info,
+                detach_context=False):
         #batch_input_idx (batch*time_step)
         #batch_lengths (batch,)
         #batch_word_info(words_num*[bidx,s,e,tidx])
@@ -112,6 +113,12 @@ class WordEncoder(nn.Module):
         word_embedding = self.word_pool_normal(
             word_embedding + self.word_length_embedding(word_lengths - 1)
         )
+        if detach_context:
+            # Graph path NLL spans many dynamic-programming operations. Let the
+            # recognizer train the shared contextual representation and stop
+            # that long graph before it reaches Transformer backward. Type
+            # embeddings below remain trainable for quantizer specialization.
+            word_embedding = word_embedding.detach()
         # In joint training recognizer spans omit the optional type column,
         # while graph nodes include it. The contextual/position parameters are
         # shared in both cases; only graph calls add the type representation.
@@ -177,14 +184,17 @@ class Quantizer(nn.Module):
         # temperature gives the probability head useful dynamic range early.
         self.logit_scale = nn.Parameter(torch.tensor(np.log(np.sqrt(hidden_size)), dtype=torch.float32))
 
-    def forward(self, x, y):
+    def logits(self, x, y):
         # The default eps=1e-12 makes gradients explode when a projection is
         # close to the zero vector. Such vectors occur naturally early in graph
         # training; a bounded denominator keeps association NLL differentiable.
         keys = F.normalize(self.Kmap(x), dim=-1, eps=1e-4)
         queries = F.normalize(self.Qmap(y), dim=-1, eps=1e-4)
         scale = self.logit_scale.exp().clamp(max=100.0)
-        association_logit = torch.sum(keys * queries, dim=-1) * scale
+        return torch.sum(keys * queries, dim=-1) * scale
+
+    def forward(self, x, y):
+        association_logit = self.logits(x, y)
         # softplus(-x) is the stable form of -log(sigmoid(x)).
         return F.softplus(-association_logit).view(-1)
 
@@ -402,16 +412,42 @@ class GraphQuantizerTrainer(nn.Module):
         self.quantizer = Quantizer(hidden_size, 32)
         self.lossfunc = GraphLossSparse(edge_chunk_size=edge_chunk_size, strict_path=strict_path)
 
-    def forward(self, batch_input_idx, batch_lengths, batch_word_info, batch_graph):
+    def forward(self, batch_input_idx, batch_lengths, batch_word_info, batch_graph,
+                detach_context=False, auxiliary_weight=0.0,
+                auxiliary_unlabelled_weight=0.05):
         device = next(self.parameters()).device
         batch_input_idx = batch_input_idx.to(device)
         batch_lengths = batch_lengths.to(device)
         batch_word_info = batch_word_info.to(device)
         batch_graph = batch_graph.to(device)
 
-        word_embeds = self.predictor(batch_input_idx, batch_lengths, batch_word_info)
-        association_nll = self.quantizer(word_embeds[batch_graph[:, 1]], word_embeds[batch_graph[:, 2]])
-        return self.lossfunc(batch_word_info, batch_graph, association_nll)
+        word_embeds = self.predictor(
+            batch_input_idx, batch_lengths, batch_word_info
+        )
+        sources = batch_graph[:, 1]
+        targets = batch_graph[:, 2]
+        path_embeds = word_embeds.detach() if detach_context else word_embeds
+        association_nll = self.quantizer(path_embeds[sources], path_embeds[targets])
+        path_loss = self.lossfunc(batch_word_info, batch_graph, association_nll)
+        if not detach_context or auxiliary_weight <= 0.0:
+            return path_loss
+
+        # The dynamic-programming path objective remains responsible for exact
+        # graph probabilities, but its long gradient does not enter the
+        # Transformer. A local edge objective supplies a short, stable gradient
+        # bridge so contextual embeddings still learn association features.
+        edge_logits = self.quantizer.logits(word_embeds[sources], word_embeds[targets])
+        edge_targets = batch_graph[:, 3].to(edge_logits.dtype)
+        edge_losses = F.binary_cross_entropy_with_logits(
+            edge_logits, edge_targets, reduction="none"
+        )
+        edge_weights = torch.where(
+            edge_targets.bool(),
+            torch.ones_like(edge_targets),
+            torch.full_like(edge_targets, auxiliary_unlabelled_weight),
+        )
+        auxiliary_loss = (edge_losses * edge_weights).sum() / edge_weights.sum().clamp_min(1.0)
+        return path_loss + auxiliary_weight * auxiliary_loss
 
 
 class JointSegmentationTrainer(nn.Module):

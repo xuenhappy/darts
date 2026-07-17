@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This workstation has reproduced asynchronous illegal memory accesses under
-# the joint graph workload. Keep every CUDA launch synchronous for both debug
-# and production so the failing operation is reported before the driver state
-# can be damaged.
-export CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-1}"
+# Alternating updates and the local graph auxiliary objective avoid the unsafe
+# path-loss-to-Transformer backward graph, so production can launch async.
+export CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}"
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 PYTHON="${PYTHON:-/home/xuen/.venv/bin/python}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-model_bin}"
@@ -14,71 +13,145 @@ HIDDEN_SIZE="${HIDDEN_SIZE:-32}"
 EPOCHS="${EPOCHS:-8}"
 PATIENCE="${PATIENCE:-3}"
 RECOGNIZER_BATCH_SIZE="${RECOGNIZER_BATCH_SIZE:-32}"
+# GraphLossSparse accumulates complete candidate DAGs. Very large graph batches
+# are numerically unstable and do not behave like ordinary dense mini-batches.
 QUANTIZER_BATCH_SIZE="${QUANTIZER_BATCH_SIZE:-16}"
 LEARNING_RATE="${LEARNING_RATE:-2e-4}"
 QUANTIZER_WEIGHT="${QUANTIZER_WEIGHT:-0.1}"
-DEVICE="${DEVICE:-cpu}"
+JOINT_UPDATE_MODE="${JOINT_UPDATE_MODE:-alternating}"
+GRAPH_AUXILIARY_WEIGHT="${GRAPH_AUXILIARY_WEIGHT:-0.1}"
+GRAPH_AUXILIARY_UNLABELLED_WEIGHT="${GRAPH_AUXILIARY_UNLABELLED_WEIGHT:-0.05}"
+DEVICE="${DEVICE:-cuda}"
+# AMP backward is currently unsafe for the shared recognizer/FP32 graph loss.
+# Keep it opt-in until both branches can use one numerically consistent dtype.
+AMP="${AMP:-0}"
+# Two same-GPU processes are supported as an experimental throughput mode, but
+# remain opt-in because concurrent backward currently reproduces CUDA faults.
+PARALLEL="${PARALLEL:-0}"
+
+# Avoid two concurrent jobs each creating a full CPU thread pool.
+if [[ -z "${OMP_NUM_THREADS:-}" ]]; then
+  CPU_COUNT="$(nproc)"
+  if [[ "$PARALLEL" == "1" ]]; then
+    export OMP_NUM_THREADS="$(( CPU_COUNT > 2 ? CPU_COUNT / 2 : 1 ))"
+  else
+    export OMP_NUM_THREADS="$CPU_COUNT"
+  fi
+fi
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-$OMP_NUM_THREADS}"
 
 mkdir -p "$OUTPUT_ROOT/neural-joint" "$OUTPUT_ROOT/lac-joint" "$MODEL_DIR"
 
-echo "stage=neural-binary device=$DEVICE cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
-"$PYTHON" scripts/train_joint.py train \
-  --recognizer-kind binary \
-  --train data/generated/cws-train.txt \
-  --dev data/generated/cws-dev.txt \
-  --mode hybrid \
-  --type-map data/codes/type.hx.txt \
-  --output-dir "$OUTPUT_ROOT/neural-joint" \
-  --epochs "$EPOCHS" \
-  --patience "$PATIENCE" \
-  --recognizer-batch-size "$RECOGNIZER_BATCH_SIZE" \
-  --quantizer-batch-size "$QUANTIZER_BATCH_SIZE" \
-  --hidden-size "$HIDDEN_SIZE" \
-  --learning-rate "$LEARNING_RATE" \
-  --quantizer-weight "$QUANTIZER_WEIGHT" \
-  --max-nonfinite-batches 0 \
-  --max-span 5 \
-  --device "$DEVICE" \
-  --no-amp
+amp_args=()
+if [[ "$AMP" == "1" ]]; then
+  amp_args+=(--amp)
+else
+  amp_args+=(--no-amp)
+fi
 
-"$PYTHON" scripts/train_joint.py evaluate \
-  "$OUTPUT_ROOT/neural-joint/best.pt" \
-  --data data/generated/cws-test.txt \
-  --mode hybrid \
-  --type-map data/codes/type.hx.txt \
+common_train_args=(
+  --epochs "$EPOCHS"
+  --patience "$PATIENCE"
+  --recognizer-batch-size "$RECOGNIZER_BATCH_SIZE"
+  --quantizer-batch-size "$QUANTIZER_BATCH_SIZE"
+  --hidden-size "$HIDDEN_SIZE"
+  --learning-rate "$LEARNING_RATE"
+  --quantizer-weight "$QUANTIZER_WEIGHT"
+  --joint-update-mode "$JOINT_UPDATE_MODE"
+  --graph-auxiliary-weight "$GRAPH_AUXILIARY_WEIGHT"
+  --graph-auxiliary-unlabelled-weight "$GRAPH_AUXILIARY_UNLABELLED_WEIGHT"
+  --max-nonfinite-batches 0
+  --max-span 5
   --device "$DEVICE"
+  "${amp_args[@]}"
+)
 
-"$PYTHON" scripts/train_joint.py export \
-  "$OUTPUT_ROOT/neural-joint/best.pt" "$MODEL_DIR"
+train_binary() {
+  echo "stage=neural-binary action=train device=$DEVICE amp=$AMP"
+  "$PYTHON" scripts/train_joint.py train \
+    --recognizer-kind binary \
+    --train data/generated/cws-train.txt \
+    --dev data/generated/cws-dev.txt \
+    --mode hybrid \
+    --type-map data/codes/type.hx.txt \
+    --output-dir "$OUTPUT_ROOT/neural-joint" \
+    "${common_train_args[@]}"
+}
 
-echo "stage=lac-syntax device=$DEVICE cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING"
-"$PYTHON" scripts/train_joint.py train \
-  --recognizer-kind syntax \
-  --train data/generated/lac-train.txt \
-  --dev data/generated/lac-dev.txt \
-  --mode lac \
-  --type-map data/codes/pos.hx.txt \
-  --output-dir "$OUTPUT_ROOT/lac-joint" \
-  --epochs "$EPOCHS" \
-  --patience "$PATIENCE" \
-  --recognizer-batch-size "$RECOGNIZER_BATCH_SIZE" \
-  --quantizer-batch-size "$QUANTIZER_BATCH_SIZE" \
-  --hidden-size "$HIDDEN_SIZE" \
-  --learning-rate "$LEARNING_RATE" \
-  --quantizer-weight "$QUANTIZER_WEIGHT" \
-  --max-nonfinite-batches 0 \
-  --max-span 5 \
-  --device "$DEVICE" \
-  --no-amp
+train_lac() {
+  echo "stage=lac-syntax action=train device=$DEVICE amp=$AMP"
+  "$PYTHON" scripts/train_joint.py train \
+    --recognizer-kind syntax \
+    --train data/generated/lac-train.txt \
+    --dev data/generated/lac-dev.txt \
+    --mode lac \
+    --type-map data/codes/pos.hx.txt \
+    --output-dir "$OUTPUT_ROOT/lac-joint" \
+    "${common_train_args[@]}"
+}
 
-"$PYTHON" scripts/train_joint.py evaluate \
-  "$OUTPUT_ROOT/lac-joint/best.pt" \
-  --data data/generated/lac-test.txt \
-  --mode lac \
-  --type-map data/codes/pos.hx.txt \
-  --device "$DEVICE"
+if [[ "$PARALLEL" == "1" ]]; then
+  echo "scheduler=parallel cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING omp_threads=$OMP_NUM_THREADS"
+  train_binary &
+  binary_pid=$!
+  train_lac &
+  lac_pid=$!
 
-"$PYTHON" scripts/train_joint.py export \
-  "$OUTPUT_ROOT/lac-joint/best.pt" "$MODEL_DIR"
+  status=0
+  wait "$binary_pid" || status=1
+  wait "$lac_pid" || status=1
+  if (( status != 0 )); then
+    echo "status=failed reason=parallel-training-child-failed" >&2
+    exit "$status"
+  fi
+else
+  echo "scheduler=sequential cuda_launch_blocking=$CUDA_LAUNCH_BLOCKING omp_threads=$OMP_NUM_THREADS"
+  train_binary
+  train_lac
+fi
+
+evaluate_binary() {
+  echo "stage=neural-binary action=evaluate"
+  "$PYTHON" scripts/train_joint.py evaluate \
+    "$OUTPUT_ROOT/neural-joint/best.pt" \
+    --data data/generated/cws-test.txt \
+    --mode hybrid \
+    --type-map data/codes/type.hx.txt \
+    --recognizer-batch-size "$RECOGNIZER_BATCH_SIZE" \
+    --quantizer-batch-size "$QUANTIZER_BATCH_SIZE" \
+    --device "$DEVICE"
+}
+
+evaluate_lac() {
+  echo "stage=lac-syntax action=evaluate"
+  "$PYTHON" scripts/train_joint.py evaluate \
+    "$OUTPUT_ROOT/lac-joint/best.pt" \
+    --data data/generated/lac-test.txt \
+    --mode lac \
+    --type-map data/codes/pos.hx.txt \
+    --recognizer-batch-size "$RECOGNIZER_BATCH_SIZE" \
+    --quantizer-batch-size "$QUANTIZER_BATCH_SIZE" \
+    --device "$DEVICE"
+}
+
+if [[ "$PARALLEL" == "1" ]]; then
+  evaluate_binary &
+  binary_eval_pid=$!
+  evaluate_lac &
+  lac_eval_pid=$!
+  status=0
+  wait "$binary_eval_pid" || status=1
+  wait "$lac_eval_pid" || status=1
+  if (( status != 0 )); then
+    echo "status=failed reason=parallel-evaluation-child-failed" >&2
+    exit "$status"
+  fi
+else
+  evaluate_binary
+  evaluate_lac
+fi
+
+"$PYTHON" scripts/train_joint.py export "$OUTPUT_ROOT/neural-joint/best.pt" "$MODEL_DIR"
+"$PYTHON" scripts/train_joint.py export "$OUTPUT_ROOT/lac-joint/best.pt" "$MODEL_DIR"
 
 echo "models=$MODEL_DIR status=complete"
