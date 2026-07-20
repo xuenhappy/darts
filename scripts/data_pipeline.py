@@ -128,6 +128,22 @@ def deduplicate_sentences(sentences):
     return unique
 
 
+def read_darts_lac(path):
+    """Read the curated ``word/POS_*`` format used by Darts demo corpora."""
+    with open(path, encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            sentence = []
+            for field in line.split():
+                if "/" not in field:
+                    raise ValueError(f"{path}:{line_number}: missing POS label in {field!r}")
+                word, pos = field.rsplit("/", 1)
+                sentence.append((word, pos))
+            yield sentence
+
+
 def prepare(args):
     raw_dir = Path(args.raw_dir)
     output_dir = Path(args.output_dir)
@@ -150,15 +166,23 @@ def prepare(args):
     raw_train_sentences = [
         sentence for source in train_sources for sentence in read_conllu(source)
     ]
+    # Curated modern-domain examples provide clean person/organization and
+    # technical span supervision that generic UD corpora largely lack.
+    raw_train_sentences.extend(read_darts_lac(ROOT / "data" / "demo" / "lac-train.txt"))
     train_sentences = deduplicate_sentences(raw_train_sentences)
     duplicates_removed = len(raw_train_sentences) - len(train_sentences)
     splits["train"] = write_segmented_sentences(
         train_sentences, output_dir / "cws-train.txt"
     )
+    evaluation_sentences = {}
     for split in ("dev", "test"):
         source = raw_dir / "ud-chinese-gsd" / f"{split}.conllu"
         target = output_dir / f"cws-{split}.txt"
-        splits[split] = write_segmented(source, target)
+        sentences = list(read_conllu(source))
+        if split == "dev":
+            sentences.extend(read_darts_lac(ROOT / "data" / "demo" / "lac-dev.txt"))
+        evaluation_sentences[split] = deduplicate_sentences(sentences)
+        splits[split] = write_segmented_sentences(evaluation_sentences[split], target)
 
     words = Counter()
     word_pos = {}
@@ -170,7 +194,9 @@ def prepare(args):
         for word, pos in sentence:
             words[word] += 1
             ud_words.add(word)
-            word_pos.setdefault(word, normalize_pos(pos, "ud"))
+            word_pos.setdefault(
+                word, pos if pos.startswith("POS_") else normalize_pos(pos, "ud")
+            )
             singles[word] += 1
         bigrams.update(zip(forms, forms[1:]))
 
@@ -199,13 +225,12 @@ def prepare(args):
 
     for split in ("train", "dev", "test"):
         target = output_dir / f"lac-{split}.txt"
-        sentences = train_sentences if split == "train" else read_conllu(
-            raw_dir / "ud-chinese-gsd" / f"{split}.conllu"
-        )
+        sentences = train_sentences if split == "train" else evaluation_sentences[split]
         with open(target, "w", encoding="utf-8") as output:
             for sentence in sentences:
                 output.write(" ".join(
-                    f"{word}/{normalize_pos(pos, 'ud')}" for word, pos in sentence
+                    f"{word}/{pos if pos.startswith('POS_') else normalize_pos(pos, 'ud')}"
+                    for word, pos in sentence
                 ) + "\n")
 
     phrase_path = output_dir / "pinyin-phrases.txt"

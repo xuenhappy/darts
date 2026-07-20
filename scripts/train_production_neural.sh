@@ -10,6 +10,8 @@ PYTHON="${PYTHON:-/home/xuen/.venv/bin/python}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-model_bin}"
 MODEL_DIR="${MODEL_DIR:-data/models/neural}"
 HIDDEN_SIZE="${HIDDEN_SIZE:-64}"
+MAX_SPAN="${MAX_SPAN:-8}"
+GRAPH_MAX_SPAN="${GRAPH_MAX_SPAN:-5}"
 EPOCHS="${EPOCHS:-10}"
 PATIENCE="${PATIENCE:-3}"
 RECOGNIZER_BATCH_SIZE="${RECOGNIZER_BATCH_SIZE:-64}"
@@ -62,7 +64,8 @@ common_train_args=(
   --graph-auxiliary-weight "$GRAPH_AUXILIARY_WEIGHT"
   --graph-auxiliary-unlabelled-weight "$GRAPH_AUXILIARY_UNLABELLED_WEIGHT"
   --max-nonfinite-batches 0
-  --max-span 5
+  --max-span "$MAX_SPAN"
+  --graph-max-span "$GRAPH_MAX_SPAN"
   --device "$DEVICE"
   "${amp_args[@]}"
 )

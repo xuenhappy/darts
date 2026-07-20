@@ -18,6 +18,14 @@ class AtomListTests(unittest.TestCase):
         self.assertEqual([atom.image for atom in atoms], ["中", "文", "ABC", "123"])
         self.assertEqual([(atom.st, atom.et) for atom in atoms], [(0, 1), (1, 2), (2, 5), (5, 8)])
 
+    def test_adjacent_punctuation_has_independent_atom_boundaries(self):
+        atoms = PyAtomList("37.5%。“测试”，https://example.com").tolist()
+        self.assertEqual(
+            [atom.image for atom in atoms],
+            ["37", ".", "5", "%", "。", "\"", "测", "试", "\"", ",",
+             "https", ":", "/", "/", "example", ".", "com"],
+        )
+
     def test_native_lists_support_safe_indexing(self):
         atom_list = PyAtomList("中文ABC123")
         self.assertEqual(atom_list[0].image, "中")
@@ -94,6 +102,7 @@ class SegmentTests(unittest.TestCase):
             "重量12.5公斤容量500ml": {"12.5公斤", "500ml"},
             "需要三百二十个人和2GB内存": {"三百二十个", "2GB"},
             "温度为-3.5°C，速度达到120km/h": {"-3.5°C", "120km"},
+            "P99延迟下降了37.5%。": {"37.5%"},
         }
         for text, expected in cases.items():
             _atoms, output = segment.cut(text, max_mode=True)

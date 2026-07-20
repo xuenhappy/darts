@@ -4,3 +4,7 @@
 共享/POS_VERB 词表示/POS_NOUN 网络/POS_NOUN 同时/POS_ADV 服务/POS_VERB 两个/POS_NUM 任务/POS_NOUN
 量化器/POS_NOUN 输出/POS_VERB 词关联/POS_NOUN 概率/POS_NOUN 的/POS_PART 负对数/POS_NOUN
 上海市/POS_ns 浦东新区/POS_ns 世纪大道/POS_ns 100号/POS_NUM 开通/POS_VERB
+赵磊/POS_nr 在/POS_ADP 中国社会科学院/POS_nt 语言研究所/POS_nt 工作/POS_VERB
+孙悦/POS_nr 参观/POS_VERB 清华大学/POS_nt 交叉信息研究院/POS_nt
+北京市/POS_ns 海淀区/POS_ns 科学院南路/POS_ns 88号/POS_NUM 融科资讯中心/POS_nt
+自然语言处理/POS_NOUN 系统/POS_NOUN 的/POS_PART P95/POS_nz 延迟/POS_NOUN 降低/POS_VERB 20.5%/POS_NUM

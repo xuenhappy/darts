@@ -12,3 +12,13 @@ Transformer/POS_PROPN 识别器/POS_NOUN 召回/POS_VERB 可能/POS_ADJ 的/POS_
 GraphLossSparse/POS_PROPN 优化/POS_VERB 完整/POS_ADJ 候选/POS_NOUN 图/POS_NOUN 路径/POS_NOUN
 北京市/POS_ns 海淀区/POS_ns 中关村大街/POS_ns 27号/POS_NUM 今日/POS_t 施工/POS_VERB
 系统/POS_NOUN 在/POS_ADP 2026年7月16日/POS_t 14:30/POS_t 发布/POS_VERB 2GB/POS_NUM 数据/POS_NOUN
+李明/POS_nr 在/POS_ADP 中国科学院/POS_nt 计算技术研究所/POS_nt 负责/POS_VERB 自然语言处理/POS_NOUN
+王小华/POS_nr 加入/POS_VERB 中国科学院/POS_nt 自动化研究所/POS_nt 从事/POS_VERB 机器学习/POS_NOUN 研究/POS_NOUN
+欧阳晨/POS_nr 在/POS_ADP 上海交通大学/POS_nt 人工智能研究院/POS_nt 攻读/POS_VERB 博士/POS_NOUN
+陈雨/POS_nr 与/POS_CCONJ 北京大学/POS_nt 信息科学技术学院/POS_nt 合作/POS_VERB 开发/POS_VERB 分词器/POS_NOUN
+张伟/POS_nr 就职/POS_VERB 于/POS_ADP 深圳市/POS_ns 腾讯计算机系统有限公司/POS_nt
+周敏/POS_nr 从/POS_ADP 浙江省/POS_ns 杭州市/POS_ns 西湖区/POS_ns 前往/POS_VERB 阿里巴巴/POS_nt 西溪园区/POS_nt
+刘洋/POS_nr 访问/POS_VERB 中国人民银行/POS_nt 金融科技研究院/POS_nt
+南京大学/POS_nt 计算机科学与技术系/POS_nt 发布/POS_VERB Transformer/POS_nz 量化器/POS_NOUN
+OpenAI-compatible/POS_nz API/POS_nz 的/POS_PART P99/POS_nz 延迟/POS_NOUN 下降/POS_VERB 了/POS_AUX 37.5%/POS_NUM
+Darts-v2.0.1/POS_nz 支持/POS_VERB GraphLossSparse/POS_nz 与/POS_CCONJ ONNX/POS_nz Runtime/POS_nz

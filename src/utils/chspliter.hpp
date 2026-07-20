@@ -137,7 +137,10 @@ static inline size_t wordLen(const std::string& str) {
             }
         }
         btype = ctype;
-        if (btype == char_type::CJK) {
+        // CJK characters and punctuation are semantic boundaries. Keeping
+        // adjacent punctuation in one atom (for example "%。" or "”，")
+        // prevents recognizers from building spans that end at the first mark.
+        if (btype == char_type::CJK || btype == char_type::POS) {
             nums += 1;
             btype = "";
             continue;
@@ -213,7 +216,7 @@ inline void atomSplit(const U32StrIter& str, asplit_hit_func accept, bool merge_
 
         btype = ctype;
 
-        if (btype == char_type::CJK) {
+        if (btype == char_type::CJK || btype == char_type::POS) {
             accept(ct, btype, position, position + 1);
             cbuffer.clear();
             return;

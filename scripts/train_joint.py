@@ -37,6 +37,10 @@ def build_model(metadata):
 
 
 def train(args):
+    if args.graph_max_span is None:
+        args.graph_max_span = args.max_span
+    if args.graph_max_span < 1 or args.graph_max_span > args.max_span:
+        raise ValueError("--graph-max-span must be between 1 and --max-span")
     if not 0.0 <= args.pu_target <= 1.0:
         raise ValueError("--pu-target must be between 0 and 1")
     if args.pu_weight < 0.0:
@@ -102,11 +106,11 @@ def train(args):
         )
     graph_train = GraphSampleReader(
         train_path, args.config, mode, args.quantizer_batch_size,
-        args.max_span, shuffle=True, type_map=type_map
+        args.graph_max_span, shuffle=True, type_map=type_map
     )
     graph_dev = GraphSampleReader(
         dev_path, args.config, mode, args.quantizer_batch_size,
-        args.max_span, type_map=type_map
+        args.graph_max_span, type_map=type_map
     )
     if span_train.wordsize() != graph_train.wordsize():
         raise RuntimeError("recognizer and quantizer must use the same WordPiece vocabulary")
@@ -117,6 +121,7 @@ def train(args):
         "hidden_size": args.hidden_size,
         "wtype_num": graph_train.typesize(),
         "max_span": args.max_span,
+        "graph_max_span": args.graph_max_span,
         "recognizer_kind": args.recognizer_kind,
         "class_num": span_train.classsize() if args.recognizer_kind == "syntax" else None,
         "positive_weight": positive_weight if args.recognizer_kind == "binary" else None,
@@ -410,6 +415,10 @@ def main():
     command.add_argument("--recognizer-batch-size", type=int, default=64)
     command.add_argument("--quantizer-batch-size", type=int, default=16)
     command.add_argument("--max-span", type=int, default=5)
+    command.add_argument(
+        "--graph-max-span", type=int,
+        help="negative candidate envelope for GraphLoss; defaults to --max-span",
+    )
     command.add_argument("--hidden-size", type=int, default=128)
     command.add_argument("--learning-rate", type=float, default=3e-4)
     command.add_argument("--weight-decay", type=float, default=1e-2)
@@ -446,6 +455,7 @@ def main():
     command.add_argument("--max-nonfinite-batches", type=int, default=8)
     command.add_argument("--seed", type=int, default=20260715)
     command.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    command.set_defaults(graph_max_span=None)
     command.set_defaults(func=train)
     command = commands.add_parser("export")
     command.add_argument("checkpoint")
