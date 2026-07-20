@@ -115,12 +115,30 @@ def normalize_pos(pos, source):
     return f"POS_{clean or 'xc'}"
 
 
+def deduplicate_sentences(sentences):
+    """Keep the first exact token/POS sequence across ordered corpora."""
+    unique = []
+    seen = set()
+    for sentence in sentences:
+        key = tuple(sentence)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(sentence)
+    return unique
+
+
 def prepare(args):
     raw_dir = Path(args.raw_dir)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     splits = {}
-    train_sources = [raw_dir / "ud-chinese-gsd" / "train.conllu"]
+    train_sources = [
+        raw_dir / "ud-chinese-gsd" / "train.conllu",
+        # Train only: GSDSimp dev/test correspond to GSD dev/test and would
+        # leak evaluation sentences even though their character forms differ.
+        raw_dir / "ud-chinese-gsdsimp" / "train.conllu",
+    ]
     train_sources.extend(
         path for path in (
             raw_dir / "ud-chinese-pud" / "train-extra.conllu",
@@ -129,9 +147,11 @@ def prepare(args):
         )
         if path.exists()
     )
-    train_sentences = [
+    raw_train_sentences = [
         sentence for source in train_sources for sentence in read_conllu(source)
     ]
+    train_sentences = deduplicate_sentences(raw_train_sentences)
+    duplicates_removed = len(raw_train_sentences) - len(train_sentences)
     splits["train"] = write_segmented_sentences(
         train_sentences, output_dir / "cws-train.txt"
     )
@@ -223,8 +243,13 @@ def prepare(args):
         "max_word_length": args.max_word_length,
         "pinyin_phrase_entries": phrase_entries,
         "training_sources": [str(path.relative_to(raw_dir)) for path in train_sources],
-        "licenses": ["UD Chinese GSD/PUD/HK/CFL: CC BY-SA 4.0", "jieba dictionary: MIT",
-                     "phrase-pinyin-data: MIT"],
+        "training_duplicates_removed": duplicates_removed,
+        "licenses": [
+            "UD Chinese GSD/GSDSimp/HK/CFL: CC BY-SA 4.0",
+            "UD Chinese PUD: CC BY-SA 3.0",
+            "jieba dictionary: MIT",
+            "phrase-pinyin-data: MIT",
+        ],
     }
     (output_dir / "metadata.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

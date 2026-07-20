@@ -351,7 +351,7 @@ cdef class PyWordList:
 
     def __getitem__(self, size_t index)->PyWord:
         cdef word_buffer buf
-        cdef ctsr_list ptrs
+        cdef vector[cstr] ptrs
         cdef string image_cache
         buf.label_cache=<void *>(&ptrs);
         buf.image_cache=<void *>(&image_cache);

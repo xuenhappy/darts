@@ -29,9 +29,23 @@
       "target": "ud-chinese-gsd/LICENSE.txt"
     },
     {
-      "name": "ud-chinese-pud-train-extra",
+      "name": "ud-chinese-gsdsimp-train",
       "version": "UD 2.18",
       "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSDSimp/r2.18/zh_gsdsimp-ud-train.conllu",
+      "target": "ud-chinese-gsdsimp/train.conllu"
+    },
+    {
+      "name": "ud-chinese-gsdsimp-license",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSDSimp/r2.18/LICENSE.txt",
+      "target": "ud-chinese-gsdsimp/LICENSE.txt"
+    },
+    {
+      "name": "ud-chinese-pud-train-extra",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 3.0",
       "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-PUD/r2.18/zh_pud-ud-test.conllu",
       "target": "ud-chinese-pud/train-extra.conllu"
     },

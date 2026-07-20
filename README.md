@@ -1064,7 +1064,7 @@ python scripts/devel.py build --test
 
 ### 开放数据流水线
 
-`data/sources.json` 固定 UD Chinese GSD、PUD、HK、CFL 2.18 与 jieba 0.42.1
+`data/sources.json` 固定 UD Chinese GSD、GSDSimp、PUD、HK、CFL 2.18 与 jieba 0.42.1
 的下载地址和许可；`data/sources.lock.json` 记录实际文件大小和 SHA-256。PUD、
 HK、CFL 仅扩充训练集，开发集和测试集始终使用未混入训练的 GSD 官方切分，避免
 数据泄漏。原始文件下载到被 Git 忽略的 `data/external/`，训练切分和中间文本生成到
@@ -1086,6 +1086,19 @@ python scripts/tune_decider.py --fine
 词典保留全部 UD train 词汇，并合并 jieba 中频率至少为 10 的词条；默认过滤超过 8 个 Unicode 字符的异常长词。Bigram 只从 UD train 统计，dev 用于模式选择，test 仅用于最终评测。UD Chinese GSD 使用 CC BY-SA 4.0，jieba 词典使用 MIT；再分发时必须遵守各自署名与共享条款，详见 `data/readme.md` 和下载后的许可证文件。
 
 在 UD Chinese GSD dev 的 500 句上，调优后的 `faster` 模式边界 precision 为 0.8856、recall 为 0.9434、F1 为 0.9136；历史内置模型同模式 F1 为 0.7993。该结果是单一语料域基线，不代表新闻、医疗或社交文本的泛化质量。
+
+神经训练集加入 GSDSimp train 并跨语料去重后由 6,452 句增加到
+10,407 句，GSD dev/test 保持不变。recognizer-only 数据与容量消融使用
+`hidden_size=64`、10 epochs，并只用 dev 选择 checkpoint 和阈值：
+
+| 任务 | Dev F1 | Test F1 | Test 词性准确率 |
+| --- | ---: | ---: | ---: |
+| binary span recognizer | 0.6442 | 0.6345 | - |
+| LAC syntax recognizer | 0.7787 | 0.7748 | 0.6011 |
+
+这些结果衡量候选词识别和 LAC 标签，不等同于最终 `best_path` 分词 F1；
+量化器仍需使用联合训练和最终路径评测。二分类 test 使用 dev 固定的长度阈值
+`0.80/0.60/0.45/0.40`，没有在 test 上重新校准。
 
 混合统计量化器在 dev 上取得 precision 0.8830、recall 0.9568、F1 0.9185；未参与调参的 test 上取得 precision 0.8634、recall 0.9436、F1 0.9017、整句准确率 0.112。相同 test 上 `faster` 的 F1 为 0.8971、整句准确率为 0.094。若业务更重视 precision，可显式选择 `faster`。
 

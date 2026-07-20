@@ -7,11 +7,18 @@
 | 来源 | 版本 | 许可 | 用途 |
 | --- | --- | --- | --- |
 | UD Chinese GSD | UD 2.18 | CC BY-SA 4.0 | 训练、开发、测试切分与 Bigram 统计 |
+| UD Chinese GSDSimp | UD 2.18 | CC BY-SA 4.0 | 仅使用 train 扩充简体训练语料 |
+| UD Chinese PUD | UD 2.18 | CC BY-SA 3.0 | 新闻与百科补充训练语料 |
+| UD Chinese HK | UD 2.18 | CC BY-SA 4.0 | 繁体口语补充训练语料 |
+| UD Chinese CFL | UD 2.18 | CC BY-SA 4.0 | 学习者文本补充训练语料 |
 | jieba `dict.txt` | v0.42.1 | MIT | 扩展通用中文词典覆盖率 |
 | phrase-pinyin-data | v0.19.0 | MIT | 词级拼音与多音字消歧 |
 | province-city-china | v8.5.8 | MIT | 省、市、区县、乡镇街道地址词典与层级转移 |
 
 下载地址记录在 `sources.json`，实际文件大小与 SHA-256 记录在 `sources.lock.json`。原始数据和生成中间文件分别位于被 Git 忽略的 `external/`、`generated/`；仓库只提交生成后的运行时模型。
+
+当前默认生成集包含 10,407 条去重训练句、500 条开发句和 500 条测试句；
+开发集与测试集保持为 GSD 原始切分，不从 GSDSimp 引入对应句。
 
 ## 重建
 
@@ -29,6 +36,9 @@ python scripts/devel.py data build-models
 ```
 
 默认构建无条件保留 UD train 词汇，只接收 jieba 中频率至少为 10 的外部词，并过滤超过 8 个 Unicode 字符的异常长词。参数可通过 `prepare --jieba-min-frequency` 和 `--max-word-length` 调整；只能用 dev 选择参数，不能反复查看 test 调参。
+
+GSDSimp 是 GSD 的简体转换和人工修正版。流水线只读取 GSDSimp train；
+其 dev/test 与 GSD dev/test 对应，禁止加入训练集，以避免跨字形的数据泄漏。
 
 下载遵循 `HTTP_PROXY`、`HTTPS_PROXY` 和小写同名环境变量，并支持 `.part` 断点续传。网络较慢时可先配置代理。生成后将 `generated/models/open-dictionary.pbs` 和 `open-bigram.bdf` 更新到 `models/`，再执行完整测试。
 

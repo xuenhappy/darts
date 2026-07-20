@@ -170,6 +170,15 @@ class DataPipelineTest(unittest.TestCase):
             self.assertEqual(PIPELINE.write_segmented(source, target), 1)
             self.assertEqual(target.read_text(encoding="utf-8"), "中文 分词\n")
 
+    def test_training_deduplication_preserves_first_ordered_sample(self):
+        first = [("中文", "NOUN"), ("分词", "NOUN")]
+        second = [("神经", "ADJ"), ("网络", "NOUN")]
+        samples = [first, second, list(first)]
+        self.assertEqual(
+            PIPELINE.deduplicate_sentences(samples),
+            [first, second],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

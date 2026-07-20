@@ -37,9 +37,27 @@
       "sha256": "899b1804a12ebc090b96339614eede1b64b686721b650a71430b55b5235f7f79"
     },
     {
-      "name": "ud-chinese-pud-train-extra",
+      "name": "ud-chinese-gsdsimp-train",
       "version": "UD 2.18",
       "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSDSimp/r2.18/zh_gsdsimp-ud-train.conllu",
+      "target": "ud-chinese-gsdsimp/train.conllu",
+      "bytes": 9321012,
+      "sha256": "956636fe612a1166e8b19e7413fee2e73d68231aca2f0455be2c616b947d629d"
+    },
+    {
+      "name": "ud-chinese-gsdsimp-license",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 4.0",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-GSDSimp/r2.18/LICENSE.txt",
+      "target": "ud-chinese-gsdsimp/LICENSE.txt",
+      "bytes": 202,
+      "sha256": "899b1804a12ebc090b96339614eede1b64b686721b650a71430b55b5235f7f79"
+    },
+    {
+      "name": "ud-chinese-pud-train-extra",
+      "version": "UD 2.18",
+      "license": "CC BY-SA 3.0",
       "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-PUD/r2.18/zh_pud-ud-test.conllu",
       "target": "ud-chinese-pud/train-extra.conllu",
       "bytes": 2199911,
