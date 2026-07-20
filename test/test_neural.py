@@ -186,6 +186,13 @@ class NeuralModelTests(unittest.TestCase):
         loss.backward()
         self.assertTrue(torch.isfinite(loss))
         self.assertTrue(torch.all(torch.isfinite(association_nll.grad)))
+        path_a = torch.exp(torch.tensor(-0.5))
+        path_b = torch.exp(torch.tensor(-1.1))
+        expected = 1.0 - path_a / (path_a + path_b)
+        self.assertTrue(torch.all(association_nll.grad.abs() <= 1.0))
+        self.assertAlmostEqual(association_nll.grad[0].item(), expected.item(), places=6)
+        self.assertAlmostEqual(association_nll.grad[1].item(), -expected.item(), places=6)
+        self.assertAlmostEqual(association_nll.grad[2].item(), expected.item(), places=6)
 
     def test_sparse_graph_loss_ignores_unreachable_predecessors(self):
         word_info = torch.tensor([[0, 0, 0, 0]] * 4)

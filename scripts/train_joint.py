@@ -130,9 +130,7 @@ def train(args):
         "dev_data": dev_path,
         "quantizer_output": "association_negative_log_probability",
         "joint_update_mode": args.joint_update_mode,
-        "quantizer_encoder_gradient": (
-            device.type != "cuda" or args.joint_update_mode == "combined"
-        ),
+        "quantizer_encoder_gradient": not args.graph_detach_context,
         "graph_auxiliary_weight": args.graph_auxiliary_weight,
         "graph_auxiliary_unlabelled_weight": args.graph_auxiliary_unlabelled_weight,
         "seed": args.seed,
@@ -222,9 +220,8 @@ def train(args):
                     quantizer_loss = model.graph_quantizer(
                         *graph_batch,
                         detach_context=(
-                            device.type == "cuda"
-                            and args.training_stage == "joint"
-                            and args.joint_update_mode == "alternating"
+                            args.training_stage == "joint"
+                            and args.graph_detach_context
                         ),
                         auxiliary_weight=args.graph_auxiliary_weight,
                         auxiliary_unlabelled_weight=args.graph_auxiliary_unlabelled_weight,
@@ -436,6 +433,10 @@ def main():
     command.add_argument(
         "--graph-auxiliary-unlabelled-weight", type=float, default=0.05,
         help="PU weight for non-gold edges in the local encoder auxiliary loss",
+    )
+    command.add_argument(
+        "--graph-detach-context", action=argparse.BooleanOptionalAction, default=False,
+        help="detach GraphLoss from the encoder and use only the local auxiliary bridge",
     )
     command.add_argument("--clip-grad", type=float, default=1.0)
     command.add_argument("--resume", help="initialize model parameters from a compatible checkpoint")

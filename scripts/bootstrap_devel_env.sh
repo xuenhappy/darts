@@ -91,6 +91,11 @@ DARTS_ONNXRUNTIME_DIR="$("$ROOT_DIR/scripts/fetch_onnxruntime.sh")"
 export DARTS_ONNXRUNTIME_DIR
 "$ROOT_DIR/scripts/bootstrap_local_deps.sh" >/dev/null
 export DARTS_MESON_BUILD_DIR="${DARTS_MESON_BUILD_DIR:-$ROOT_DIR/build/meson-devel}"
+SYSROOT="$DARTS_DEPS_DIR/sysroot"
+PKG_CONFIG_DIRS="$(find "$SYSROOT/usr/lib" -type d -name pkgconfig -print | paste -sd: -)"
+export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+export PKG_CONFIG_LIBDIR="${PKG_CONFIG_DIRS:+$PKG_CONFIG_DIRS:}$SYSROOT/usr/share/pkgconfig"
+export PATH="$VENV_DIR/bin:$SYSROOT/usr/bin:$PATH"
 
 ENV_FILE="$ROOT_DIR/build/devel-env.sh"
 {
@@ -100,7 +105,9 @@ ENV_FILE="$ROOT_DIR/build/devel-env.sh"
   printf 'export DARTS_DEPS_DIR=%q\n' "$DARTS_DEPS_DIR"
   printf 'export DARTS_ONNXRUNTIME_DIR=%q\n' "$DARTS_ONNXRUNTIME_DIR"
   printf 'export DARTS_MESON_BUILD_DIR=%q\n' "$DARTS_MESON_BUILD_DIR"
-  printf 'export PATH=%q:$PATH\n' "$VENV_DIR/bin"
+  printf 'export PKG_CONFIG_SYSROOT_DIR=%q\n' "$PKG_CONFIG_SYSROOT_DIR"
+  printf 'export PKG_CONFIG_LIBDIR=%q\n' "$PKG_CONFIG_LIBDIR"
+  printf 'export PATH=%q:%q:$PATH\n' "$VENV_DIR/bin" "$SYSROOT/usr/bin"
 } >"$ENV_FILE"
 
 if ((INSTALL_PROJECT)); then

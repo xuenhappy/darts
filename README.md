@@ -179,6 +179,10 @@ protoc --version
 安装相同虚拟环境中的 Meson/Cython/训练依赖，并生成统一路径配置
 `build/devel-env.sh`：
 
+生成文件同时设置 `PKG_CONFIG_SYSROOT_DIR`、`PKG_CONFIG_LIBDIR` 和 sysroot
+工具路径，确保 pip 触发的 Meson 构建与直接 C++ 构建解析到同一套
+fmt、jsoncpp、protobuf 和 zlib。
+
 ```bash
 ./scripts/bootstrap_devel_env.sh \
   --python python3.12 \
@@ -619,7 +623,7 @@ Decider 分为嵌入和距离两个阶段：
 | --- | --- |
 | `reader.py` | 文本、词候选和稀疏图训练数据构造 |
 | `model.py` | 共享 Transformer 词表示架构、span 识别器和稀疏图量化器 |
-| `utils.py` | `GraphLossSparse` 条件路径负对数似然 |
+| `utils.py` | `GraphLossSparse` 条件路径负对数似然与前向-后向解析梯度 |
 | `scripts/train_recognizer.py` | 独立训练和导出可重叠 span 识别器 |
 | `scripts/train_quantizer.py` | 使用 `GraphLossSparse` 独立训练和导出图量化器 |
 | `scripts/train_joint.py` | 推荐的共享 encoder 多任务训练与三个 ONNX 导出 |

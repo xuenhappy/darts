@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Alternating updates and the local graph auxiliary objective avoid the unsafe
-# path-loss-to-Transformer backward graph, so production can launch async.
+# GraphLoss uses an exact forward-backward posterior with bounded analytic edge
+# gradients, so production no longer builds the unsafe deep DP autograd graph.
 export CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
@@ -21,6 +21,7 @@ QUANTIZER_WEIGHT="${QUANTIZER_WEIGHT:-0.1}"
 JOINT_UPDATE_MODE="${JOINT_UPDATE_MODE:-alternating}"
 GRAPH_AUXILIARY_WEIGHT="${GRAPH_AUXILIARY_WEIGHT:-0.1}"
 GRAPH_AUXILIARY_UNLABELLED_WEIGHT="${GRAPH_AUXILIARY_UNLABELLED_WEIGHT:-0.05}"
+GRAPH_DETACH_CONTEXT="${GRAPH_DETACH_CONTEXT:-0}"
 DEVICE="${DEVICE:-cuda}"
 # AMP backward is currently unsafe for the shared recognizer/FP32 graph loss.
 # Keep it opt-in until both branches can use one numerically consistent dtype.
@@ -65,6 +66,11 @@ common_train_args=(
   --device "$DEVICE"
   "${amp_args[@]}"
 )
+if [[ "$GRAPH_DETACH_CONTEXT" == "1" ]]; then
+  common_train_args+=(--graph-detach-context)
+else
+  common_train_args+=(--no-graph-detach-context)
+fi
 
 train_binary() {
   echo "stage=neural-binary action=train device=$DEVICE amp=$AMP"
