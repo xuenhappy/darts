@@ -365,6 +365,29 @@ class NeuralReaderTests(unittest.TestCase):
         research_types = {node[2] for node in nodes if node[3:5] == (0, 2)}
         self.assertGreaterEqual(len(research_types), 2)
 
+    def test_graph_reader_batches_by_edge_budget_and_drops_outliers(self):
+        _atom_list, reader_type, _piece_bounds = self._reader_types()
+        reader = object.__new__(reader_type)
+        def sample(edges, nodes=2, wordpieces=2):
+            return ([None] * wordpieces, [None] * nodes, [None] * edges)
+
+        reader._samples = [
+            sample(2), sample(4), sample(6), sample(7), sample(11),
+            sample(5, nodes=11), sample(5, wordpieces=11),
+        ]
+        reader.shuffle = False
+        reader.batch_size = 4
+        reader.target_batch_edges = 10
+        reader.min_graph_edges = 3
+        reader.max_graph_edges = 10
+        reader.max_graph_nodes = 10
+        reader.max_graph_wordpieces = 10
+        reader._batch = lambda samples: [len(sample[2]) for sample in samples]
+
+        self.assertEqual(list(reader), [[4, 6], [7]])
+        self.assertEqual(reader.batch_edge_counts, [10, 7])
+        self.assertEqual(reader.dropped_graphs, 4)
+
     def test_binary_graph_uses_runtime_candidate_types_without_unknown_duplicates(self):
         _atom_list, reader_type, _piece_bounds = self._reader_types()
         reader = reader_type(

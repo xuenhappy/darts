@@ -414,19 +414,28 @@ class GraphQuantizerTrainer(nn.Module):
 
     def forward(self, batch_input_idx, batch_lengths, batch_word_info, batch_graph,
                 detach_context=False, auxiliary_weight=0.0,
-                auxiliary_unlabelled_weight=0.05):
+                auxiliary_unlabelled_weight=0.05, auxiliary_max_edges=4096):
         device = next(self.parameters()).device
         batch_input_idx = batch_input_idx.to(device)
         batch_lengths = batch_lengths.to(device)
         batch_word_info = batch_word_info.to(device)
         batch_graph = batch_graph.to(device)
 
-        word_embeds = self.predictor(
-            batch_input_idx, batch_lengths, batch_word_info
-        )
         sources = batch_graph[:, 1]
         targets = batch_graph[:, 2]
-        path_embeds = word_embeds.detach() if detach_context else word_embeds
+        if detach_context:
+            # The exact path objective needs every candidate, but it does not
+            # need an autograd graph for the contextual encoder. Build those
+            # embeddings without gradients; a bounded node subset below forms
+            # the only Transformer bridge.
+            with torch.no_grad():
+                path_embeds = self.predictor(
+                    batch_input_idx, batch_lengths, batch_word_info,
+                )
+        else:
+            path_embeds = self.predictor(
+                batch_input_idx, batch_lengths, batch_word_info,
+            )
         association_nll = self.quantizer(path_embeds[sources], path_embeds[targets])
         path_loss = self.lossfunc(batch_word_info, batch_graph, association_nll)
         if not detach_context or auxiliary_weight <= 0.0:
@@ -436,8 +445,41 @@ class GraphQuantizerTrainer(nn.Module):
         # graph probabilities, but its long gradient does not enter the
         # Transformer. A local edge objective supplies a short, stable gradient
         # bridge so contextual embeddings still learn association features.
-        edge_logits = self.quantizer.logits(word_embeds[sources], word_embeds[targets])
-        edge_targets = batch_graph[:, 3].to(edge_logits.dtype)
+        # Keep every gold transition and deterministically subsample negatives.
+        # This truncated edge bridge sends local association information to the
+        # Transformer without backpropagating an unbounded candidate DAG.
+        gold_indexes = torch.nonzero(batch_graph[:, 3].bool(), as_tuple=False).flatten()
+        negative_indexes = torch.nonzero(~batch_graph[:, 3].bool(), as_tuple=False).flatten()
+        negative_budget = max(0, int(auxiliary_max_edges) - int(gold_indexes.numel()))
+        if negative_budget == 0:
+            negative_indexes = negative_indexes[:0]
+        elif negative_indexes.numel() > negative_budget:
+            positions = torch.linspace(
+                0, negative_indexes.numel() - 1, negative_budget,
+                device=negative_indexes.device,
+            ).long()
+            negative_indexes = negative_indexes[positions]
+        auxiliary_indexes = torch.cat((gold_indexes, negative_indexes))
+        auxiliary_sources = sources[auxiliary_indexes]
+        auxiliary_targets = targets[auxiliary_indexes]
+        auxiliary_nodes = torch.unique(
+            torch.cat((auxiliary_sources, auxiliary_targets)), sorted=True
+        )
+        node_lookup = torch.full(
+            (batch_word_info.shape[0],), -1, dtype=torch.long,
+            device=batch_word_info.device,
+        )
+        node_lookup[auxiliary_nodes] = torch.arange(
+            auxiliary_nodes.numel(), device=batch_word_info.device
+        )
+        auxiliary_embeds = self.predictor(
+            batch_input_idx, batch_lengths, batch_word_info[auxiliary_nodes],
+        )
+        edge_logits = self.quantizer.logits(
+            auxiliary_embeds[node_lookup[auxiliary_sources]],
+            auxiliary_embeds[node_lookup[auxiliary_targets]],
+        )
+        edge_targets = batch_graph[auxiliary_indexes, 3].to(edge_logits.dtype)
         edge_losses = F.binary_cross_entropy_with_logits(
             edge_logits, edge_targets, reduction="none"
         )

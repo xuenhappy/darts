@@ -799,6 +799,31 @@ Transformer 的原型 nested-tensor 快路径，继续使用标准稠密 padding
 量化器余弦归一化使用显式的有限范数下限，防止接近零的 key/query 投影在反向传播中
 产生极大梯度。
 
+`GraphSampleReader` 不再按固定图数量组成量化器 batch，而是按候选边总数动态装箱。
+单图先通过 `min_graph_edges` 和 `max_graph_edges` 过滤；加入下一图会超过
+`target_batch_edges` 时提交当前 batch，`quantizer_batch_size` 仅作为最大图数量硬上限。
+训练日志记录每轮 batch 边数的最小值、平均值、最大值和被丢弃图数。
+
+默认阈值来自当前正式语料统计：binary 图的 P99.5 为 2510 边，LAC 图的 P99.5 为
+2790 边；两类语料的 WordPiece P99.5 为 107，节点数 P99.5 最大为 544。因此使用
+单图 `3..2800` 边、最多 `108` WordPiece、最多 `550` 节点、batch 目标 `3000` 边和
+最多 `4` 图。可按新语料分布覆盖：
+
+```bash
+TARGET_BATCH_EDGES=3000 \
+MIN_GRAPH_EDGES=3 \
+MAX_GRAPH_EDGES=2800 \
+MAX_GRAPH_NODES=550 \
+MAX_GRAPH_WORDPIECES=108 \
+QUANTIZER_BATCH_SIZE=4 \
+bash scripts/train_production_neural.sh
+```
+
+`GraphLossSparse` 的候选 DAG 配分在 CPU 上执行，因为其拓扑循环使用解析 backward，
+无需在 GPU 上发射大量标量 kernel；Quantizer、Transformer 和有界采样边辅助桥仍在
+GPU 上训练。辅助桥保留所有 gold 边并采样负边，把词关联信息反馈给共享
+Transformer，同时限制反向图规模。
+
 ### `modes`
 
 模式把一个 Decider 和一组 Recognizer 组合为可加载流水线：

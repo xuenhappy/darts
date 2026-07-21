@@ -48,16 +48,25 @@ class _GraphPathNll(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, word_info, graph, association_nll, edge_chunk_size, strict_path):
-        dtype = association_nll.dtype
-        batch_ids = word_info[:, 0].long()
+        output_device = association_nll.device
+        # The DP is a Python topological loop and its backward is analytic.
+        # Running thousands of scalar logsumexp/exp kernels on CUDA is slower,
+        # retains allocator workspaces, and has destabilized consumer drivers.
+        # Compute detached path posteriors on CPU and return only the bounded
+        # edge gradient to the accelerator.
+        work_nll = association_nll.detach().cpu() if association_nll.is_cuda else association_nll
+        work_info = word_info.detach().cpu() if word_info.is_cuda else word_info
+        work_graph = graph.detach().cpu() if graph.is_cuda else graph
+        dtype = work_nll.dtype
+        batch_ids = work_info[:, 0].long()
         batch_num = int(batch_ids.max().item()) + 1
         counts = torch.bincount(batch_ids, minlength=batch_num)
         offsets = torch.zeros_like(counts)
         if counts.numel() > 1:
             offsets[1:] = torch.cumsum(counts[:-1], 0)
 
-        total_loss = association_nll.new_zeros(())
-        edge_gradient = torch.zeros_like(association_nll)
+        total_loss = work_nll.new_zeros(())
+        edge_gradient = torch.zeros_like(work_nll)
         valid_graphs = 0
         for batch_id in range(batch_num):
             node_num = int(counts[batch_id].item())
@@ -65,15 +74,15 @@ class _GraphPathNll(torch.autograd.Function):
                 continue
             node_offset = int(offsets[batch_id].item())
             edge_indexes = torch.nonzero(
-                graph[:, 0].long() == batch_id, as_tuple=False
+                work_graph[:, 0].long() == batch_id, as_tuple=False
             ).flatten()
             if edge_indexes.numel() == 0:
                 if strict_path and node_num > 1:
                     raise RuntimeError(f"graph {batch_id} has nodes but no edges")
                 continue
 
-            edges = graph[edge_indexes]
-            edge_nll = association_nll[edge_indexes]
+            edges = work_graph[edge_indexes]
+            edge_nll = work_nll[edge_indexes]
             sources = (edges[:, 1].long() - node_offset).tolist()
             destinations = (edges[:, 2].long() - node_offset).tolist()
             incoming = [[] for _ in range(node_num)]
@@ -83,9 +92,9 @@ class _GraphPathNll(torch.autograd.Function):
                     incoming[destination].append(edge_id)
                     outgoing[source].append(edge_id)
 
-            neg_inf = association_nll.new_tensor(float("-inf"))
+            neg_inf = work_nll.new_tensor(float("-inf"))
             alpha = [neg_inf for _ in range(node_num)]
-            alpha[0] = association_nll.new_zeros(())
+            alpha[0] = work_nll.new_zeros(())
             forward_reachable = [False for _ in range(node_num)]
             forward_reachable[0] = True
             for destination in range(1, node_num):
@@ -113,7 +122,7 @@ class _GraphPathNll(torch.autograd.Function):
                 raise RuntimeError(f"non-finite path cost found for graph {batch_id}")
 
             beta = [neg_inf for _ in range(node_num)]
-            beta[-1] = association_nll.new_zeros(())
+            beta[-1] = work_nll.new_zeros(())
             backward_reachable = [False for _ in range(node_num)]
             backward_reachable[-1] = True
             for source in range(node_num - 2, -1, -1):
@@ -151,8 +160,9 @@ class _GraphPathNll(torch.autograd.Function):
         if valid_graphs:
             total_loss /= valid_graphs
             edge_gradient /= valid_graphs
+        edge_gradient = edge_gradient.to(output_device)
         ctx.save_for_backward(edge_gradient)
-        return total_loss
+        return total_loss.to(output_device)
 
     @staticmethod
     def backward(ctx, grad_output):

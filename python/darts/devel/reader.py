@@ -55,12 +55,21 @@ class GraphSampleReader(IterableDataset):
     """
 
     def __init__(self, sample, config="data/conf.json", mode="hybrid", batch_size=16,
-                 max_span=5, shuffle=False, type_map=None):
+                 max_span=5, shuffle=False, type_map=None, target_batch_edges=0,
+                 min_graph_edges=0, max_graph_edges=0, max_graph_nodes=0,
+                 max_graph_wordpieces=0):
         super().__init__()
         self.sample = sample
         self.batch_size = batch_size
         self.max_span = max_span
         self.shuffle = shuffle
+        self.target_batch_edges = max(0, int(target_batch_edges))
+        self.min_graph_edges = max(0, int(min_graph_edges))
+        self.max_graph_edges = max(0, int(max_graph_edges))
+        self.max_graph_nodes = max(0, int(max_graph_nodes))
+        self.max_graph_wordpieces = max(0, int(max_graph_wordpieces))
+        self.batch_edge_counts = []
+        self.dropped_graphs = 0
         self._samples = None
         self.segment = DSegment(config, mode, isdev=True)
         self.atom_codec = AtomCodec({"base.dir": "data/models/codex"})
@@ -220,8 +229,35 @@ class GraphSampleReader(IterableDataset):
         ordered = list(self._samples)
         if self.shuffle:
             random.shuffle(ordered)
-        for start in range(0, len(ordered), self.batch_size):
-            yield self._batch(ordered[start:start + self.batch_size])
+        self.batch_edge_counts = []
+        self.dropped_graphs = 0
+        batch = []
+        edge_count = 0
+        for sample in ordered:
+            sample_edges = len(sample[2])
+            sample_nodes = len(sample[1])
+            sample_wordpieces = len(sample[0])
+            if sample_edges < self.min_graph_edges or (
+                    self.max_graph_edges and sample_edges > self.max_graph_edges) or (
+                    self.max_graph_nodes and sample_nodes > self.max_graph_nodes) or (
+                    self.max_graph_wordpieces and
+                    sample_wordpieces > self.max_graph_wordpieces):
+                self.dropped_graphs += 1
+                continue
+            exceeds_edges = (
+                self.target_batch_edges and batch and
+                edge_count + sample_edges > self.target_batch_edges
+            )
+            if exceeds_edges or len(batch) >= self.batch_size:
+                self.batch_edge_counts.append(edge_count)
+                yield self._batch(batch)
+                batch = []
+                edge_count = 0
+            batch.append(sample)
+            edge_count += sample_edges
+        if batch:
+            self.batch_edge_counts.append(edge_count)
+            yield self._batch(batch)
 
 
 class SpanSampleReader(IterableDataset):

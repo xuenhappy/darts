@@ -18,9 +18,13 @@ from train_recognizer import evaluate as evaluate_recognizer, select_device
 from train_syntax_recognizer import evaluate as evaluate_syntax_recognizer
 
 
-def save(model, metadata, path):
+def save(model, metadata, path, **training_state):
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"state_dict": model.state_dict(), "metadata": metadata}, path)
+    torch.save({
+        "state_dict": model.state_dict(),
+        "metadata": metadata,
+        **training_state,
+    }, path)
 
 
 def build_model(metadata):
@@ -41,6 +45,12 @@ def train(args):
         args.graph_max_span = args.max_span
     if args.graph_max_span < 1 or args.graph_max_span > args.max_span:
         raise ValueError("--graph-max-span must be between 1 and --max-span")
+    if args.target_batch_edges < 0 or args.min_graph_edges < 0 or args.max_graph_edges < 0:
+        raise ValueError("graph edge budgets must be non-negative")
+    if args.max_graph_edges and args.min_graph_edges > args.max_graph_edges:
+        raise ValueError("--min-graph-edges cannot exceed --max-graph-edges")
+    if args.max_graph_nodes < 0 or args.max_graph_wordpieces < 0:
+        raise ValueError("graph node and WordPiece limits must be non-negative")
     if not 0.0 <= args.pu_target <= 1.0:
         raise ValueError("--pu-target must be between 0 and 1")
     if args.pu_weight < 0.0:
@@ -49,6 +59,8 @@ def train(args):
         raise ValueError("--graph-auxiliary-weight must be non-negative")
     if not 0.0 <= args.graph_auxiliary_unlabelled_weight <= 1.0:
         raise ValueError("--graph-auxiliary-unlabelled-weight must be between 0 and 1")
+    if args.graph_auxiliary_max_edges < 1:
+        raise ValueError("--graph-auxiliary-max-edges must be positive")
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -106,11 +118,21 @@ def train(args):
         )
     graph_train = GraphSampleReader(
         train_path, args.config, mode, args.quantizer_batch_size,
-        args.graph_max_span, shuffle=True, type_map=type_map
+        args.graph_max_span, shuffle=True, type_map=type_map,
+        target_batch_edges=args.target_batch_edges,
+        min_graph_edges=args.min_graph_edges,
+        max_graph_edges=args.max_graph_edges,
+        max_graph_nodes=args.max_graph_nodes,
+        max_graph_wordpieces=args.max_graph_wordpieces,
     )
     graph_dev = GraphSampleReader(
         dev_path, args.config, mode, args.quantizer_batch_size,
-        args.graph_max_span, type_map=type_map
+        args.graph_max_span, type_map=type_map,
+        target_batch_edges=args.target_batch_edges,
+        min_graph_edges=args.min_graph_edges,
+        max_graph_edges=args.max_graph_edges,
+        max_graph_nodes=args.max_graph_nodes,
+        max_graph_wordpieces=args.max_graph_wordpieces,
     )
     if span_train.wordsize() != graph_train.wordsize():
         raise RuntimeError("recognizer and quantizer must use the same WordPiece vocabulary")
@@ -122,6 +144,11 @@ def train(args):
         "wtype_num": graph_train.typesize(),
         "max_span": args.max_span,
         "graph_max_span": args.graph_max_span,
+        "target_batch_edges": args.target_batch_edges,
+        "min_graph_edges": args.min_graph_edges,
+        "max_graph_edges": args.max_graph_edges,
+        "max_graph_nodes": args.max_graph_nodes,
+        "max_graph_wordpieces": args.max_graph_wordpieces,
         "recognizer_kind": args.recognizer_kind,
         "class_num": span_train.classsize() if args.recognizer_kind == "syntax" else None,
         "positive_weight": positive_weight if args.recognizer_kind == "binary" else None,
@@ -141,6 +168,7 @@ def train(args):
         "seed": args.seed,
     }
     model = build_model(metadata).to(device)
+    resumed = None
     if args.resume:
         resumed = torch.load(args.resume, map_location="cpu", weights_only=True)
         resumed_metadata = resumed["metadata"]
@@ -163,14 +191,33 @@ def train(args):
     amp_enabled = args.amp and device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
     output = Path(args.output_dir)
-    best_objective = float("inf")
-    stale = 0
+    resumed_dev = resumed.get("metadata", {}).get("dev", {}) if resumed else {}
+    if args.recognizer_kind == "syntax":
+        resumed_recognizer_error = (
+            1.0 - resumed_dev.get("word_f1", 0.0) +
+            0.25 * (1.0 - resumed_dev.get("word_type_accuracy", 0.0))
+        )
+    else:
+        resumed_recognizer_error = 1.0 - resumed_dev.get("f1", 0.0)
+    resumed_objective = (
+        resumed_recognizer_error +
+        args.quantizer_weight * resumed_dev.get("quantizer_dev_loss", 0.0)
+    )
+    best_objective = (resumed.get("best_objective", resumed_objective)
+                      if resumed else float("inf"))
+    stale = resumed.get("stale", 0) if resumed else 0
+    start_epoch = (resumed.get("epoch", resumed_dev.get("epoch", 0)) + 1
+                   if resumed else 1)
+    if resumed and "optimizer_state_dict" in resumed:
+        optimizer.load_state_dict(resumed["optimizer_state_dict"])
+        scheduler.load_state_dict(resumed["scheduler_state_dict"])
+        scaler.load_state_dict(resumed.get("scaler_state_dict", {}))
     if not any(True for _ in span_train):
         raise RuntimeError(f"no recognizer samples were generated from {train_path}")
     if not any(True for _ in graph_train):
         raise RuntimeError(f"no quantizer samples were generated from {train_path}")
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         started = time.perf_counter()
         if device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(device)
@@ -230,6 +277,7 @@ def train(args):
                         ),
                         auxiliary_weight=args.graph_auxiliary_weight,
                         auxiliary_unlabelled_weight=args.graph_auxiliary_unlabelled_weight,
+                        auxiliary_max_edges=args.graph_auxiliary_max_edges,
                     )
             if recognizer_loss is None:
                 loss = (
@@ -303,15 +351,29 @@ def train(args):
             "peak_gpu_mb": (torch.cuda.max_memory_allocated(device) / 1024**2
                             if device.type == "cuda" else 0.0),
             "skipped_nonfinite_batches": skipped_nonfinite,
+            "graph_batches": len(graph_train.batch_edge_counts),
+            "graph_edges_min": min(graph_train.batch_edge_counts, default=0),
+            "graph_edges_mean": (sum(graph_train.batch_edge_counts) /
+                                 max(1, len(graph_train.batch_edge_counts))),
+            "graph_edges_max": max(graph_train.batch_edge_counts, default=0),
+            "dropped_graphs": graph_train.dropped_graphs,
             **recognizer_metrics,
         }
         print(json.dumps(metrics))
         epoch_metadata = {**metadata, "dev": metrics}
-        save(model, epoch_metadata, output / "last.pt")
+        state = {
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "scaler_state_dict": scaler.state_dict(),
+            "epoch": epoch,
+            "best_objective": min(best_objective, objective),
+            "stale": 0 if objective < best_objective else stale + 1,
+        }
+        save(model, epoch_metadata, output / "last.pt", **state)
         if objective < best_objective:
             best_objective = objective
             stale = 0
-            save(model, epoch_metadata, output / "best.pt")
+            save(model, epoch_metadata, output / "best.pt", **state)
         else:
             stale += 1
             if stale >= args.patience:
@@ -392,7 +454,12 @@ def evaluate(args):
         )
     graphs = GraphSampleReader(
         args.data, args.config, mode, args.quantizer_batch_size,
-        metadata["max_span"], type_map=type_map
+        metadata.get("graph_max_span", metadata["max_span"]), type_map=type_map,
+        target_batch_edges=metadata.get("target_batch_edges", 0),
+        min_graph_edges=metadata.get("min_graph_edges", 0),
+        max_graph_edges=metadata.get("max_graph_edges", 0),
+        max_graph_nodes=metadata.get("max_graph_nodes", 0),
+        max_graph_wordpieces=metadata.get("max_graph_wordpieces", 0),
     )
     quantizer_loss = evaluate_quantizer(model.graph_quantizer, graphs)
     print(json.dumps({"data": args.data, "quantizer_loss": quantizer_loss,
@@ -419,6 +486,11 @@ def main():
         "--graph-max-span", type=int,
         help="negative candidate envelope for GraphLoss; defaults to --max-span",
     )
+    command.add_argument("--target-batch-edges", type=int, default=3000)
+    command.add_argument("--min-graph-edges", type=int, default=3)
+    command.add_argument("--max-graph-edges", type=int, default=2800)
+    command.add_argument("--max-graph-nodes", type=int, default=550)
+    command.add_argument("--max-graph-wordpieces", type=int, default=108)
     command.add_argument("--hidden-size", type=int, default=128)
     command.add_argument("--learning-rate", type=float, default=3e-4)
     command.add_argument("--weight-decay", type=float, default=1e-2)
@@ -442,6 +514,10 @@ def main():
     command.add_argument(
         "--graph-auxiliary-unlabelled-weight", type=float, default=0.05,
         help="PU weight for non-gold edges in the local encoder auxiliary loss",
+    )
+    command.add_argument(
+        "--graph-auxiliary-max-edges", type=int, default=256,
+        help="maximum gold plus sampled negative edges backpropagated to the encoder",
     )
     command.add_argument(
         "--graph-detach-context", action=argparse.BooleanOptionalAction, default=False,
