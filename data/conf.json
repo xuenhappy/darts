@@ -58,7 +58,7 @@
             "model.path": "data/models/neural/syntax.onnx",
             "label.path": "data/models/neural/syntax.labels.txt",
             "max.span": "5",
-            "threshold": "0.7",
+            "threshold": "0.9",
             "deps": {
                 "wordpiece.name": "wordpiece.dict"
             }
