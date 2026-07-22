@@ -1,0 +1,8 @@
+# CPU corpus extraction environment.
+mwparserfromhell==0.7.2
+opencc-python-reimplemented==0.1.7
+zstandard==0.25.0
+
+# External teachers and Qwen AWQ are intentionally installed in separate
+# environments because Paddle 2.6, current LTP and AutoAWQ pin incompatible
+# framework versions. See README.md for the reproducible commands.

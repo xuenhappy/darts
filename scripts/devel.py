@@ -213,6 +213,36 @@ def location_poi_extract(args):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def corpus_extract(args):
+    command = [args.python, "scripts/extract_wikimedia.py", args.input,
+               "--output", args.output, "--manifest", args.manifest,
+               "--opencc", args.opencc, "--min-chars", str(args.min_chars)]
+    if args.max_pages:
+        command.extend(["--max-pages", str(args.max_pages)])
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def corpus_build(args):
+    command = [args.python, "scripts/pseudo_corpus.py", *args.input,
+               "--output-root", args.output_root, "--teacher", args.teacher,
+               "--model", args.model, "--device-id", str(args.device_id),
+               "--min-atoms", str(args.min_atoms), "--max-atoms", str(args.max_atoms),
+               "--batch-size", str(args.batch_size)]
+    for path in args.exclude_corpus:
+        command.extend(["--exclude-corpus", path])
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def teacher_benchmark(args):
+    command = [args.python, "scripts/benchmark_lac_teacher.py",
+               "--teacher", args.teacher, "--gold", args.gold,
+               "--batch-size", str(args.batch_size), "--model", args.model,
+               "--device-id", str(args.device_id)]
+    if args.output:
+        command.extend(["--output", args.output])
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -363,6 +393,39 @@ def main():
     command.add_argument("input")
     command.add_argument("--output", default="data/external/location/poi.txt")
     command.set_defaults(func=location_poi_extract)
+
+    command = commands.add_parser("corpus-extract", help="extract clean JSONL.zst from Wikimedia XML")
+    command.add_argument("input")
+    command.add_argument("--output", default="/data/darts-corpus/raw/zhwiki.jsonl.zst")
+    command.add_argument("--manifest", default="/data/darts-corpus/manifests/zhwiki-extract.json")
+    command.add_argument("--python", default="/data/darts-corpus/cache/corpus-venv/bin/python")
+    command.add_argument("--opencc", choices=("none", "t2s", "s2t"), default="t2s")
+    command.add_argument("--min-chars", type=int, default=12)
+    command.add_argument("--max-pages", type=int, default=0)
+    command.set_defaults(func=corpus_extract)
+
+    command = commands.add_parser("corpus-build", help="build sharded binary/LAC pseudo corpora")
+    command.add_argument("input", nargs="+")
+    command.add_argument("--output-root", default="/data/darts-corpus")
+    command.add_argument("--python", required=True, help="Python from the selected external teacher env")
+    command.add_argument("--teacher", choices=("ltp", "paddle"), default="ltp")
+    command.add_argument("--model", default="LTP/small")
+    command.add_argument("--device-id", type=int, default=0)
+    command.add_argument("--min-atoms", type=int, default=3)
+    command.add_argument("--max-atoms", type=int, default=108)
+    command.add_argument("--batch-size", type=int, default=64)
+    command.add_argument("--exclude-corpus", action="append", default=[])
+    command.set_defaults(func=corpus_build)
+
+    command = commands.add_parser("teacher-benchmark", help="benchmark an external LAC teacher")
+    command.add_argument("--python", required=True)
+    command.add_argument("--teacher", choices=("ltp", "paddle"), required=True)
+    command.add_argument("--model", default="LTP/small")
+    command.add_argument("--device-id", type=int, default=0)
+    command.add_argument("--gold", default="data/generated/lac-dev.txt")
+    command.add_argument("--output")
+    command.add_argument("--batch-size", type=int, default=64)
+    command.set_defaults(func=teacher_benchmark)
 
     args = parser.parse_args()
     args.func(args)

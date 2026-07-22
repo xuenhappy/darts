@@ -1,0 +1,6 @@
+# Install the matching PyTorch CUDA wheel from download.pytorch.org first.
+# Keep LLM training isolated from Paddle, LTP and AutoAWQ environments.
+transformers==4.57.1
+accelerate==1.14.0
+peft==0.19.1
+safetensors>=0.6

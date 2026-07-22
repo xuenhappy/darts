@@ -1308,6 +1308,135 @@ python scripts/benchmark_runtime.py --iterations 1000
 
 脚本分别测量原子化及 `faster`、`fast` 两种分词模式，输出总耗时、每次调用耗时和吞吐量。候选词在识别完成后按起点建立索引；分词图使用连续邻接表和 DAG 动态规划；支持批量接口的 ONNX 决策器会一次计算全部候选边，旧版一维 ONNX 模型则自动回退到逐边推理。
 
+## 大规模语料与 LTP LoRA 纠错
+
+大规模伪语料不使用 Darts 自身的 `lac` 或 `lac-nural` 作为教师。当前流水线使用
+LTP 生成初始分词和词性，再由人工 LAC gold 训练的小模型纠正。百度 LAC 仅用于外部
+基准与误差分析，不混入纠错目标。
+
+```mermaid
+flowchart LR
+    WIKI["Wikimedia XML dump"] --> CLEAN["AST 清理 / OpenCC / 段落过滤"]
+    CLEAN --> RAW["JSONL.zst 原文"]
+    RAW --> LTP["外部 LTP CWS + POS"]
+    GOLD["人工 LAC train/dev/test"] --> PAIRS["LTP -> gold 纠错对"]
+    LTP --> PAIRS
+    PAIRS --> LORA["Qwen3-0.6B LoRA"]
+    LTP --> FIX["LoRA 非 JSON 纠错"]
+    LORA --> FIX
+    FIX --> CHECK["无损对齐 / POS 集 / 去重 / 防泄漏"]
+    CHECK --> CWS["binary 分词分片"]
+    CHECK --> LAC["word/POS LAC 分片"]
+```
+
+### 存储布局
+
+默认数据根目录是 `/data/darts-corpus`：
+
+| 目录 | 内容 |
+| --- | --- |
+| `raw/` | 官方原始 dump 和清理后的 `JSONL.zst` |
+| `router/` | 人工 gold、LTP 输出和 LoRA 纠错训练对 |
+| `models/` | 本地 Qwen 基座与 LoRA adapter |
+| `pseudo/binary/` | 空白分隔的分词训练分片 |
+| `pseudo/lac/` | 空白分隔的 `词/POS` 训练分片 |
+| `rejected/` | 无法重建、超长、泄漏或模型输出无效的样本 |
+| `manifests/` | URL、校验值、参数、统计和日志 |
+
+Wikimedia dump 必须先按官方 SHA-1 清单校验。正文提取只读取主命名空间，跳过重定向，
+使用 wiki AST 去除模板和链接标记，并可执行 `t2s` 繁转简：
+
+```bash
+python scripts/devel.py corpus-extract \
+  /data/darts-corpus/raw/zhwiki-latest-pages-articles-multistream.xml.bz2
+```
+
+### 外部教师基准
+
+PaddleNLP 的 `pos_tagging` 与 LTP 依赖冲突，必须使用两个虚拟环境。不要把 Paddle、
+LTP 和 AutoAWQ 安装到同一个环境：
+
+```bash
+python scripts/devel.py teacher-benchmark \
+  --python /data/darts-corpus/cache/teacher-ltp/bin/python \
+  --teacher ltp --gold data/generated/lac-dev.txt \
+  --output /data/darts-corpus/manifests/ltp-dev.json
+```
+
+当前人工开发集结果为：LTP 边界 F1 `80.27%`、对齐词 POS 准确率 `68.86%`；百度
+LAC 边界 F1 `75.02%`、POS 准确率 `71.05%`。这些值不足以把任一教师输出直接视为
+gold，因此生产语料必须经过纠错和严格校验。
+
+同一份 510 句开发集上的官方 HIT-SCIR/LTP CPU 对比（batch 64）如下。`LTP()` 默认
+就是 `LTP/small`，不是另一个独立实现：
+
+| 模型 | 边界 F1 | 共享词 POS 准确率 | CPU 句/秒 |
+| --- | ---: | ---: | ---: |
+| `LTP/legacy` | 68.30% | 64.30% | 19586 |
+| `LTP/tiny` | 79.13% | 67.67% | 703 |
+| `LTP/small` | 80.27% | 68.86% | 216 |
+| `LTP/base` | 80.66% | 69.18% | 29 |
+| `LTP/base1` | 80.77% | 69.11% | 28 |
+| `LTP/base2` | 80.56% | 69.21% | 28 |
+
+GB 级初标默认使用 `LTP/small`：`base1` 只增加约 0.50 个边界 F1 点，但 CPU 吞吐
+下降约 7.7 倍。`base1` 适合小规模质量复核，`tiny` 适合快速预筛；`legacy` 的精度
+不足以作为生产教师。可用 `--model LTP/base1` 显式切换，`--device-id -1` 强制 CPU。
+
+### 非 JSON LoRA 纠错
+
+LoRA 输入包含原文和 LTP 标注，输出直接使用项目训练语料格式，不输出 JSON：
+
+```text
+输入原文：南京市长江大桥今日正式通车
+输入LTP：南京市/POS_ns 长江/POS_ns 大桥/POS_NOUN 今日/POS_t 正式/POS_ADJ 通车/POS_VERB
+目标输出：南京市/POS_ns 长江大桥/POS_nz 今日/POS_t 正式/POS_ADV 通车/POS_VERB
+```
+
+训练数据由人工 `lac-train.txt` 构造，`lac-dev.txt` 和 `lac-test.txt` 不参与训练。
+Qwen3-0.6B 使用 FP32 LoRA，避免 RTX A2000 上长时间 BF16/FP16 GEMM 的非有限梯度；
+LoRA rank 16 只训练注意力投影。输入和输出使用 `n/v/ns/nr` 等短标签，P90 序列长度
+为 381 token；超过 384 token 的样本不截断 gold，而是留给后续长句补训。正式训练示例：
+
+```bash
+CUDA_LAUNCH_BLOCKING=1 HF_HUB_OFFLINE=1 \
+  /data/darts-corpus/cache/qwen-train-venv/bin/python \
+  scripts/train_teacher_router_lora.py \
+  --model /data/darts-corpus/models/Qwen3-0.6B \
+  --train /data/darts-corpus/router/ltp-correction-train.jsonl \
+  --dev /data/darts-corpus/router/ltp-correction-dev.jsonl \
+  --output /data/darts-corpus/models/ltp-corrector \
+  --dtype float32 --max-length 384 --skip-dev
+```
+
+推理输出必须满足三个条件才可进入伪语料：所有字段均为 `词/POS`、拼接后逐字等于
+去空白原文、标签属于项目 POS 集。完整 test 使用以下命令比较纠错模型和原始 LTP：
+
+```bash
+CUDA_LAUNCH_BLOCKING=1 HF_HUB_OFFLINE=1 PYTHONPATH=scripts \
+  /data/darts-corpus/cache/qwen-train-venv/bin/python \
+  scripts/evaluate_ltp_corrector.py \
+  --model /data/darts-corpus/models/Qwen3-0.6B \
+  --adapter /data/darts-corpus/models/ltp-corrector/epoch-1 \
+  --data /data/darts-corpus/router/ltp-correction-test.jsonl \
+  --output /data/darts-corpus/manifests/ltp-corrector-test.jsonl \
+  --metrics-output /data/darts-corpus/manifests/ltp-corrector-test.metrics.json \
+  --dtype float32
+```
+
+训练读取器必须保持 `normal_before=false` 和 `skip_space=true`。标准语料中的空白只
+分隔 gold 词，不属于 AtomList；英文原文中的空白同样由 AtomCodec 跳过，教师输出
+不得把空白附着到词面或标成标点。开发/测试句子的规范化摘要会预载到去重数据库，
+任何匹配句均以 `evaluation_leak` 拒绝。
+
+预计超过三小时的下载、标注和训练统一使用命名 `screen` 会话：
+
+```bash
+screen -ls
+screen -r darts-ltp-lora
+tail -f /data/darts-corpus/manifests/ltp-corrector-train.log
+```
+
 ## 构建验证状态
 
 当前自动化流程已验证以下链路：
