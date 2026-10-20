@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import math
 from pathlib import Path
 import random
 import time
@@ -37,6 +38,7 @@ def build_model(metadata):
         positive_weight=metadata.get("positive_weight"),
         pu_target=metadata.get("pu_target", 0.0),
         pu_weight=metadata.get("pu_weight", 0.0),
+        distance_buckets=metadata.get("distance_buckets", 0),
     )
 
 
@@ -154,6 +156,7 @@ def train(args):
         "positive_weight": positive_weight if args.recognizer_kind == "binary" else None,
         "pu_target": args.pu_target,
         "pu_weight": args.pu_weight,
+        "distance_buckets": args.quantizer_distance_buckets,
         "training_stage": args.training_stage,
         "labels": span_train.labels if args.recognizer_kind == "syntax" else None,
         "type_map": type_map,
@@ -185,9 +188,28 @@ def train(args):
         (parameter for parameter in model.parameters() if parameter.requires_grad),
         lr=args.learning_rate, weight_decay=args.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=max(1, args.epochs), eta_min=1e-6
-    )
+    if args.warmup_epochs > 0:
+        # 线性 warmup + cosine（与 CosineAnnealingLR 同形，eta_min=1e-6）；
+        # LambdaLR 逐 epoch 步进，epoch_index 从 0 计
+        floor_ratio = 1e-6 / max(args.learning_rate, 1e-12)
+        total_epochs = max(1, args.epochs)
+
+        def _warmup_cosine(epoch_index):
+            if epoch_index < args.warmup_epochs:
+                return (epoch_index + 1) / args.warmup_epochs
+            progress = min(
+                1.0,
+                (epoch_index - args.warmup_epochs)
+                / max(1e-9, total_epochs - args.warmup_epochs),
+            )
+            return floor_ratio + (1.0 - floor_ratio) * 0.5 * (
+                1.0 + math.cos(math.pi * progress))
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, _warmup_cosine)
+    else:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max(1, args.epochs), eta_min=1e-6
+        )
     amp_enabled = args.amp and device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
     output = Path(args.output_dir)
@@ -294,6 +316,10 @@ def train(args):
                              if parameter.grad is not None and not torch.isfinite(parameter.grad).all()]
             if bad_gradients:
                 optimizer.zero_grad(set_to_none=True)
+                # 跳过 step 也必须 update()：否则 scaler 停留在已 unscale
+                # 状态，下一批次的 unscale_ 会直接 RuntimeError（非有限
+                # 批次一旦真实出现，训练必然崩溃——伪标注大语料会触发）
+                scaler.update()
                 skipped_nonfinite += 1
                 print(json.dumps({
                     "warning": "skipped_nonfinite_batch",
@@ -524,6 +550,10 @@ def main():
         help="detach GraphLoss from the encoder and use only the local auxiliary bridge",
     )
     command.add_argument("--clip-grad", type=float, default=1.0)
+    command.add_argument("--warmup-epochs", type=float, default=0.0,
+                         help="linear warmup epochs before cosine decay (0=off)")
+    command.add_argument("--quantizer-distance-buckets", type=int, default=0,
+                         help="gap-aware quantizer: relative-distance bucket embeddings (0=off)")
     command.add_argument("--resume", help="initialize model parameters from a compatible checkpoint")
     command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True,
                          help="enable CUDA automatic mixed precision; use --no-amp for older GPUs")

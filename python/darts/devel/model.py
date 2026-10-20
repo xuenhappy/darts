@@ -174,27 +174,38 @@ class WordEncoder(nn.Module):
 class Quantizer(nn.Module):
     """Return the negative log-probability of a word association."""
 
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, distance_buckets=0):
         nn.Module.__init__(self)
         self.input_size = input_size
         self.hidden_size = hidden_size
+        # 可选相对距离感知：相邻候选间隔（跳过的 piece 数）分桶 embedding，
+        # 零初始化 → 初始行为与无距离版本逐字节等价（A/B 公平起点）。
+        self.distance_buckets = int(distance_buckets)
         self.Kmap = nn.Linear(input_size, hidden_size)
         self.Qmap = nn.Linear(input_size, hidden_size)
+        if self.distance_buckets > 0:
+            # 注意维度用 input_size（编码器输出维），不是内部投影 hidden
+            self.distance_embedding = nn.Embedding(self.distance_buckets, input_size)
+            nn.init.zeros_(self.distance_embedding.weight)
         # Cosine similarity is bounded to [-1, 1]. A sqrt(d) initial inverse
         # temperature gives the probability head useful dynamic range early.
         self.logit_scale = nn.Parameter(torch.tensor(np.log(np.sqrt(hidden_size)), dtype=torch.float32))
 
-    def logits(self, x, y):
+    def logits(self, x, y, gaps=None):
         # The default eps=1e-12 makes gradients explode when a projection is
         # close to the zero vector. Such vectors occur naturally early in graph
         # training; a bounded denominator keeps association NLL differentiable.
+        if gaps is not None and self.distance_buckets > 0:
+            distance = self.distance_embedding(gaps)
+            x = x + distance
+            y = y + distance
         keys = F.normalize(self.Kmap(x), dim=-1, eps=1e-4)
         queries = F.normalize(self.Qmap(y), dim=-1, eps=1e-4)
         scale = self.logit_scale.exp().clamp(max=100.0)
         return torch.sum(keys * queries, dim=-1) * scale
 
-    def forward(self, x, y):
-        association_logit = self.logits(x, y)
+    def forward(self, x, y, gaps=None):
+        association_logit = self.logits(x, y, gaps)
         # softplus(-x) is the stable form of -log(sigmoid(x)).
         return F.softplus(-association_logit).view(-1)
 
@@ -406,11 +417,19 @@ class GraphQuantizerTrainer(nn.Module):
     """
 
     def __init__(self, vocab_num, hidden_size, wtype_num, edge_chunk_size=65536,
-                 strict_path=True, encoder=None):
+                 strict_path=True, encoder=None, distance_buckets=0):
         super().__init__()
         self.predictor = encoder or WordEncoder(vocab_num, hidden_size, wtype_num)
-        self.quantizer = Quantizer(hidden_size, 32)
+        self.quantizer = Quantizer(hidden_size, 32,
+                                   distance_buckets=distance_buckets)
         self.lossfunc = GraphLossSparse(edge_chunk_size=edge_chunk_size, strict_path=strict_path)
+
+    def _edge_gaps(self, batch_word_info, sources, targets):
+        """相邻候选间隔（跳过 piece 数）分桶；gap<0 视为 0。"""
+        starts = batch_word_info[:, 1]
+        ends = batch_word_info[:, 2]
+        raw = starts[targets] - ends[sources] - 1
+        return raw.clamp(0, self.quantizer.distance_buckets - 1)
 
     def forward(self, batch_input_idx, batch_lengths, batch_word_info, batch_graph,
                 detach_context=False, auxiliary_weight=0.0,
@@ -423,6 +442,8 @@ class GraphQuantizerTrainer(nn.Module):
 
         sources = batch_graph[:, 1]
         targets = batch_graph[:, 2]
+        gaps = (self._edge_gaps(batch_word_info, sources, targets)
+                if self.quantizer.distance_buckets > 0 else None)
         if detach_context:
             # The exact path objective needs every candidate, but it does not
             # need an autograd graph for the contextual encoder. Build those
@@ -436,7 +457,8 @@ class GraphQuantizerTrainer(nn.Module):
             path_embeds = self.predictor(
                 batch_input_idx, batch_lengths, batch_word_info,
             )
-        association_nll = self.quantizer(path_embeds[sources], path_embeds[targets])
+        association_nll = self.quantizer(path_embeds[sources],
+                                         path_embeds[targets], gaps)
         path_loss = self.lossfunc(batch_word_info, batch_graph, association_nll)
         if not detach_context or auxiliary_weight <= 0.0:
             return path_loss
@@ -478,6 +500,9 @@ class GraphQuantizerTrainer(nn.Module):
         edge_logits = self.quantizer.logits(
             auxiliary_embeds[node_lookup[auxiliary_sources]],
             auxiliary_embeds[node_lookup[auxiliary_targets]],
+            (self._edge_gaps(batch_word_info, auxiliary_sources,
+                             auxiliary_targets)
+             if self.quantizer.distance_buckets > 0 else None),
         )
         edge_targets = batch_graph[auxiliary_indexes, 3].to(edge_logits.dtype)
         edge_losses = F.binary_cross_entropy_with_logits(
@@ -497,7 +522,7 @@ class JointSegmentationTrainer(nn.Module):
 
     def __init__(self, vocab_num, hidden_size, wtype_num,
                  recognizer_kind="binary", class_num=None, positive_weight=None,
-                 pu_target=0.0, pu_weight=0.0):
+                 pu_target=0.0, pu_weight=0.0, distance_buckets=0):
         super().__init__()
         encoder = WordEncoder(vocab_num, hidden_size, wtype_num)
         if recognizer_kind == "binary":
@@ -516,7 +541,8 @@ class JointSegmentationTrainer(nn.Module):
             raise ValueError(f"unsupported recognizer kind: {recognizer_kind}")
         self.recognizer_kind = recognizer_kind
         self.graph_quantizer = GraphQuantizerTrainer(
-            vocab_num, hidden_size, wtype_num, encoder=encoder
+            vocab_num, hidden_size, wtype_num, encoder=encoder,
+            distance_buckets=distance_buckets
         )
 
     @property
