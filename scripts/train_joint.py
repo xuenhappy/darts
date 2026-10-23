@@ -211,7 +211,11 @@ def train(args):
             optimizer, T_max=max(1, args.epochs), eta_min=1e-6
         )
     amp_enabled = args.amp and device.type == "cuda"
-    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+    # bfloat16：动态范围与 fp32 同阶，消除 fp16 溢出型非有限梯度（GB10 原生支持）；
+    # bf16 无需 loss scaling
+    amp_dtype = (torch.bfloat16 if args.amp_dtype == "bfloat16" else torch.float16)
+    scaler = torch.amp.GradScaler(
+        "cuda", enabled=amp_enabled and amp_dtype == torch.float16)
     output = Path(args.output_dir)
     resumed_dev = resumed.get("metadata", {}).get("dev", {}) if resumed else {}
     if args.recognizer_kind == "syntax":
@@ -233,7 +237,9 @@ def train(args):
     if resumed and "optimizer_state_dict" in resumed:
         optimizer.load_state_dict(resumed["optimizer_state_dict"])
         scheduler.load_state_dict(resumed["scheduler_state_dict"])
-        scaler.load_state_dict(resumed.get("scaler_state_dict", {}))
+        saved_scaler = resumed.get("scaler_state_dict", {})
+        if saved_scaler:      # bf16（禁用 scaler）时无状态可载
+            scaler.load_state_dict(saved_scaler)
     if not any(True for _ in span_train):
         raise RuntimeError(f"no recognizer samples were generated from {train_path}")
     if not any(True for _ in graph_train):
@@ -283,7 +289,8 @@ def train(args):
             quantizer_loss = None
             if span_batch is not None:
                 span_batch = tuple(tensor.to(device) for tensor in span_batch)
-                with torch.amp.autocast("cuda", enabled=amp_enabled):
+                with torch.amp.autocast("cuda", enabled=amp_enabled,
+                                        dtype=amp_dtype):
                     recognizer_loss = model.recognizer(*span_batch)
             # GraphLossSparse repeatedly combines path log probabilities. Keep
             # the graph encoder and K/Q projections in FP32; FP16 autocast can
@@ -557,6 +564,9 @@ def main():
     command.add_argument("--resume", help="initialize model parameters from a compatible checkpoint")
     command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True,
                          help="enable CUDA automatic mixed precision; use --no-amp for older GPUs")
+    command.add_argument("--amp-dtype", choices=("float16", "bfloat16"),
+                         default="float16",
+                         help="autocast dtype; bfloat16 removes fp16 overflow-type non-finite batches (no GradScaler)")
     command.add_argument("--detect-anomaly", action="store_true")
     command.add_argument("--max-nonfinite-batches", type=int, default=8)
     command.add_argument("--seed", type=int, default=20260715)

@@ -99,20 +99,25 @@ class WordEncoder(nn.Module):
         token_positions = torch.arange(steps, device=batch_input_idx.device).unsqueeze(0)
         word_mask = (token_positions >= word_starts) & (token_positions <= word_ends)
         relative_positions = (token_positions - word_starts).clamp(0, self.max_word_positions - 1)
-        content_logits = self.word_content_attention(sentence_embedding).squeeze(-1)[word_batches]
+        # 池化注意力全程 FP32：word_content_attention 是 Linear(hidden→1) 对整句
+        # token 求和，AMP fp16 下梯度动态范围不足，是 skipped_nonfinite_batch
+        # 的反复命中点（量产每 epoch 数十次）。该层参数量 hidden×1，FP32 开销
+        # 可忽略；softmax/归约同步 FP32，embedding 结果回原 dtype。
+        pool_context = sentence_embedding.float()
+        content_logits = self.word_content_attention(pool_context).squeeze(-1)[word_batches]
         position_logits = self.word_position_attention(relative_positions).squeeze(-1)
         attention_logits = (content_logits + position_logits).masked_fill(~word_mask, -1e4)
         attention = torch.softmax(attention_logits, dim=1)
         # Elementwise reduction is equivalent to a [1, steps] x
         # [steps, hidden] BMM, but avoids unstable cuBLAS BMM backward kernels
         # observed with variable-length span batches on sm_86 GPUs.
-        word_embedding = (attention.unsqueeze(-1) * sentence_embedding[word_batches]).sum(dim=1)
+        word_embedding = (attention.unsqueeze(-1) * pool_context[word_batches]).sum(dim=1)
         word_lengths = (batch_word_info[:, 2] - batch_word_info[:, 1] + 1).clamp(
             1, self.max_word_positions
         )
         word_embedding = self.word_pool_normal(
             word_embedding + self.word_length_embedding(word_lengths - 1)
-        )
+        ).to(sentence_embedding.dtype)
         if detach_context:
             # Graph path NLL spans many dynamic-programming operations. Let the
             # recognizer train the shared contextual representation and stop
