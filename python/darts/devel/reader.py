@@ -57,12 +57,19 @@ class GraphSampleReader(IterableDataset):
     def __init__(self, sample, config="data/conf.json", mode="hybrid", batch_size=16,
                  max_span=5, shuffle=False, type_map=None, target_batch_edges=0,
                  min_graph_edges=0, max_graph_edges=0, max_graph_nodes=0,
-                 max_graph_wordpieces=0):
+                 max_graph_wordpieces=0, online_graph=False,
+                 distractor_spans=False):
         super().__init__()
         self.sample = sample
         self.batch_size = batch_size
         self.max_span = max_span
         self.shuffle = shuffle
+        # 线上模拟（2026-10-23 定案）：默认构图填满 2..max_span 包络（训练图比
+        # 线上更密）。online_graph=True 时不填包络——节点=词典候选+金标（监督
+        # 路径）+可选随机干扰 span（句级确定性，k=clamp(n/16,2,4)，长 2..max_span
+        # atom），以真实密度训练量化器/DP，干扰 span 代理线上神经提名的假阳性
+        self.online_graph = online_graph
+        self.distractor_spans = distractor_spans
         self.target_batch_edges = max(0, int(target_batch_edges))
         self.min_graph_edges = max(0, int(min_graph_edges))
         self.max_graph_edges = max(0, int(max_graph_edges))
@@ -161,13 +168,32 @@ class GraphSampleReader(IterableDataset):
             types_by_span.setdefault((word.atom_s, word.atom_e), []).append(type_code)
         syntax_mode = any(tag is not None for tag in gold_tags)
         neural_type = 0 if syntax_mode else self.type_codes.get("_NWORD", 0)
-        for start in range(len(atoms)):
-            minimum_end = start + 1 if syntax_mode else start + 2
-            for end in range(minimum_end, min(len(atoms), start + self.max_span) + 1):
-                span = (start, end)
-                if span not in types_by_span:
+        if self.online_graph:
+            # 不填包络；随机干扰 span 代理线上神经提名噪声（句级确定性种子）
+            if self.distractor_spans and len(atoms) >= 4:
+                k = min(4, max(2, len(atoms) // 16))
+                rng = random.Random(hash(text) & 0xFFFFFFFF)
+                added, tries = 0, 0
+                while added < k and tries < k * 10:
+                    tries += 1
+                    start = rng.randrange(len(atoms))
+                    end = start + rng.randint(2, self.max_span)
+                    if end > len(atoms):
+                        continue
+                    span = (start, end)
+                    if span in types_by_span:
+                        continue
                     candidates_by_node[(start, end, neural_type)] = None
                     types_by_span[span] = [neural_type]
+                    added += 1
+        else:
+            for start in range(len(atoms)):
+                minimum_end = start + 1 if syntax_mode else start + 2
+                for end in range(minimum_end, min(len(atoms), start + self.max_span) + 1):
+                    span = (start, end)
+                    if span not in types_by_span:
+                        candidates_by_node[(start, end, neural_type)] = None
+                        types_by_span[span] = [neural_type]
         gold_spans = self._gold_spans(tokens, atoms)
         gold_nodes_by_span = []
         for span, tag in zip(gold_spans, gold_tags):

@@ -177,12 +177,21 @@ class WordEncoder(nn.Module):
 
 
 class Quantizer(nn.Module):
-    """Return the negative log-probability of a word association."""
+    """Return the negative log-probability of a word association.
 
-    def __init__(self, input_size, hidden_size, distance_buckets=0):
+    score="cosine"（默认，历史行为）：cosine × 可学习温度，softplus(-logit)。
+    score="sigmoid-dot"：NLL = max_nll · sigmoid(dot/τ)，关联 logit = −dot/τ
+    （高=关联；DP 与辅助 BCE 桥共用同一 logit 语义）。无除以范数的分母
+    （根治零向量梯度爆炸）、NLL 双侧有界 (0, max_nll)、无梯度死区。
+    """
+
+    def __init__(self, input_size, hidden_size, distance_buckets=0,
+                 score="cosine", max_nll=10.0):
         nn.Module.__init__(self)
         self.input_size = input_size
         self.hidden_size = hidden_size
+        self.score = score
+        self.max_nll = float(max_nll)
         # 可选相对距离感知：相邻候选间隔（跳过的 piece 数）分桶 embedding，
         # 零初始化 → 初始行为与无距离版本逐字节等价（A/B 公平起点）。
         self.distance_buckets = int(distance_buckets)
@@ -192,18 +201,31 @@ class Quantizer(nn.Module):
             # 注意维度用 input_size（编码器输出维），不是内部投影 hidden
             self.distance_embedding = nn.Embedding(self.distance_buckets, input_size)
             nn.init.zeros_(self.distance_embedding.weight)
-        # Cosine similarity is bounded to [-1, 1]. A sqrt(d) initial inverse
-        # temperature gives the probability head useful dynamic range early.
-        self.logit_scale = nn.Parameter(torch.tensor(np.log(np.sqrt(hidden_size)), dtype=torch.float32))
+        if score == "sigmoid-dot":
+            # τ 乘性、初始 1/√d（attention 式 √d 缩放）：raw dot 量级 ~√d，
+            # 乘 1/√d 归一至 O(1)，初始 NLL≈5（中性）；可学习并钳制范围
+            self.temperature = nn.Parameter(
+                torch.tensor(1.0 / np.sqrt(hidden_size), dtype=torch.float32))
+        else:
+            # Cosine similarity is bounded to [-1, 1]. A sqrt(d) initial inverse
+            # temperature gives the probability head useful dynamic range early.
+            self.logit_scale = nn.Parameter(torch.tensor(np.log(np.sqrt(hidden_size)), dtype=torch.float32))
 
     def logits(self, x, y, gaps=None):
-        # The default eps=1e-12 makes gradients explode when a projection is
-        # close to the zero vector. Such vectors occur naturally early in graph
-        # training; a bounded denominator keeps association NLL differentiable.
+        """关联 logit（高=更关联）；两条路径语义一致，供 DP/辅助桥共用。"""
         if gaps is not None and self.distance_buckets > 0:
             distance = self.distance_embedding(gaps)
             x = x + distance
             y = y + distance
+        if self.score == "sigmoid-dot":
+            dot = torch.sum(self.Kmap(x) * self.Qmap(y), dim=-1)
+            # τ ∈ (1e-4, 1.0]：只允许从 1/√d 初始收紧灵敏度，不允许放大——
+            # sigmoid 饱和区 ±5，raw dot 自身可达该量级，放大会推进饱和
+            tau = self.temperature.clamp(1e-4, 1.0)
+            return -dot * tau
+        # The default eps=1e-12 makes gradients explode when a projection is
+        # close to the zero vector. Such vectors occur naturally early in graph
+        # training; a bounded denominator keeps association NLL differentiable.
         keys = F.normalize(self.Kmap(x), dim=-1, eps=1e-4)
         queries = F.normalize(self.Qmap(y), dim=-1, eps=1e-4)
         scale = self.logit_scale.exp().clamp(max=100.0)
@@ -211,6 +233,8 @@ class Quantizer(nn.Module):
 
     def forward(self, x, y, gaps=None):
         association_logit = self.logits(x, y, gaps)
+        if self.score == "sigmoid-dot":
+            return (self.max_nll * torch.sigmoid(-association_logit)).view(-1)
         # softplus(-x) is the stable form of -log(sigmoid(x)).
         return F.softplus(-association_logit).view(-1)
 
@@ -422,11 +446,13 @@ class GraphQuantizerTrainer(nn.Module):
     """
 
     def __init__(self, vocab_num, hidden_size, wtype_num, edge_chunk_size=65536,
-                 strict_path=True, encoder=None, distance_buckets=0):
+                 strict_path=True, encoder=None, distance_buckets=0,
+                 quantizer_score="cosine"):
         super().__init__()
         self.predictor = encoder or WordEncoder(vocab_num, hidden_size, wtype_num)
         self.quantizer = Quantizer(hidden_size, 32,
-                                   distance_buckets=distance_buckets)
+                                   distance_buckets=distance_buckets,
+                                   score=quantizer_score)
         self.lossfunc = GraphLossSparse(edge_chunk_size=edge_chunk_size, strict_path=strict_path)
 
     def _edge_gaps(self, batch_word_info, sources, targets):
@@ -527,7 +553,8 @@ class JointSegmentationTrainer(nn.Module):
 
     def __init__(self, vocab_num, hidden_size, wtype_num,
                  recognizer_kind="binary", class_num=None, positive_weight=None,
-                 pu_target=0.0, pu_weight=0.0, distance_buckets=0):
+                 pu_target=0.0, pu_weight=0.0, distance_buckets=0,
+                 quantizer_score="cosine"):
         super().__init__()
         encoder = WordEncoder(vocab_num, hidden_size, wtype_num)
         if recognizer_kind == "binary":
@@ -547,7 +574,8 @@ class JointSegmentationTrainer(nn.Module):
         self.recognizer_kind = recognizer_kind
         self.graph_quantizer = GraphQuantizerTrainer(
             vocab_num, hidden_size, wtype_num, encoder=encoder,
-            distance_buckets=distance_buckets
+            distance_buckets=distance_buckets,
+            quantizer_score=quantizer_score
         )
 
     @property

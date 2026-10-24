@@ -39,6 +39,7 @@ def build_model(metadata):
         pu_target=metadata.get("pu_target", 0.0),
         pu_weight=metadata.get("pu_weight", 0.0),
         distance_buckets=metadata.get("distance_buckets", 0),
+        quantizer_score=metadata.get("quantizer_score", "cosine"),
     )
 
 
@@ -126,6 +127,8 @@ def train(args):
         max_graph_edges=args.max_graph_edges,
         max_graph_nodes=args.max_graph_nodes,
         max_graph_wordpieces=args.max_graph_wordpieces,
+        online_graph=args.online_graph,
+        distractor_spans=args.distractor_spans,
     )
     graph_dev = GraphSampleReader(
         dev_path, args.config, mode, args.quantizer_batch_size,
@@ -135,6 +138,8 @@ def train(args):
         max_graph_edges=args.max_graph_edges,
         max_graph_nodes=args.max_graph_nodes,
         max_graph_wordpieces=args.max_graph_wordpieces,
+        online_graph=args.online_graph,
+        distractor_spans=args.distractor_spans,
     )
     if span_train.wordsize() != graph_train.wordsize():
         raise RuntimeError("recognizer and quantizer must use the same WordPiece vocabulary")
@@ -157,6 +162,7 @@ def train(args):
         "pu_target": args.pu_target,
         "pu_weight": args.pu_weight,
         "distance_buckets": args.quantizer_distance_buckets,
+        "quantizer_score": args.quantizer_score,
         "training_stage": args.training_stage,
         "labels": span_train.labels if args.recognizer_kind == "syntax" else None,
         "type_map": type_map,
@@ -561,6 +567,15 @@ def main():
                          help="linear warmup epochs before cosine decay (0=off)")
     command.add_argument("--quantizer-distance-buckets", type=int, default=0,
                          help="gap-aware quantizer: relative-distance bucket embeddings (0=off)")
+    command.add_argument("--quantizer-score", choices=("cosine", "sigmoid-dot"),
+                         default="cosine",
+                         help="quantizer head: cosine+softplus (default) or bounded 10*sigmoid(dot*tau)")
+    command.add_argument("--online-graph", action=argparse.BooleanOptionalAction,
+                         default=False,
+                         help="graph reader simulates online candidate density (no envelope fill; dict+gold+distractors)")
+    command.add_argument("--distractor-spans", action=argparse.BooleanOptionalAction,
+                         default=False,
+                         help="with --online-graph: add 2-4 random spans/sentence as neural-proposal noise proxies")
     command.add_argument("--resume", help="initialize model parameters from a compatible checkpoint")
     command.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True,
                          help="enable CUDA automatic mixed precision; use --no-amp for older GPUs")
