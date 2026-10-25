@@ -58,9 +58,9 @@
     "recall_standard": "annotated_span"
   },
   "runtime": {
-    "model.path": "recognizer.onnx",
-    "pmodel.path": "indicator.onnx",
-    "qmodel.path": "quantizer.onnx",
+    "model.path": "recognizer.mnn",
+    "pmodel.path": "indicator.mnn",
+    "qmodel.path": "quantizer.mnn",
     "max.span": "8",
     "thresholds": {
       "2": "0.9",

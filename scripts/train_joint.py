@@ -442,15 +442,33 @@ def export(args):
     model.recognizer.export2onnx(str(output / recognizer_name))
     model.encoder.export2onnx(str(output / indicator_name))
     model.graph_quantizer.quantizer.export2onnx(str(output / quantizer_name))
+    # MNN 部署产物：torch --onnx--> MNNConvert（2026-10-25 运行时迁移 MNN）
+    import subprocess  # noqa: E402
+    import sys  # noqa: E402
+
+    mnn_names = []
+    for onnx_name in (recognizer_name, indicator_name, quantizer_name):
+        mnn_name = onnx_name[:-5] + ".mnn"
+        result = subprocess.run(
+            [sys.executable, "-m", "MNN.tools.mnnconvert",
+             "--framework", "ONNX", "--modelFile", str(output / onnx_name),
+             "--MNNModel", str(output / mnn_name)],
+            capture_output=True, timeout=900)
+        if result.returncode == 0 and (output / mnn_name).exists():
+            mnn_names.append(mnn_name)
+        else:
+            print(f"MNNConvert failed for {onnx_name} (rc={result.returncode}); "
+                  f"onnx artifact kept")
     if syntax:
         (output / "syntax.labels.txt").write_text(
             "\n".join(metadata["labels"]) + "\n", encoding="utf-8"
         )
     thresholds = metadata.get("dev", {}).get("thresholds", {})
+    deployed = set(mnn_names)
     runtime = {
-        "model.path": recognizer_name,
-        "pmodel.path": indicator_name,
-        "qmodel.path": quantizer_name,
+        "model.path": (recognizer_name[:-5] + ".mnn") if recognizer_name[:-5] + ".mnn" in deployed else recognizer_name,
+        "pmodel.path": (indicator_name[:-5] + ".mnn") if indicator_name[:-5] + ".mnn" in deployed else indicator_name,
+        "qmodel.path": (quantizer_name[:-5] + ".mnn") if quantizer_name[:-5] + ".mnn" in deployed else quantizer_name,
         "max.span": str(metadata["max_span"]),
         "thresholds": {str(length): str(value) for length, value in thresholds.items()},
     }

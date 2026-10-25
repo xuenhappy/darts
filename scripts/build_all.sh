@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY_DIR="$ROOT_DIR/python"
 BUILD_DIR="${DARTS_MESON_BUILD_DIR:-$ROOT_DIR/build/meson}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-ONNXRUNTIME_DIR="${DARTS_ONNXRUNTIME_DIR:-}"
+MNN_DIR="${DARTS_MNN_DIR:-}"
 DEPS_DIR="${DARTS_DEPS_DIR:-}"
 
 usage() {
@@ -14,7 +14,7 @@ Usage: scripts/build_all.sh [--clean] [--test]
 
 Environment variables:
   DARTS_MESON_BUILD_DIR   Meson build directory (default: build/meson)
-  DARTS_ONNXRUNTIME_DIR   ONNX Runtime prefix fallback
+  DARTS_MNN_DIR            MNN install prefix (libMNN + headers)
   DARTS_DEBUG_MEMORY      1 to enable dmalloc flags
   PYTHON_BIN              Python interpreter to run packaging commands
 EOF
@@ -52,7 +52,7 @@ export PATH="$DEPS_DIR/sysroot/usr/bin:$PATH"
 export PKG_CONFIG_SYSROOT_DIR="$DEPS_DIR/sysroot"
 pkg_config_dirs="$(find "$DEPS_DIR/sysroot/usr/lib" -type d -name pkgconfig -print | paste -sd: -)"
 export PKG_CONFIG_LIBDIR="${pkg_config_dirs:+$pkg_config_dirs:}$DEPS_DIR/sysroot/usr/share/pkgconfig"
-export DARTS_ONNXRUNTIME_DIR="$ONNXRUNTIME_DIR"
+export DARTS_MNN_DIR="$MNN_DIR"
 export DARTS_DEPS_DIR="$DEPS_DIR"
 
 BUILD_VENV="${DARTS_BUILD_VENV:-$BUILD_DIR/.build-venv}"
@@ -73,7 +73,7 @@ if [[ $run_test -eq 1 ]]; then
   build_tests=true
 fi
 meson setup "$BUILD_DIR" . -Dbuild-python=true -Dbuild-tests="$build_tests" -Dlink-static=true \
-  -Donnxruntime-dir="$ONNXRUNTIME_DIR" -Dpython-include-dir="$PYTHON_INCLUDE_DIR"
+  -Dmnn-dir="$MNN_DIR" -Dpython-include-dir="$PYTHON_INCLUDE_DIR"
 meson compile -C "$BUILD_DIR"
 if [[ $run_test -eq 1 ]]; then
   meson test -C "$BUILD_DIR" --print-errorlogs

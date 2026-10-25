@@ -41,8 +41,8 @@
             }
         },
         "neural.span": {
-            "type": "OnnxRecongnizer",
-            "model.path": "data/models/neural/recognizer.onnx",
+            "type": "MnnRecongnizer",
+            "model.path": "data/models/neural/recognizer.mnn",
             "max.span": "5",
             "threshold": "0.5",
             "threshold.2": "0.96",
@@ -54,8 +54,8 @@
             }
         },
         "neural.syntax": {
-            "type": "OnnxSyntaxRecongnizer",
-            "model.path": "data/models/neural/syntax.onnx",
+            "type": "MnnSyntaxRecongnizer",
+            "model.path": "data/models/neural/syntax.mnn",
             "label.path": "data/models/neural/syntax.labels.txt",
             "max.span": "5",
             "threshold": "0.9",
@@ -94,18 +94,18 @@
             "unknown.penalty": "20.0"
         },
         "neural.decider": {
-            "type": "OnnxDecider",
-            "pmodel.path": "data/models/neural/indicator.onnx",
-            "qmodel.path": "data/models/neural/quantizer.onnx",
+            "type": "MnnDecider",
+            "pmodel.path": "data/models/neural/indicator.mnn",
+            "qmodel.path": "data/models/neural/quantizer.mnn",
             "deps": {
                 "wordpiece.name": "wordpiece.dict",
                 "tencode.name": "wtype.encoder"
             }
         },
         "lac.neural.decider": {
-            "type": "OnnxDecider",
-            "pmodel.path": "data/models/neural/lac-indicator.onnx",
-            "qmodel.path": "data/models/neural/lac-quantizer.onnx",
+            "type": "MnnDecider",
+            "pmodel.path": "data/models/neural/lac-indicator.mnn",
+            "qmodel.path": "data/models/neural/lac-quantizer.mnn",
             "deps": {
                 "wordpiece.name": "wordpiece.dict",
                 "tencode.name": "pos.encoder"

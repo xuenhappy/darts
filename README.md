@@ -115,7 +115,7 @@ WordList 分词结果
 │   ├── darts/               Cython API 与 Python 开发模块
 │   ├── pyproject.toml        PEP 517 隔离构建依赖
 │   └── setup.py             Meson 驱动的 wheel 打包逻辑
-├── scripts/                 依赖引导、ONNX Runtime 下载和一键构建
+├── scripts/                 依赖引导、MNN 下载和一键构建
 ├── requirements/            构建、训练和完整开发环境的 pip 依赖
 ├── test/                    C++ 功能测试
 ├── meson.build              原生构建入口
@@ -134,7 +134,7 @@ WordList 分词结果
 - curl、pkg-config、protoc 和常用编译工具。
 - 可访问 PyPI、Ubuntu/Debian 软件源和 GitHub Release。
 
-自动依赖脚本目前下载 `onnxruntime-linux-x64`，因此 ARM64、macOS 和 Windows 不能直接使用该自动下载流程。其他平台需要自行准备 ONNX Runtime，并通过 `DARTS_ONNXRUNTIME_DIR` 指定安装前缀。
+自动依赖脚本目前下载 `MNN-linux-x64`，因此 ARM64、macOS 和 Windows 不能直接使用该自动下载流程。其他平台需要自行准备 MNN，并通过 `DARTS_ONNXRUNTIME_DIR` 指定安装前缀。
 
 ### 系统安装方式
 
@@ -175,7 +175,7 @@ protoc --version
 - `train.txt`：聚合训练公共依赖并安装 PyTorch。
 - `devel.txt`：完整开发环境，聚合前两项。
 
-推荐使用引导脚本建立共享环境。它会准备 C++ sysroot 和 ONNX Runtime，
+推荐使用引导脚本建立共享环境。它会准备 C++ sysroot 和 MNN，
 安装相同虚拟环境中的 Meson/Cython/训练依赖，并生成统一路径配置
 `build/devel-env.sh`：
 
@@ -192,7 +192,7 @@ fmt、jsoncpp、protobuf 和 zlib。
 source build/devel-env.sh
 meson setup "$DARTS_MESON_BUILD_DIR" . \
   -Dbuild-python=true \
-  -Donnxruntime-dir="$DARTS_ONNXRUNTIME_DIR"
+  -DMNN-dir="$DARTS_ONNXRUNTIME_DIR"
 meson compile -C "$DARTS_MESON_BUILD_DIR"
 ```
 
@@ -210,7 +210,7 @@ PyTorch CUDA wheel 必须先按驱动和 GPU 能力从官方索引安装。引�
 
 这是当前推荐且已经验证的构建方式。脚本会：
 
-1. 下载 ONNX Runtime 1.17.3 到 `build/deps/`。
+1. 下载 MNN 1.17.3 到 `build/deps/`。
 2. 使用 `apt download` 下载 C++ 依赖并展开到用户目录 sysroot，不修改系统软件包。
 3. 创建隔离构建虚拟环境。
 4. 使用 Meson 编译 C++ 静态库和 Cython 扩展。
@@ -254,9 +254,9 @@ python/dist/darts-<version>-<python-tag>-linux_x86_64.whl
 | `PYTHON_BIN` | `python3` | 创建构建和测试虚拟环境的解释器 |
 | `DARTS_MESON_BUILD_DIR` | `build/meson` | Meson 构建目录 |
 | `DARTS_DEPS_DIR` | `build/deps` | 本地依赖、sysroot 和下载缓存目录 |
-| `DARTS_ONNXRUNTIME_DIR` | 自动下载目录 | ONNX Runtime 前缀，必须包含 `include/` 和 `lib/` |
-| `DARTS_ONNXRUNTIME_VERSION` | `1.17.3` | 自动下载的 ONNX Runtime 版本 |
-| `DARTS_ONNXRUNTIME_URL` | GitHub Release URL | 自定义 ONNX Runtime 下载地址或镜像 |
+| `DARTS_ONNXRUNTIME_DIR` | 自动下载目录 | MNN 前缀，必须包含 `include/` 和 `lib/` |
+| `DARTS_ONNXRUNTIME_VERSION` | `1.17.3` | 自动下载的 MNN 版本 |
+| `DARTS_ONNXRUNTIME_URL` | GitHub Release URL | 自定义 MNN 下载地址或镜像 |
 | `DARTS_BUILD_VENV` | `build/meson/.build-venv` | 构建虚拟环境目录 |
 | `DARTS_TEST_VENV` | `build/test-venv` | wheel 验证虚拟环境目录 |
 | `DARTS_DEBUG_MEMORY` | 未启用 | 设为 `1`、`true` 或 `yes` 时启用内存调试参数 |
@@ -266,7 +266,7 @@ python/dist/darts-<version>-<python-tag>-linux_x86_64.whl
 ```bash
 PYTHON_BIN=/usr/bin/python3.12 \
 DARTS_DEPS_DIR="$HOME/.cache/darts/deps" \
-DARTS_ONNXRUNTIME_DIR=/opt/onnxruntime \
+DARTS_ONNXRUNTIME_DIR=/opt/MNN \
 ./scripts/build_all.sh --clean --test
 ```
 
@@ -280,7 +280,7 @@ export https_proxy=http://127.0.0.1:7890
 
 ## 手动构建 wheel
 
-如果依赖已经安装在系统 pkg-config 路径中，并且 ONNX Runtime 已准备好，可以直接使用 PEP 517 构建：
+如果依赖已经安装在系统 pkg-config 路径中，并且 MNN 已准备好，可以直接使用 PEP 517 构建：
 
 ```bash
 cd python
@@ -288,7 +288,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip build
 
-DARTS_ONNXRUNTIME_DIR=/opt/onnxruntime \
+DARTS_ONNXRUNTIME_DIR=/opt/MNN \
 python -m build --wheel
 ```
 
@@ -303,7 +303,7 @@ meson setup build/native . \
   -Dbuild-python=false \
   -Dbuild-tests=false \
   -Dlink-static=true \
-  -Donnxruntime-dir=/opt/onnxruntime
+  -DMNN-dir=/opt/MNN
 
 meson compile -C build/native
 ```
@@ -317,7 +317,7 @@ meson setup build/native . \
   -Dbuild-python=true \
   -Dbuild-tests=false \
   -Dlink-static=true \
-  -Donnxruntime-dir=/opt/onnxruntime \
+  -DMNN-dir=/opt/MNN \
   -Dpython-include-dir="$PYTHON_INCLUDE"
 
 meson compile -C build/native
@@ -332,7 +332,7 @@ Meson 选项：
 | `build-tests` | `false` | 构建 C++ 测试程序 |
 | `link-static` | `true` | 优先静态链接支持该方式的依赖 |
 | `debug-memory` | `false` | 启用 dmalloc 相关调试参数，需要额外安装 dmalloc |
-| `onnxruntime-dir` | 空 | pkg-config 找不到 ONNX Runtime 时使用的前缀 |
+| `MNN-dir` | 空 | pkg-config 找不到 MNN 时使用的前缀 |
 | `python-include-dir` | 空 | 使用依赖 sysroot 时显式指定 Python 头文件目录 |
 
 项目代码和生成的 protobuf 代码会静态合入 Python 扩展。发行版提供的 zlib、jsoncpp 和 protobuf 静态库通常没有启用 PIC，不能直接链接到 `.so`，因此 wheel 流程会动态链接并把对应运行库复制到 `darts/` 包目录。扩展的 RUNPATH 为 `$ORIGIN`，运行时会优先从自身目录加载这些库。
@@ -650,7 +650,7 @@ Decider 分为嵌入和距离两个阶段：
 | `confparser.hpp` | 读取 JSON、解析模式、递归加载插件依赖并缓存实例 |
 | `recognizer.hpp` | 词典和拼音识别器 |
 | `quantizer.hpp` | 最小覆盖与 Bigram 决策器 |
-| `neuroplug.hpp` | ONNX Runtime 会话、序列识别器和神经图决策器 |
+| `neuroplug.hpp` | MNN 会话、序列识别器和神经图决策器 |
 | `encoder.hpp` | WordPiece、标签和拼音编码器 |
 
 ### 工具层 `src/utils`
@@ -789,7 +789,7 @@ build/train-venv/bin/python -c \
 
 识别器与量化器共享 `WordEncoder` 架构。推荐的联合训练让两个损失共同更新同一份 encoder 参数，识别概率头与关联 NLL 头保持独立；独立训练脚本仍用于消融。导出时共享参数分别固化到 `recognizer.onnx` 和 `indicator.onnx`，运行时不要求跨 ONNX 会话共享内存。编码器先生成带句内位置的上下文字表示，再用内容注意力和词内相对位置偏置对 span 内所有 WordPiece 加权组合，不采用简单首尾或平均池化。
 
-识别器输出独立的 `word_probability`，允许同时召回交叠词。量化器输出 `association_nll = -log P(next | previous)`，使用 `GraphLossSparse` 在完整候选 DAG 上优化金标路径条件负对数似然。ONNX 使用 opset 18，并导出为 ONNX Runtime 1.17.3 可加载的 IR 9；项目不提供 CRF/BIO 兼容模型。
+识别器输出独立的 `word_probability`，允许同时召回交叠词。量化器输出 `association_nll = -log P(next | previous)`，使用 `GraphLossSparse` 在完整候选 DAG 上优化金标路径条件负对数似然。ONNX 使用 opset 18，并导出为 MNN 1.17.3 可加载的 IR 9；项目不提供 CRF/BIO 兼容模型。
 
 CUDA 联合训练默认关闭 PyTorch 的 flash/memory-efficient SDPA 反向内核并使用 math
 SDPA。部分 Ampere 显卡在高度填充的变长批次上会由
@@ -1185,7 +1185,7 @@ python scripts/tune_decider.py --fine
 | `neural` | 0.8653 | 0.8950 | 0.8799 | 0.056 |
 | `lac-nural` | 0.8632 | 0.9016 | 0.8819 | 0.060 |
 
-`lac-nural` 在边界对齐词上的 POS 精确率为 0.7811，单进程 ONNX Runtime 测得约
+`lac-nural` 在边界对齐词上的 POS 精确率为 0.7811，单进程 MNN 测得约
 382 句/秒、9576 词/秒。该结果证明当前配置可用于通用中文基线，但训练规模仍小，
 社交文本、医学和专名密集领域应使用对应领域语料重新训练并只在独立 dev 上校准阈值。
 
@@ -1248,12 +1248,12 @@ python scripts/tune_decider.py --fine
 python -m pip install "Cython>=3.0" "meson>=1.3" "ninja>=1.11"
 ```
 
-### 找不到 ONNX Runtime
+### 找不到 MNN
 
 ```bash
-export DARTS_ONNXRUNTIME_DIR=/opt/onnxruntime
-test -f "$DARTS_ONNXRUNTIME_DIR/include/onnxruntime_cxx_api.h"
-ls "$DARTS_ONNXRUNTIME_DIR/lib"/libonnxruntime.so*
+export DARTS_ONNXRUNTIME_DIR=/opt/MNN
+test -f "$DARTS_ONNXRUNTIME_DIR/include/MNN_cxx_api.h"
+ls "$DARTS_ONNXRUNTIME_DIR/lib"/libMNN.so*
 ```
 
 ### `Python.h: No such file or directory`
@@ -1278,7 +1278,7 @@ PY
 ldd /path/to/site-packages/darts/cdarts*.so
 ```
 
-正常情况下 `libonnxruntime`、`libprotobuf`、`libjsoncpp` 和 `libz` 应解析到同一个 `darts/` 包目录。
+正常情况下 `libMNN`、`libprotobuf`、`libjsoncpp` 和 `libz` 应解析到同一个 `darts/` 包目录。
 
 ### 配置或模型找不到
 
@@ -1446,7 +1446,7 @@ tail -f /data/darts-corpus/manifests/ltp-corrector-train.log
 - Meson 1.11。
 - Cython 3.2。
 - CPython 3.14。
-- ONNX Runtime 1.17.3。
+- MNN 1.17.3。
 - 从清理、依赖下载、原生编译到 wheel 生成。
 - 在全新虚拟环境安装 wheel。
 - `import darts`、`PyAtomList` 和 AtomList 基础调用。

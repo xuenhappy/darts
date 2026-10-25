@@ -59,9 +59,9 @@ def _build_options() -> list[str]:
         "-Dbuild-tests=false",
         "-Dlink-static=true",
     ]
-    onnx_dir = os.environ.get("DARTS_ONNXRUNTIME_DIR") or os.environ.get("ONNXRUNTIME_HOME")
-    if onnx_dir:
-        options.append(f"-Donnxruntime-dir={Path(onnx_dir).expanduser().resolve()}")
+    mnn_dir = os.environ.get("DARTS_MNN_DIR") or os.environ.get("DARTS_ONNXRUNTIME_DIR")
+    if mnn_dir:
+        options.append(f"-Dmnn-dir={Path(mnn_dir).expanduser().resolve()}")
     options.append(f"-Dpython-include-dir={sysconfig.get_paths()['include']}")
     if os.environ.get("DARTS_DEBUG_MEMORY") in {"1", "true", "True", "yes"}:
         options.append("-Ddebug-memory=true")
@@ -112,11 +112,11 @@ def copy_runtime_data(dst: Path) -> None:
 
 
 def copy_runtime_libs_if_requested(package_dir: Path) -> None:
-    runtime_dir = _env_path("DARTS_ONNXRUNTIME_DIR") or _env_path("ONNXRUNTIME_HOME")
+    runtime_dir = _env_path("DARTS_MNN_DIR")
     if runtime_dir:
         lib_dir = runtime_dir / "lib"
         if lib_dir.exists():
-            for pattern in ("libonnxruntime*.so*", "libonnxruntime*.dylib", "onnxruntime*.dll"):
+            for pattern in ("libMNN*.so*", "libMNN*.dylib", "libMNN*.dll"):
                 for item in lib_dir.glob(pattern):
                     if item.is_file():
                         shutil.copy2(item, package_dir / item.name)

@@ -83,12 +83,17 @@ class WordEncoder(nn.Module):
         steps = batch_input_idx.shape[1]
         positions = torch.arange(steps, device=batch_input_idx.device).clamp_max(self.max_positions - 1)
         vocab_emb = self.vocab_embedding(batch_input_idx) + self.position_embedding(positions).unsqueeze(0)
-        padding_mask = positions.unsqueeze(0) >= batch_lengths.unsqueeze(1)
-        sentence_embedding = self.transformer(vocab_emb, src_key_padding_mask=padding_mask)
-        # Some fused/nested Transformer kernels leave NaN at fully masked
-        # padding positions. Zero attention does not protect BMM backward from
-        # 0 * NaN, so sanitize padding before any span gather or pooling.
-        sentence_embedding = sentence_embedding.masked_fill(padding_mask.unsqueeze(-1), 0.0)
+        # B=1（线上推理/导出）无 padding：跳过 mask 机器，图里无 masked_fill，
+        # pnnx 可全原生降级到 ncnn；B>1（训练）保持原 mask 语义不变。
+        if batch_input_idx.size(0) == 1 and batch_lengths.size(0) == 1:
+            sentence_embedding = self.transformer(vocab_emb)
+        else:
+            padding_mask = positions.unsqueeze(0) >= batch_lengths.unsqueeze(1)
+            sentence_embedding = self.transformer(vocab_emb, src_key_padding_mask=padding_mask)
+            # Some fused/nested Transformer kernels leave NaN at fully masked
+            # padding positions. Zero attention does not protect BMM backward from
+            # 0 * NaN, so sanitize padding before any span gather or pooling.
+            sentence_embedding = sentence_embedding.masked_fill(padding_mask.unsqueeze(-1), 0.0)
 
         # A candidate is not represented by endpoint averaging.  Each piece in
         # the span receives a content logit and a learned word-relative position
@@ -98,7 +103,6 @@ class WordEncoder(nn.Module):
         word_starts = batch_word_info[:, 1].unsqueeze(1)
         word_ends = batch_word_info[:, 2].unsqueeze(1)
         token_positions = torch.arange(steps, device=batch_input_idx.device).unsqueeze(0)
-        word_mask = (token_positions >= word_starts) & (token_positions <= word_ends)
         relative_positions = (token_positions - word_starts).clamp(0, self.max_word_positions - 1)
         # 池化注意力全程 FP32：word_content_attention 是 Linear(hidden→1) 对整句
         # token 求和，AMP fp16 下梯度动态范围不足，是 skipped_nonfinite_batch
@@ -107,7 +111,13 @@ class WordEncoder(nn.Module):
         pool_context = sentence_embedding.float()
         content_logits = self.word_content_attention(pool_context).squeeze(-1)[word_batches]
         position_logits = self.word_position_attention(relative_positions).squeeze(-1)
-        attention_logits = (content_logits + position_logits).masked_fill(~word_mask, -1e4)
+        # 池化 mask 用纯算术窗函数（relu 差）表达：整数格点上严格 0/1，
+        # 避免 masked_fill/比较算子（pnnx 无法降级到 ncnn 原生层）。
+        tp = token_positions.float()
+        lo = (tp - word_starts.float() + 1.0).clamp(0.0, 1.0)
+        hi = (word_ends.float() - tp + 1.0).clamp(0.0, 1.0)
+        word_gate = lo * hi  # 1 当且仅当 start<=t<=end（整数格点）
+        attention_logits = (content_logits + position_logits) + (word_gate - 1.0) * 1e4
         attention = torch.softmax(attention_logits, dim=1)
         # Elementwise reduction is equivalent to a [1, steps] x
         # [steps, hidden] BMM, but avoids unstable cuBLAS BMM backward kernels

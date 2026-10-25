@@ -79,9 +79,9 @@
     "word_type_standard": "annotated_span"
   },
   "runtime": {
-    "model.path": "syntax.onnx",
-    "pmodel.path": "lac-indicator.onnx",
-    "qmodel.path": "lac-quantizer.onnx",
+    "model.path": "syntax.mnn",
+    "pmodel.path": "lac-indicator.mnn",
+    "qmodel.path": "lac-quantizer.mnn",
     "max.span": "5",
     "thresholds": {},
     "label.path": "syntax.labels.txt",

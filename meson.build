@@ -2,7 +2,7 @@ project('cdarts','c','cpp','cython',default_options: ['cpp_std=c++17'],version:'
 enable_static=get_option('link-static')
 enable_python=get_option('build-python')
 enable_tests=get_option('build-tests')
-onnxruntime_dir=get_option('onnxruntime-dir')
+mnn_dir=get_option('mnn-dir')
 python_include_dir=get_option('python-include-dir')
 # Validate the c++ Standard
 if get_option('cpp_std') != 'c++17'
@@ -40,17 +40,13 @@ else
     )
 endif
 
-onnxrt_dep=dependency('onnxruntime', method: 'pkg-config', version:'>=1.12.1',required:false)
-if not onnxrt_dep.found()
-    if onnxruntime_dir == ''
-        error('onnxruntime dependency not found. Install pkg-config metadata or pass -Donnxruntime-dir=/path/to/onnxruntime')
-    endif
-    onnxrt_dep = declare_dependency(
-        link_args : ['-L' + join_paths(onnxruntime_dir, 'lib'), '-lonnxruntime'],
-        compile_args : ['-I' + join_paths(onnxruntime_dir, 'include')],
-        version:'1.12.1'
-    )
+if mnn_dir == ''
+    error('MNN dependency prefix required. Pass -Dmnn-dir=/path/to/MNN (built from github.com/alibaba/MNN)')
 endif
+mnn_dep = declare_dependency(
+    link_args : ['-L' + join_paths(mnn_dir, 'lib'), '-lMNN'],
+    compile_args : ['-I' + join_paths(mnn_dir, 'include')],
+)
 
 zlib_dep = dependency('zlib', version : '>=1.2.11', required : true,static: false)
 jsoncpp_dep = dependency('jsoncpp', version : '>=1.7.4',required : true,static: false)
@@ -58,7 +54,7 @@ proto_dep = dependency('protobuf', version : '>=3.17.3',
     method: 'pkg-config', required : true,
     static: false,modules: ['protobuf::libprotobuf-lite']
 )
-base_deps=[zlib_dep,jsoncpp_dep,proto_dep,onnxrt_dep,fmt_dep]
+base_deps=[zlib_dep,jsoncpp_dep,proto_dep,mnn_dep,fmt_dep]
 
 message('building proto source.....')
 protoc = find_program('protoc', required : false)
@@ -118,8 +114,8 @@ darts_dict_repack = executable(
 if enable_tests
     message('buiding darts test....')
     test_rpath = ''
-    if onnxruntime_dir != ''
-        test_rpath = join_paths(onnxruntime_dir, 'lib')
+    if mnn_dir != ''
+        test_rpath = join_paths(mnn_dir, 'lib')
     endif
     darts_test_exe = executable('darts_test','test/test_func.cc',
         dependencies:base_deps,include_directories : incdir,
