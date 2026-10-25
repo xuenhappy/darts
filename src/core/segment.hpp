@@ -413,7 +413,9 @@ class Segment {
         if (atomList.size() < 1) {
             return;
         }
-        auto cmap = new SegPath();
+        // P0（2026-10-25）：裸 new 在 embed 抛异常时泄漏整条 Cursor 链——
+        // 改 unique_ptr 保证异常安全
+        std::unique_ptr<SegPath> cmap(new SegPath());
         buildSegPath(atomList, *cmap);
         if (decider == nullptr || maxMode) {
             auto dfunc = [&](Cursor cur) {
@@ -452,7 +454,6 @@ class Segment {
             }
             splitContent(atomList, *cmap, ret, atom_start_pos, temperature_override, report);
         }
-        delete cmap;
     }
 };
 

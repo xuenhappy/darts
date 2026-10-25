@@ -34,12 +34,24 @@
 #include "./encoder.hpp"
 namespace darts {
 
-inline Ort::Session* loadmodel(const char* model_path) {
+inline Ort::Session* loadmodel(const char* model_path, int intra_threads = 2) {
     static Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "darts");
     Ort::SessionOptions session_options;
     session_options.EnableMemPattern();
     session_options.EnableCpuMemArena();
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    // P2（2026-10-25）：小模型（hidden 128）默认按核数开线程是过度并行，
+    // 线程同步开销 > 计算——默认 intra=2/inter=1，可用环境变量覆盖：
+    //   DARTS_ORT_THREADS=0 表示按 ORT 默认（核数）
+    if (const char* env_threads = std::getenv("DARTS_ORT_THREADS")) {
+        const int parsed = std::atoi(env_threads);
+        if (parsed > 0) intra_threads = parsed;
+        else if (parsed == 0) intra_threads = 0;  // ORT 默认
+    }
+    if (intra_threads > 0) {
+        session_options.SetIntraOpNumThreads(intra_threads);
+        session_options.SetInterOpNumThreads(1);
+    }
     try {
         return new Ort::Session(env, model_path, session_options);
     } catch (const Ort::Exception& error) {
