@@ -206,7 +206,6 @@ class Tokenizer:
                             f"\"idx={node['idx']} feat={node['feat']} "
                             f"labels={esc(','.join(node['labels']))}\">"
                             f"{esc(node['text'])}<small>{esc(label_main)}</small>"
-                            f"{'<b class=\"nb\">⚡</b>' if neural else ''}"
                             f"{fx}</span>")
                     parts.append(f"<td>{''.join(chips)}</td>")
                 parts.append("</tr>")
