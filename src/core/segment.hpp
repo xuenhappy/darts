@@ -152,11 +152,13 @@ class SegGraph {
         }
         if (prev.back() == -2) return;
         int pre = prev[prev.size() - 1];
+        bestPaths.emplace_back(-1);  // 头哨兵入路径（报告端点标绿/边配对）
         while (pre > -1) {
             bestPaths.emplace_back(pre);
             pre = prev[pre + 1];
         }
-        std::reverse(bestPaths.begin(), bestPaths.end());
+        bestPaths.emplace_back(static_cast<int>(candidate_count));  // 尾哨兵
+        std::reverse(bestPaths.begin() + 1, bestPaths.end());
     }
 
     /**
@@ -347,9 +349,9 @@ class Segment {
             graph.selectPath(bestPaths);
         }
 
-        // output result
+        // output result（bestPaths 已含头/尾哨兵，仅二分普通候选 idx）
         auto dfunc = [&](Cursor cur) {
-            if (std::binary_search(bestPaths.begin(), bestPaths.end(), cur->idx)) {
+            if (std::binary_search(bestPaths.begin() + 1, bestPaths.end() - 1, cur->idx)) {
                 auto word = cur->val;
                 word->st += atom_start_pos;
                 word->et += atom_start_pos;

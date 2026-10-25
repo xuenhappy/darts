@@ -384,6 +384,11 @@ class TypeEncoder : public SegmentPlugin {
      */
     virtual int encode(const std::shared_ptr<darts::Word> word) const = 0;
 
+    /** 词性域优先编码（见 LabelEncoder 实现）；默认退化为 encode。 */
+    virtual int encodeSyntaxPreferred(const std::shared_ptr<darts::Word> word) const {
+        return encode(word);
+    }
+
     /**
      * explain a type code
      */
@@ -457,6 +462,26 @@ class LabelEncoder : public TypeEncoder {
         auto _it = kind_codes.find(label);
         if (_it == kind_codes.end()) return codemap::unk_code;
         return _it->second.first + codemap::special_code_nums;
+    }
+
+    /**
+     * 神经提名优先编码：词标签含 NEURAL_POS_* 时取之（OnnxSyntax 提名，
+     * 与训练 reader 金标节点 type=金标词性同源同域——量化器对这类
+     * type 给低 NLL）；否则回退 encode()（词典 H 序，与训练 reader 的
+     * 词典副本节点同型）。训练/线上一致性修复 2026-10-25：
+     * 实测词典 type 副本头边 NLL=48 vs 金标 type 0.09。
+     */
+    int encodeSyntaxPreferred(const std::shared_ptr<darts::Word> word) const {
+        const auto& labels = word->getLabels();
+        for (const auto& label : labels) {
+            if (label.compare(0, 7, "NEURAL_") != 0) continue;
+            const std::string pos_label = label.substr(7);
+            auto it = kind_codes.find(pos_label);
+            if (it != kind_codes.end()) {
+                return it->second.first + codemap::special_code_nums;
+            }
+        }
+        return encode(word);
     }
 
     /**

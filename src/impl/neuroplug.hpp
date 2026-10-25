@@ -229,6 +229,12 @@ class OnnxIndicator {
         words_tensor_values[words_tensor_size - 2] = adim - 1;
         words_tensor_values[words_tensor_size - 1] = codemap::cls_code;
         // set common
+        // 2026-10-25 一致性修复：神经提名词（OnnxSyntaxRecongnizer.addWords）
+        // 只带单个 POS_* 标签（ONNX 预测，如 这种→POS_DET）——与训练 reader
+        // 的金标节点 type 同源同域，量化器对这些 type 给低 NLL（实测 0.09）。
+        // 词典词多标签（{POS_DET,POS_r}）经 H 序 encode 得 POS_r=29——训练里
+        // 该 type 的词典副本几乎不在金标路径 → 量化器惩罚（NLL 48）。
+        // 因此：单 POS_* 标签（神经提名）直接用；其余走词典 H 序。
         cmap.iterRow(nullptr, -1, [this, &words_tensor_values, &start_, &ends_, unset](Cursor cur) {
             auto w     = cur->val;
             size_t idx = (cur->idx + 1) * 3;
@@ -239,7 +245,11 @@ class OnnxIndicator {
 
             words_tensor_values[idx]     = start_[w->st];
             words_tensor_values[idx + 1] = ends_[w->et - 1];
-            words_tensor_values[idx + 2] = this->lencoder == nullptr ? codemap::unk_code : this->lencoder->encode(w);
+            // 一致性修复（见上方注释）：神经提名词单 POS_* 标签直接编码；
+            // 词典多标签词回退 H 序（与训练 reader 的词典副本节点同型）
+            words_tensor_values[idx + 2] = this->lencoder == nullptr
+                ? codemap::unk_code
+                : this->lencoder->encodeSyntaxPreferred(w);
         });
         Ort::Value words_input_tensor = Ort::Value::CreateTensor<int64_t>(
             memory_info, words_tensor_values.data(), words_tensor_size, words_dims.data(), words_dims.size());
@@ -937,6 +947,9 @@ class OnnxSyntaxRecongnizer : public CellRecognizer {
                 if (type == 0 || !std::isfinite(row[type]) || row[type] < threshold) continue;
                 auto word = std::make_shared<Word>(atoms, spans[span].first, spans[span].second);
                 word->addLabel(labels[type]);
+                // 神经提名标记：embed 时优先取（与训练 reader 金标节点
+                // type=金标词性同源），词典合并候选不受影响
+                word->addLabel("NEURAL_" + labels[type]);
                 cursor = path.addCell(word, cursor);
             }
         } catch (const std::exception& error) {
