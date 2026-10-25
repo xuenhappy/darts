@@ -460,7 +460,7 @@ class SyntaxSpanRecognizer(nn.Module):
                 lexicon_unlabelled, raw.new_tensor(self.pu_target), word_targets
             )
             word_weights = torch.where(
-                lexicon_unlabelled, logits.new_tensor(self.pu_weight), word_weights
+                lexicon_unlabelled, raw.new_tensor(self.pu_weight), word_weights
             )
         word_losses = F.binary_cross_entropy_with_logits(
             word_logits, word_targets,
