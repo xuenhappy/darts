@@ -66,7 +66,8 @@ td.num, th.num { text-align: right; font-family: ui-monospace, Menlo, monospace;
          font-size: 11px; line-height: 1.25; }
 .wcell small { font-size: 8.5px; font-weight: 500; font-family: ui-monospace, Menlo, monospace; }
 .wcell .fx { font-size: 8px; color: #666; }
-.wcell.neural::before { content: "⚡"; color: var(--accent); font-size: 9px; margin-right: 1px; }
+.wcell.neural::after { content: "⚡"; }
+.wcell.neural.best::after { content: "★⚡"; }
 .wcell.best { border-color: var(--ok); box-shadow: 0 0 0 1.5px #b2f2bb66; }
 .wcell.best::after { content: "★"; color: var(--ok); font-size: 8px; margin-left: 1px; }
 .wcell.best { border-color: var(--ok); box-shadow: 0 0 0 2px #b2f2bb66; }

@@ -396,13 +396,20 @@ class SyntaxSpanRecognizer(nn.Module):
     """Classify every span as NOT_WORD or one mutually exclusive POS type."""
 
     def __init__(self, vocab_num, hidden_size, class_num, encoder=None,
-                 pu_target=0.0, pu_weight=0.0, char_negative_weight=1.0):
+                 pu_target=0.0, pu_weight=0.0, char_negative_weight=1.0,
+                 factorized=False):
         super().__init__()
         if class_num < 2:
             raise ValueError("syntax recognizer requires NOT_WORD and at least one POS class")
         self.class_num = class_num
         self.encoder = encoder or WordEncoder(vocab_num, hidden_size, -1)
         self.classifier = nn.Sequential(nn.Dropout(0.1), nn.Linear(hidden_size, class_num))
+        # 双头因子化（2026-10-25）：classifier 第 0 列 = 成词 logit w，
+        # 1.. 列 = 词上条件标签 logits l。联合 P(NOT_WORD)=σ(−w)、
+        # P(k)=σ(w)·softmax(l)_k；损失 = 联合 CE（与旧 BCE(word)+CE(label)
+        # 数学同构，仅 w 从聚合 logsumexp 改为专责头）。推理契约双输出：
+        # class_probabilities（联合）+ word_probabilities（σ(w)）。
+        self.factorized = bool(factorized)
         self.pu_target = pu_target
         self.pu_weight = pu_weight
         # 单字负样本加权：高频单字在其它语境常为词，先验淹没上下文证据
@@ -410,27 +417,47 @@ class SyntaxSpanRecognizer(nn.Module):
         # 放大损失权重，教识别器用上下文压制句内被合并的单字
         self.char_negative_weight = float(char_negative_weight)
 
-    def logits(self, batch_input_idx, batch_lengths, batch_span_info):
+    def head_logits(self, batch_input_idx, batch_lengths, batch_span_info):
+        """原始头输出：非因子化 = class_num 联合 logits；因子化 = [w | 条件标签 l]。"""
         embeddings = self.encoder(batch_input_idx, batch_lengths, batch_span_info)
         return self.classifier(embeddings)
 
+    def logits(self, batch_input_idx, batch_lengths, batch_span_info):
+        """联合 class_num logits（softmax 即联合标签概率），eval/导出统一口径。"""
+        raw = self.head_logits(batch_input_idx, batch_lengths, batch_span_info)
+        if not self.factorized:
+            return raw
+        w = raw[:, :1]
+        l = raw[:, 1:]
+        # 用 sigmoid/softmax/log 基础算子表达（softplus/logsumexp 组合在
+        # MNN 转换中降级有数值偏差，2026-10-25 实测 joint 差 0.64）
+        word_p = torch.sigmoid(w)
+        not_word = torch.log1p(-word_p)
+        word_part = torch.log(word_p) + torch.log_softmax(l, dim=-1)
+        return torch.cat((not_word, word_part), dim=1)
+
+    def word_logits(self, raw):
+        """成词 logit：因子化 = 专责头；旧头 = 聚合 POS 质量对 NOT_WORD。"""
+        if self.factorized:
+            return raw[:, 0]
+        return torch.logsumexp(raw[:, 1:], dim=-1) - raw[:, 0]
+
     def forward(self, batch_input_idx, batch_lengths, batch_span_info):
-        logits = self.logits(batch_input_idx, batch_lengths, batch_span_info[:, :3])
+        raw = self.head_logits(batch_input_idx, batch_lengths, batch_span_info[:, :3])
         label_column = -2 if batch_span_info.shape[1] > 5 else -1
         labels = batch_span_info[:, label_column]
         is_word = labels != 0
-        # Compare the aggregate POS mass against NOT_WORD. This directly trains
-        # candidate recall/precision without letting sparse POS reweighting
-        # suppress the abundant and important NOT_WORD class.
-        word_logits = torch.logsumexp(logits[:, 1:], dim=-1) - logits[:, 0]
+        # 成词项：因子化头 = 专责 w；旧头 = 聚合 POS 质量对 NOT_WORD。
+        # 两者都直接训练候选 recall/precision，PU/单字负例加权逻辑共用。
+        word_logits = self.word_logits(raw)
         positives = is_word.sum().clamp_min(1)
         negatives = (~is_word).sum().clamp_min(1)
-        word_targets = is_word.to(logits.dtype)
+        word_targets = is_word.to(raw.dtype)
         word_weights = torch.ones_like(word_targets)
         if self.pu_weight > 0 and batch_span_info.shape[1] > 5:
             lexicon_unlabelled = batch_span_info[:, -1].bool() & ~is_word
             word_targets = torch.where(
-                lexicon_unlabelled, logits.new_tensor(self.pu_target), word_targets
+                lexicon_unlabelled, raw.new_tensor(self.pu_target), word_targets
             )
             word_weights = torch.where(
                 lexicon_unlabelled, logits.new_tensor(self.pu_weight), word_weights
@@ -449,9 +476,8 @@ class SyntaxSpanRecognizer(nn.Module):
         word_loss = (word_losses * word_weights).sum() / word_weights.sum().clamp_min(1.0)
         if not is_word.any():
             return word_loss
-        # POS classification is conditioned on known word spans, so it cannot
-        # trade word recall against rare-class weights.
-        pos_loss = F.cross_entropy(logits[is_word, 1:], labels[is_word] - 1)
+        # 标签项：条件 CE（词上）。因子化头即条件分布；旧头用其 1.. 列同构训练。
+        pos_loss = F.cross_entropy(raw[is_word, 1:], labels[is_word] - 1)
         return word_loss + pos_loss
 
     def export2onnx(self, outfile="syntax.recognizer.onnx"):
@@ -469,17 +495,26 @@ class SyntaxSpanRecognizer(nn.Module):
                                         device=span_info.device)
                 batched_spans = torch.cat((batch_ids, span_info), dim=1)
                 logits = self.model.logits(token_ids.unsqueeze(0), lengths, batched_spans)
-                return torch.softmax(logits, dim=-1)
+                probs = torch.softmax(logits, dim=-1)
+                if not self.model.factorized:
+                    return probs
+                raw = self.model.head_logits(token_ids.unsqueeze(0), lengths, batched_spans)
+                return probs, torch.sigmoid(raw[:, 0])
 
         timestep = torch.export.Dim("timestep", min=1)
         spans_count = torch.export.Dim("spans", min=1)
         script = Script(self).eval()
+        outputs = ["class_probabilities"]
+        axes = {"sents": {0: "timestep"}, "spaninfo": {0: "spans"},
+                "class_probabilities": {0: "spans"}}
+        if self.factorized:
+            outputs.append("word_probabilities")
+            axes["word_probabilities"] = {0: "spans"}
         torch.onnx.export(
             script, (sents, spans), outfile, export_params=True, opset_version=18,
             do_constant_folding=True, input_names=["sents", "spaninfo"],
-            output_names=["class_probabilities"],
-            dynamic_axes={"sents": {0: "timestep"}, "spaninfo": {0: "spans"},
-                          "class_probabilities": {0: "spans"}},
+            output_names=outputs,
+            dynamic_axes=axes,
             dynamic_shapes=({0: timestep}, {0: spans_count}),
             external_data=False, dynamo=True,
         )
@@ -659,7 +694,7 @@ class JointSegmentationTrainer(nn.Module):
                  recognizer_kind="binary", class_num=None, positive_weight=None,
                  pu_target=0.0, pu_weight=0.0, distance_buckets=0,
                  quantizer_score="cosine", char_negative_weight=1.0,
-                 type_dropout=0.0):
+                 type_dropout=0.0, syntax_factorized=False):
         super().__init__()
         encoder = WordEncoder(vocab_num, hidden_size, wtype_num, type_dropout=type_dropout)
         if recognizer_kind == "binary":
@@ -674,6 +709,7 @@ class JointSegmentationTrainer(nn.Module):
                 vocab_num, hidden_size, class_num, encoder=encoder,
                 pu_target=pu_target, pu_weight=pu_weight,
                 char_negative_weight=char_negative_weight,
+                factorized=syntax_factorized,
             )
         else:
             raise ValueError(f"unsupported recognizer kind: {recognizer_kind}")

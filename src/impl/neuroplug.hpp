@@ -120,6 +120,22 @@ struct MnnModel {
             throw std::runtime_error("MNN runSession failed");
     }
 
+    bool has_output(const std::string& name) const {
+        return std::find(output_names.begin(), output_names.end(), name) != output_names.end();
+    }
+
+    // 按名取输出（双头模型的多输出契约）
+    std::vector<float> fetch_float_named(const std::string& name,
+                                         std::vector<int>* shape = nullptr) const {
+        MNN::Tensor* device = this->net->getSessionOutput(this->session, name.c_str());
+        if (device == nullptr) throw std::runtime_error("MNN model has no output " + name);
+        MNN::Tensor host(device, MNN::Tensor::CAFFE);
+        if (!device->copyToHostTensor(&host)) throw std::runtime_error("MNN copyToHostTensor failed");
+        if (shape != nullptr) *shape = host.shape();
+        const float* data = host.host<float>();
+        return std::vector<float>(data, data + host.elementSize());
+    }
+
     // 输出拉回 host；shape 随产出回填
     std::vector<float> fetch_float(std::vector<int>* shape = nullptr, size_t index = 0) const {
         MNN::Tensor* device = this->output(index);
@@ -658,12 +674,18 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
    private:
     static const char* MODEL_PATH_KEY;
     static const char* LABEL_PATH_KEY;
+    static const char* LABEL_THRESHOLD_KEY;
     static const char* WORDPIECE_PARAM;
     static const char* MAX_SPAN_KEY;
     static const char* THRESHOLD_KEY;
 
     size_t max_span = 5;
     float threshold = 0.5f;
+    // 双头因子化模型（2026-10-25）：threshold* 门 成词概率 σ(w)；
+    // label.threshold 门 联合标签概率 σ(w)·softmax(l)。旧单输出模型
+    // threshold* 仍门 联合 argmax 概率（行为不变）。
+    bool factorized = false;
+    float label_threshold = 0.0f;
     std::shared_ptr<WordPice> wordpiece;
     std::vector<std::string> labels;
     MnnModel model;
@@ -697,6 +719,14 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
         }
         if (max_span < 1 || max_span > 32 || threshold < 0.0f || threshold > 1.0f)
             return EXIT_FAILURE;
+        auto label_option = params.find(LABEL_THRESHOLD_KEY);
+        try {
+            if (label_option != params.end()) label_threshold = std::stof(label_option->second);
+        } catch (const std::exception& error) {
+            std::cerr << "invalid " << LABEL_THRESHOLD_KEY << ": " << error.what() << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (label_threshold < 0.0f || label_threshold > 1.0f) return EXIT_FAILURE;
 
         auto dependency = plugins.find(WORDPIECE_PARAM);
         if (dependency == plugins.end()) return EXIT_FAILURE;
@@ -708,7 +738,9 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
         if (label_path == params.end() || model_path == params.end() ||
             loadLabels(label_path->second)) return EXIT_FAILURE;
         const std::string resolved = getResource(model_path->second);
-        return model.load(resolved) == EXIT_SUCCESS ? EXIT_SUCCESS : EXIT_FAILURE;
+        if (model.load(resolved) != EXIT_SUCCESS) return EXIT_FAILURE;
+        factorized = model.has_output("word_probabilities");
+        return EXIT_SUCCESS;
     }
 
     void addWords(const AtomList& atoms, SegPath& path) const override {
@@ -748,9 +780,26 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
                 shape[1] != static_cast<int>(labels.size()))
                 throw std::runtime_error("invalid syntax probability tensor");
             const float* probabilities = flat.data();
+            std::vector<float> word_probabilities;
+            if (factorized) word_probabilities = model.fetch_float_named("word_probabilities");
             Cursor cursor = path.Head();
             for (size_t span = 0; span < spans.size(); ++span) {
                 const float* row = probabilities + span * labels.size();
+                if (factorized) {
+                    // 成词门：σ(w)（threshold* / 按长度）；标签=联合 argmax；
+                    // 联合标签门：σ(w)·softmax(l) ≥ label.threshold
+                    const float word_p = word_probabilities[span];
+                    if (!std::isfinite(word_p) || word_p < threshold) continue;
+                    const size_t type =
+                        std::max_element(row + 1, row + labels.size()) - row;
+                    const float joint_p = row[type];
+                    if (!std::isfinite(joint_p) || joint_p < label_threshold) continue;
+                    auto word = std::make_shared<Word>(atoms, spans[span].first, spans[span].second);
+                    word->addLabel(labels[type]);
+                    word->addLabel("NEURAL_" + labels[type]);
+                    cursor = path.addCell(word, cursor);
+                    continue;
+                }
                 const size_t type = std::max_element(row, row + labels.size()) - row;
                 if (type == 0 || !std::isfinite(row[type]) || row[type] < threshold) continue;
                 auto word = std::make_shared<Word>(atoms, spans[span].first, spans[span].second);
@@ -768,6 +817,7 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
     ~MnnSyntaxRecongnizer() {}
 };
 
+const char* MnnSyntaxRecongnizer::LABEL_THRESHOLD_KEY = "label.threshold";
 const char* MnnSyntaxRecongnizer::MODEL_PATH_KEY = "model.path";
 const char* MnnSyntaxRecongnizer::LABEL_PATH_KEY = "label.path";
 const char* MnnSyntaxRecongnizer::WORDPIECE_PARAM = "wordpiece.name";

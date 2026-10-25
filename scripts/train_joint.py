@@ -42,6 +42,7 @@ def build_model(metadata):
         quantizer_score=metadata.get("quantizer_score", "cosine"),
         char_negative_weight=metadata.get("char_negative_weight", 1.0),
         type_dropout=metadata.get("type_dropout", 0.0),
+        syntax_factorized=metadata.get("syntax_factorized", False),
     )
 
 
@@ -167,6 +168,7 @@ def train(args):
         "quantizer_score": args.quantizer_score,
         "char_negative_weight": args.char_negative_weight,
         "type_dropout": args.type_dropout,
+        "syntax_factorized": getattr(args, "syntax_factorized", False),
         "training_stage": args.training_stage,
         "labels": span_train.labels if args.recognizer_kind == "syntax" else None,
         "type_map": type_map,
@@ -588,6 +590,8 @@ def main():
         help="detach GraphLoss from the encoder and use only the local auxiliary bridge",
     )
     command.add_argument("--clip-grad", type=float, default=1.0)
+    command.add_argument("--syntax-factorized", action="store_true",
+                         help="语法识别器双头因子化：成词概率+条件标签概率（联合=积），导出双输出")
     command.add_argument("--type-dropout", type=float, default=0.0,
                          help="训练时词型列随机 UNK 化概率，防类型捷径（0 关闭）")
     command.add_argument("--warmup-epochs", type=float, default=0.0,
