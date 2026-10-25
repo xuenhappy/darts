@@ -13,6 +13,7 @@
 #ifndef SRC_CORE_SEGMENT_HPP_
 #define SRC_CORE_SEGMENT_HPP_
 #include <float.h>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <map>
@@ -115,6 +116,15 @@ class SegGraph {
      */
     void addEdge(int st, int et, double weight) { graph[st + 1].push_back(GraphEdge{et, weight}); }
 
+    /** 报告用：遍历全部边 (from, to, weight)；from=-1 句首，to=candidate_count 句尾 */
+    void collectEdges(const std::function<void(int, int, double)>& hit) const {
+        for (int u = -1; u < static_cast<int>(candidate_count); ++u) {
+            for (const auto& edge : graph[static_cast<size_t>(u + 1)]) {
+                hit(u, edge.et, edge.weight);
+            }
+        }
+    }
+
     /**
      * @brief select best path
      *
@@ -209,6 +219,37 @@ class SegGraph {
     }
 };
 
+// ── 切分报告结构（seg_report 特性，2026-10-25）──────────────────────
+// 复用正常切分管线：select/splitContent 在 need_report 时把中间产物
+// （原子/候选格/边权/最优路径）旁路采集到报告结构，零额外计算路径。
+struct SegReportEdge {
+    int from;     // 源节点 idx（-1=句首哨兵）
+    int to;       // 目标节点 idx（size=句尾哨兵）
+    double weight;
+};
+
+struct SegReportNode {
+    int idx;
+    std::string text;
+    int st;       // atom 起点（句内）
+    int et;       // atom 终点（句内，半开）
+    int feat;     // 同 span 多标签副本序号（-1 起）
+    std::vector<std::string> labels;
+};
+
+struct SubSegReport {
+    std::string text;                              // 子句原文（规范化后）
+    std::vector<std::array<std::string, 4>> atoms; // image/type/st/et
+    std::vector<SegReportNode> nodes;              // 候选格（idx 0..n-1）
+    std::vector<SegReportEdge> edges;              // 全部相邻边+权重
+    std::vector<int> best_path;                    // 最优路径节点序列
+    std::vector<std::pair<std::string, std::vector<std::string>>> outputs;
+};
+
+struct SegReport {
+    std::vector<SubSegReport> subs;                // 长文切窗的每个子句
+};
+
 class Segment {
    private:
     std::vector<std::shared_ptr<CellRecognizer>> cellRecognizers;
@@ -292,7 +333,8 @@ class Segment {
      * @param ret
      */
     void splitContent(const AtomList& context, SegPath& cmap, std::vector<std::shared_ptr<Word>>& ret,
-                      int atom_start_pos = 0, double temperature_override = -1.0) {
+                      int atom_start_pos = 0, double temperature_override = -1.0,
+                      SubSegReport* report = nullptr) {
         // get best path
         SegGraph graph(cmap.Size());
         buildGraph(context, cmap, graph);
@@ -315,6 +357,17 @@ class Segment {
             }
         };
         cmap.iterRow(nullptr, -1, dfunc);
+
+        if (report != nullptr) {
+            graph.collectEdges([&report](int f, int t, double w) {
+                report->edges.push_back(SegReportEdge{f, t, w});
+            });
+            report->best_path = bestPaths;
+            for (const auto& word : ret) {
+                std::vector<std::string> labels(word->getLabels().begin(), word->getLabels().end());
+                report->outputs.emplace_back(word->text(), std::move(labels));
+            }
+        }
     }
 
     void buildSegPath(const AtomList& atomList, SegPath& cmap) {
@@ -355,7 +408,8 @@ class Segment {
      * @param atom_start_pos
      */
     void select(const AtomList& atomList, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
-                int atom_start_pos = 0, double temperature_override = -1.0) {
+                int atom_start_pos = 0, double temperature_override = -1.0,
+                SubSegReport* report = nullptr) {
         if (atomList.size() < 1) {
             return;
         }
@@ -369,8 +423,34 @@ class Segment {
                 ret.push_back(word);
             };
             cmap->iterRow(nullptr, -1, dfunc);
+            if (report != nullptr) {
+                cmap->indexIt();
+                for (const auto& word : ret) {
+                    std::vector<std::string> labels(word->getLabels().begin(), word->getLabels().end());
+                    report->outputs.emplace_back(word->text(), std::move(labels));
+                }
+            }
         } else {
-            splitContent(atomList, *cmap, ret, atom_start_pos, temperature_override);
+            if (report != nullptr) {
+                cmap->indexIt();  // buildGraph 内也会 indexIt（幂等）
+                for (size_t i = 0; i < atomList.size(); i++) {
+                    auto a = atomList.at(i);
+                    report->atoms.push_back({a->image, a->char_type,
+                                             std::to_string(a->st), std::to_string(a->et)});
+                }
+                cmap->collectCells([&report](int idx, const std::shared_ptr<Word>& w) {
+                    SegReportNode node;
+                    node.idx = idx;
+                    node.text = w->text();
+                    node.st = w->st;
+                    node.et = w->et;
+                    node.feat = w->feat;
+                    node.labels.assign(w->getLabels().begin(), w->getLabels().end());
+                    report->nodes.push_back(std::move(node));
+                });
+                report->text = atomList.subAtom(0, static_cast<int>(atomList.size()));
+            }
+            splitContent(atomList, *cmap, ret, atom_start_pos, temperature_override, report);
         }
         delete cmap;
     }
@@ -387,9 +467,16 @@ const std::set<std::string> SENTENCE_POS = {"!", "。", ",", "?", ";", ":", "！
  * @param maxMode
  */
 inline void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_ptr<Word>>& ret, bool maxMode = false,
-                     size_t maxLineLength = 100, size_t minLineLength = 10, double temperature = -1.0) {
+                     size_t maxLineLength = 100, size_t minLineLength = 10, double temperature = -1.0,
+                     SegReport* report = nullptr) {
+    // 长文切窗的每个子句独立成子报告；need_report 与正常路径完全复用
+    auto sub_report = [&report]() -> SubSegReport* {
+        if (report == nullptr) return nullptr;
+        report->subs.emplace_back();
+        return &report->subs.back();
+    };
     if (ori.size() <= maxLineLength) {
-        sg.select(ori, ret, maxMode, 0, temperature);
+        sg.select(ori, ret, maxMode, 0, temperature, sub_report());
         return;
     }
     // too long context
@@ -397,7 +484,7 @@ inline void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_p
     for (size_t pos = minLineLength; pos < ori.size(); pos++) {
         if (pos - pre >= maxLineLength) {
             AtomList temp(ori, pre, pos + 1);
-            sg.select(temp, ret, maxMode, pre, temperature);
+            sg.select(temp, ret, maxMode, pre, temperature, sub_report());
             pre = pos + 1;
             continue;
         }
@@ -405,12 +492,12 @@ inline void tokenize(Segment& sg, const AtomList& ori, std::vector<std::shared_p
         if (pos - pre < minLineLength) continue;
 
         AtomList temp(ori, pre, pos + 1);
-        sg.select(temp, ret, maxMode, pre, temperature);
+        sg.select(temp, ret, maxMode, pre, temperature, sub_report());
         pre = pos + 1;
     }
     if (pre < ori.size()) {
         AtomList temp(ori, pre, ori.size());
-        sg.select(temp, ret, maxMode, pre, temperature);
+        sg.select(temp, ret, maxMode, pre, temperature, sub_report());
         return;
     }
 }

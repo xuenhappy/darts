@@ -299,6 +299,104 @@ wordlist token_str_temperature(segment sg, atomlist alist, bool max_mode, double
     darts::tokenize(*sgment, *(alist->alist), ret->wlist, max_mode, 100, 10, temperature);
     return ret;
 }
+
+// ── seg_report：同管线 + 报告旁路，报告以 JSON 输出到 report_json 缓存 ──
+static void report_json_escape(const std::string& text, std::string& out) {
+    for (char ch : text) {
+        switch (ch) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(ch) < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", ch);
+                    out += buf;
+                } else {
+                    out += ch;
+                }
+        }
+    }
+}
+
+static void report_to_json(const darts::SegReport& report, std::string& out) {
+    out += "{\"subs\":[";
+    for (size_t s = 0; s < report.subs.size(); ++s) {
+        const auto& sub = report.subs[s];
+        if (s) out += ',';
+        out += "{\"text\":\"";
+        report_json_escape(sub.text, out);
+        out += "\",\"atoms\":[";
+        for (size_t i = 0; i < sub.atoms.size(); ++i) {
+            if (i) out += ',';
+            out += "[\"";
+            report_json_escape(sub.atoms[i][0], out);
+            out += "\",\"";
+            report_json_escape(sub.atoms[i][1], out);
+            out += "\"," + sub.atoms[i][2] + "," + sub.atoms[i][3] + "]";
+        }
+        out += "],\"nodes\":[";
+        for (size_t i = 0; i < sub.nodes.size(); ++i) {
+            const auto& node = sub.nodes[i];
+            if (i) out += ',';
+            out += "{\"idx\":" + std::to_string(node.idx) + ",\"text\":\"";
+            report_json_escape(node.text, out);
+            out += "\",\"st\":" + std::to_string(node.st) +
+                   ",\"et\":" + std::to_string(node.et) +
+                   ",\"feat\":" + std::to_string(node.feat) + ",\"labels\":[";
+            for (size_t j = 0; j < node.labels.size(); ++j) {
+                if (j) out += ',';
+                out += '"';
+                report_json_escape(node.labels[j], out);
+                out += '"';
+            }
+            out += "]}";
+        }
+        out += "],\"edges\":[";
+        for (size_t i = 0; i < sub.edges.size(); ++i) {
+            const auto& edge = sub.edges[i];
+            if (i) out += ',';
+            char buf[96];
+            snprintf(buf, sizeof(buf), "{\"f\":%d,\"t\":%d,\"w\":%.6f}", edge.from, edge.to, edge.weight);
+            out += buf;
+        }
+        out += "],\"best\":[";
+        for (size_t i = 0; i < sub.best_path.size(); ++i) {
+            if (i) out += ',';
+            out += std::to_string(sub.best_path[i]);
+        }
+        out += "],\"out\":[";
+        for (size_t i = 0; i < sub.outputs.size(); ++i) {
+            if (i) out += ',';
+            out += "[\"";
+            report_json_escape(sub.outputs[i].first, out);
+            out += "\",[";
+            for (size_t j = 0; j < sub.outputs[i].second.size(); ++j) {
+                if (j) out += ',';
+                out += '"';
+                report_json_escape(sub.outputs[i].second[j], out);
+                out += '"';
+            }
+            out += "]]";
+        }
+        out += "]}";
+    }
+    out += "]}";
+}
+
+wordlist token_str_report(segment sg, atomlist alist, bool max_mode, double temperature, void* report_json_cache) {
+    if (!sg || !sg->segment || !alist || !alist->alist || !report_json_cache) return nullptr;
+    auto sgment = sg->segment;
+    wordlist ret = new struct _wordlist;
+    darts::SegReport report;
+    darts::tokenize(*sgment, *(alist->alist), ret->wlist, max_mode, 100, 10, temperature, &report);
+    auto* cache = static_cast<std::string*>(report_json_cache);
+    cache->clear();
+    report_to_json(report, *cache);
+    return ret;
+}
 // free list
 void free_wordlist(wordlist wlist) {
     if (wlist) {

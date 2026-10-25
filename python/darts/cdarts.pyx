@@ -93,6 +93,7 @@ cdef extern from 'darts.h':
     int get_npos_word(wordlist wlist, size_t index, word_buffer* buffer)
     wordlist token_str(segment sg, atomlist alist, bool max_mode) nogil
     wordlist token_str_temperature(segment sg, atomlist alist, bool max_mode, double temperature) nogil
+    wordlist token_str_report(segment sg, atomlist alist, bool max_mode, double temperature, void* report_json_cache) nogil
     void free_wordlist(wordlist wlist)
 
     wtype_encoder get_wtype_encoder(void* map_param,const char* type_cls_name)
@@ -411,6 +412,26 @@ cdef class DSegment:
             with nogil:
                 wlist.wlist=token_str_temperature(self.segt,alist.alist,max_mode,c_temperature)
         return (alist,wlist)
+
+    def cut_report(self, strs:str, max_mode:bool=False, skip_space:bool=True,
+                   normal_before:bool=True, temperature=None):
+        """同 cut 管线 + 切分报告：返回 (atoms, words, report_json_str)。
+        report_json: {"subs":[{text, atoms, nodes, edges, best, out}, ...]}"""
+        cdef double c_temperature
+        cdef string report_cache
+        if not strs or len(strs)<1:
+            return (None,None,"{\"subs\":[]}")
+        alist=PyAtomList(strs, skip_space=skip_space, normal_before=normal_before)
+        wlist=PyWordList()
+        if temperature is None:
+            c_temperature = -1.0
+        else:
+            if temperature < 0:
+                raise ValueError("temperature must be non-negative")
+            c_temperature = float(temperature)
+        with nogil:
+            wlist.wlist=token_str_report(self.segt,alist.alist,max_mode,c_temperature,&report_cache)
+        return (alist,wlist,report_cache.c_str().decode("utf-8","ignore"))
        
 
     def __dealloc__(self):

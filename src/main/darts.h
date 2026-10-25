@@ -112,6 +112,9 @@ void free_segment(segment sg);
 // token str
 wordlist token_str(segment sg, atomlist alist, bool max_mode);
 wordlist token_str_temperature(segment sg, atomlist alist, bool max_mode, double temperature);
+// seg_report: 同切分管线 + 报告旁路；report_json_cache 为 std::string* 缓存，
+// 产出结构化 JSON（subs[].{text,atoms,nodes,edges,best,out}）
+wordlist token_str_report(segment sg, atomlist alist, bool max_mode, double temperature, void* report_json_cache);
 // build the biggram dict
 int build_biggram_dict(const char* single_freq_dict, const char* union_freq_dict, const char* outdir);
 // alist_encoder

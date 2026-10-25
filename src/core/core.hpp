@@ -362,6 +362,11 @@ class SegPath {
         indexed = true;
     }
 
+    /** 报告用：遍历已索引的全部候选格（idx, word）；须先 indexIt() */
+    void collectCells(const std::function<void(int, const std::shared_ptr<Word>&)>& hit) const {
+        for (const auto& node : indexed_nodes) hit(node->idx, node->val);
+    }
+
     /**
      * @brief 迭代图
      *
