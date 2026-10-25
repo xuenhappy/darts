@@ -83,6 +83,7 @@ td.num, th.num { text-align: right; font-family: ui-monospace, Menlo, monospace;
 .edge { font-size: 10.5px; font-family: ui-monospace, Menlo, monospace; }
 .edge b { font-family: inherit; }
 td.edgecell { background: #f1f3f9; border: 1px solid var(--line); }
+.matrix th.corner.best { background: var(--okbg); color: var(--ok); font-weight: 700; }
 td.edgecell.bestedge { background: linear-gradient(135deg, #37b24d, #2f9e44);
                        color: #fff; font-weight: 700; border-color: #2b8a3e; }
 

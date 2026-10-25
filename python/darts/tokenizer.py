@@ -224,15 +224,15 @@ class Tokenizer:
                          "最优路径绿色 · 灰=不可达）</h3><div class=\"drag\">"
                          "<table class=\"matrix\"><tr><th>from＼to</th>")
             for t in ids:
-                tag = "best" if t in best and t != size else ""
+                tag = " best" if t in best else ""
                 star = " ★" if tag else ""
-                parts.append(f"<th class=\"corner\">{esc(nlabel(t))}{star}<br/>"
+                parts.append(f"<th class=\"corner{tag}\">{esc(nlabel(t))}{star}<br/>"
                              f"<small>#{t}</small></th>")
             parts.append("</tr>")
             for f in ids:
-                tag = "best" if f in best else ""
+                tag = " best" if f in best else ""
                 star = " ★" if tag else ""
-                parts.append(f"<tr><th class=\"corner\">{esc(nlabel(f))}{star}<br/>"
+                parts.append(f"<tr><th class=\"corner{tag}\">{esc(nlabel(f))}{star}<br/>"
                              f"<small>#{f}</small></th>")
                 for t in ids:
                     if ids.index(t) <= ids.index(f):

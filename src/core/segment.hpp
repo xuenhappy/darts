@@ -157,8 +157,8 @@ class SegGraph {
             bestPaths.emplace_back(pre);
             pre = prev[pre + 1];
         }
-        bestPaths.emplace_back(static_cast<int>(candidate_count));  // 尾哨兵
         std::reverse(bestPaths.begin() + 1, bestPaths.end());
+        bestPaths.emplace_back(static_cast<int>(candidate_count));  // 尾哨兵（reverse 之后再追加，保持路径顺序）
     }
 
     /**
@@ -194,6 +194,7 @@ class SegGraph {
         sampled_path.clear();
         if (suffix_log_partition[0] == unreachable) return;
         std::uniform_real_distribution<double> uniform(0.0, 1.0);
+        sampled_path.push_back(-1);  // 头哨兵，与确定性 selectPath 的路径格式一致
         int current = -1;
         while (current < static_cast<int>(candidate_count)) {
             const auto& edges = graph[current + 1];
@@ -216,7 +217,7 @@ class SegGraph {
                 return;
             }
             current = fallback->et;
-            if (current >= 0 && current < static_cast<int>(candidate_count)) sampled_path.push_back(current);
+            sampled_path.push_back(current);  // 最后一次 push 的是尾哨兵 candidate_count
         }
     }
 };
