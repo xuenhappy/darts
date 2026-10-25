@@ -144,22 +144,25 @@ class Tokenizer:
             parts.append(f"<h2>子句 {si}/{len(report['subs'])}</h2>")
             parts.append(f"<div class=\"sentence\">{esc(sub['text'])}</div>")
 
-            # ── AtomList：3 行 × n 列，可拖动 ──
-            parts.append("<h3>AtomList 原子条（拖动横移 · st~et 合并单元格）</h3>"
-                         "<div class=\"drag atomgrid\">")
-            parts.append("<div class=\"h\">#</div>")
+            # ── AtomList：真·二维矩阵 4 行 × n 列，列可滚动（sticky 首列）──
+            parts.append("<h3>AtomList 矩阵（4×n · 列横向滚动）</h3>"
+                         "<div class=\"drag compact\"><table class=\"matrix\">"
+                         "<tr><th class=\"stick\">行＼col</th>")
             for i in range(n_atoms):
-                parts.append(f"<div class=\"h\">{i}</div>")
-            parts.append("<div class=\"h\">atom</div>")
-            for image, _t, _s, _e in sub["atoms"]:
-                parts.append(f"<div class=\"a\">{esc(image)}</div>")
-            parts.append("<div class=\"h\">type</div>")
-            for _i, (_im, ctype, _s, _e) in enumerate(sub["atoms"]):
-                parts.append(f"<div class=\"t\">{esc(ctype)}</div>")
-            parts.append("<div class=\"h\">st~et</div>")
-            for _i, (_im, _t, st, et) in enumerate(sub["atoms"]):
-                parts.append(f"<div class=\"p\">{st}~{et}</div>")
-            parts.append("</div>")
+                parts.append(f"<th class=\"num\">{i}</th>")
+            parts.append("</tr>")
+            rows = [
+                ("atom", lambda im, t, s, e: f"<td class=\"acell\">{esc(im)}</td>"),
+                ("type", lambda im, t, s, e: f"<td class=\"tcell\">{esc(t)}</td>"),
+                ("st", lambda im, t, s, e: f"<td class=\"pcell\">{s}</td>"),
+                ("et", lambda im, t, s, e: f"<td class=\"pcell\">{e}</td>"),
+            ]
+            for name, fmt in rows:
+                parts.append(f"<tr><th class=\"stick\">{name}</th>")
+                for image, ctype, st, et in sub["atoms"]:
+                    parts.append(fmt(image, ctype, st, et))
+                parts.append("</tr>")
+            parts.append("</table></div>")
 
             # ── 候选词矩阵：atom 索引 n×n 上三角（行 st，列 et）──
             span_words = {}
