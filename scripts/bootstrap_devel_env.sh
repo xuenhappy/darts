@@ -23,8 +23,9 @@ Options:
   -h, --help               Show this help
 
 The script prepares one environment for Meson/Cython, C++ dependencies,
-Python tests, neural training and ONNX export. It writes build/devel-env.sh;
-source that file before invoking Meson, pip builds or training commands.
+Python tests, neural training and MNN export (torch -> onnx -> MNNConvert).
+It writes build/devel-env.sh; source that file before invoking Meson, pip
+builds or training commands.
 EOF
 }
 
@@ -87,15 +88,26 @@ else
 fi
 
 export DARTS_DEPS_DIR="${DARTS_DEPS_DIR:-$ROOT_DIR/build/deps}"
-DARTS_ONNXRUNTIME_DIR="$("$ROOT_DIR/scripts/fetch_onnxruntime.sh")"
-export DARTS_ONNXRUNTIME_DIR
-"$ROOT_DIR/scripts/bootstrap_local_deps.sh" >/dev/null
+# MNN 运行时（推理后端）：已安装则直接用，否则源码编译（见 build_mnn.sh）
+if [[ -z "${DARTS_MNN_DIR:-}" || ! -e "$DARTS_MNN_DIR/lib/libMNN.so" ]]; then
+  DARTS_MNN_DIR="$(bash "$ROOT_DIR/scripts/build_mnn.sh")"
+fi
+export DARTS_MNN_DIR
+# 系统 pkg-config 已提供 jsoncpp/fmt/protobuf 时跳过 sysroot 解包
+if ! pkg-config --exists jsoncpp fmt protobuf 2>/dev/null; then
+  "$ROOT_DIR/scripts/bootstrap_local_deps.sh" >/dev/null
+fi
 export DARTS_MESON_BUILD_DIR="${DARTS_MESON_BUILD_DIR:-$ROOT_DIR/build/meson-devel}"
-SYSROOT="$DARTS_DEPS_DIR/sysroot"
-PKG_CONFIG_DIRS="$(find "$SYSROOT/usr/lib" -type d -name pkgconfig -print | paste -sd: -)"
-export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
-export PKG_CONFIG_LIBDIR="${PKG_CONFIG_DIRS:+$PKG_CONFIG_DIRS:}$SYSROOT/usr/share/pkgconfig"
-export PATH="$VENV_DIR/bin:$SYSROOT/usr/bin:$PATH"
+if [[ -d "$DARTS_DEPS_DIR/sysroot" ]]; then
+  SYSROOT="$DARTS_DEPS_DIR/sysroot"
+  PKG_CONFIG_DIRS="$(find "$SYSROOT/usr/lib" -type d -name pkgconfig -print | paste -sd: -)"
+  export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+  export PKG_CONFIG_LIBDIR="${PKG_CONFIG_DIRS:+$PKG_CONFIG_DIRS:}$SYSROOT/usr/share/pkgconfig"
+  export PATH="$VENV_DIR/bin:$SYSROOT/usr/bin:$PATH"
+else
+  # 系统依赖模式：不覆盖 PKG_CONFIG*，保持系统 pkg-config 发现
+  export PATH="$VENV_DIR/bin:$PATH"
+fi
 
 ENV_FILE="$ROOT_DIR/build/devel-env.sh"
 {
@@ -103,11 +115,19 @@ ENV_FILE="$ROOT_DIR/build/devel-env.sh"
   printf 'export DARTS_ROOT=%q\n' "$ROOT_DIR"
   printf 'export DARTS_DEVEL_VENV=%q\n' "$VENV_DIR"
   printf 'export DARTS_DEPS_DIR=%q\n' "$DARTS_DEPS_DIR"
-  printf 'export DARTS_ONNXRUNTIME_DIR=%q\n' "$DARTS_ONNXRUNTIME_DIR"
+  printf 'export DARTS_MNN_DIR=%q\n' "$DARTS_MNN_DIR"
+  printf 'export LD_LIBRARY_PATH=%q:$LD_LIBRARY_PATH\n' "$DARTS_MNN_DIR/lib"
+  if [[ -d "$DARTS_DEPS_DIR/sysroot" ]]; then
+    printf 'export PKG_CONFIG_SYSROOT_DIR=%q\n' "$DARTS_DEPS_DIR"
+  fi
   printf 'export DARTS_MESON_BUILD_DIR=%q\n' "$DARTS_MESON_BUILD_DIR"
-  printf 'export PKG_CONFIG_SYSROOT_DIR=%q\n' "$PKG_CONFIG_SYSROOT_DIR"
-  printf 'export PKG_CONFIG_LIBDIR=%q\n' "$PKG_CONFIG_LIBDIR"
-  printf 'export PATH=%q:%q:$PATH\n' "$VENV_DIR/bin" "$SYSROOT/usr/bin"
+  if [[ -d "$DARTS_DEPS_DIR/sysroot" ]]; then
+    printf 'export PKG_CONFIG_SYSROOT_DIR=%q\n' "$PKG_CONFIG_SYSROOT_DIR"
+    printf 'export PKG_CONFIG_LIBDIR=%q\n' "$PKG_CONFIG_LIBDIR"
+    printf 'export PATH=%q:%q:$PATH\n' "$VENV_DIR/bin" "$SYSROOT/usr/bin"
+  else
+    printf 'export PATH=%q:$PATH\n' "$VENV_DIR/bin"
+  fi
 } >"$ENV_FILE"
 
 if ((INSTALL_PROJECT)); then

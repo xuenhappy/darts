@@ -2,3 +2,4 @@
 numpy>=1.26
 onnx>=1.16
 onnxscript>=0.1
+MNN>=3.0  # 导出链 MNNConvert（torch->onnx->mnn）
