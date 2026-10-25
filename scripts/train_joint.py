@@ -41,6 +41,7 @@ def build_model(metadata):
         distance_buckets=metadata.get("distance_buckets", 0),
         quantizer_score=metadata.get("quantizer_score", "cosine"),
         char_negative_weight=metadata.get("char_negative_weight", 1.0),
+        type_dropout=metadata.get("type_dropout", 0.0),
     )
 
 
@@ -165,6 +166,7 @@ def train(args):
         "distance_buckets": args.quantizer_distance_buckets,
         "quantizer_score": args.quantizer_score,
         "char_negative_weight": args.char_negative_weight,
+        "type_dropout": args.type_dropout,
         "training_stage": args.training_stage,
         "labels": span_train.labels if args.recognizer_kind == "syntax" else None,
         "type_map": type_map,
@@ -568,6 +570,8 @@ def main():
         help="detach GraphLoss from the encoder and use only the local auxiliary bridge",
     )
     command.add_argument("--clip-grad", type=float, default=1.0)
+    command.add_argument("--type-dropout", type=float, default=0.0,
+                         help="训练时词型列随机 UNK 化概率，防类型捷径（0 关闭）")
     command.add_argument("--warmup-epochs", type=float, default=0.0,
                          help="linear warmup epochs before cosine decay (0=off)")
     command.add_argument("--quantizer-distance-buckets", type=int, default=0,

@@ -91,6 +91,45 @@ class GraphSampleReader(IterableDataset):
             self.word_codec.decode(code): code for code in range(self.word_codec.label_nums())
         }
 
+        # 类型依赖修复（2026-10-25）：词典细标签（LTP n/v/zg/...）在训练词表外，
+        # 线上曾落 H 序陌生码遭量化器饱和惩罚。金标与候选统一细→粗映射，
+        # 与 C++ encodeSyntaxPreferred 同表——细码在训练图与线上图中都消失。
+        self.trusted_ud = {
+            "NOUN", "VERB", "ADJ", "ADV", "PRON", "ADP", "CCONJ", "SCONJ",
+            "AUX", "PART", "DET", "NUM", "PROPN", "PUNCT", "SYM", "X",
+        }
+        self.ltp_to_ud = {
+            "n": "NOUN", "nz": "NOUN", "ng": "NOUN", "s": "NOUN", "t": "NOUN",
+            "i": "NOUN", "l": "NOUN", "j": "NOUN",
+            "nr": "PROPN", "ns": "PROPN", "nt": "PROPN", "nw": "PROPN",
+            "v": "VERB", "vn": "VERB", "vd": "VERB",
+            "a": "ADJ", "an": "ADJ", "ad": "ADJ", "ag": "ADJ",
+            "d": "ADV", "m": "NUM", "q": "NUM", "r": "PRON",
+            "p": "ADP", "f": "ADP", "c": "CCONJ", "u": "PART",
+            "h": "PART", "k": "PART", "w": "PUNCT", "e": "X", "o": "X", "xc": "X",
+        }
+        self.unk_type_code = self.type_codes.get("[UNK]", 1)
+
+    def _map_type_code(self, code):
+        tag = self.word_codec.decode(code)
+        if tag.startswith("POS_"):
+            tag = tag[4:]
+            if tag in self.trusted_ud:
+                return code
+            ud = self.ltp_to_ud.get(tag)
+            if ud is not None:
+                return self.type_codes.get("POS_" + ud, self.unk_type_code)
+        return self.unk_type_code
+
+    def _map_tag(self, tag):
+        stem = tag[4:] if tag.startswith("POS_") else tag
+        if stem in self.trusted_ud:
+            return self.type_codes.get(tag, 0)
+        ud = self.ltp_to_ud.get(stem)
+        if ud is not None:
+            return self.type_codes.get("POS_" + ud, 0)
+        return self.type_codes.get(tag, 0)
+
     def wordsize(self):
         return self.atom_codec.label_nums()
 
@@ -153,7 +192,7 @@ class GraphSampleReader(IterableDataset):
             text, max_mode=True, skip_space=True, normal_before=False
         )
         words = candidates.tolist()
-        types = self.word_codec.encode(candidates)
+        types = [self._map_type_code(code) for code in self.word_codec.encode(candidates)]
         codes = self.atom_codec.encode(atoms)
         code_ids = [value[0] for value in codes]
         starts, ends = piece_bounds(codes, len(atoms))
@@ -198,7 +237,7 @@ class GraphSampleReader(IterableDataset):
         gold_nodes_by_span = []
         for span, tag in zip(gold_spans, gold_tags):
             if tag:
-                type_code = self.type_codes.get(tag, 0)
+                type_code = self._map_tag(tag)
             else:
                 # A runtime dictionary hit is one typed node, not a parallel
                 # unknown gold node. OOV spans use the neural recognizer type.

@@ -481,7 +481,30 @@ class LabelEncoder : public TypeEncoder {
                 return it->second.first + codemap::special_code_nums;
             }
         }
-        return encode(word);
+        // 类型依赖修复（2026-10-25）：词典细标签（LTP n/v/zg/...）不落 H 序
+        // 陌生码（训练词表外、量化器饱和惩罚 40+）。细→粗映射与训练 reader
+        // 同表；映射不到的归一 UNK。
+        static const std::unordered_map<std::string, std::string> ltp_to_ud = {
+                {"n", "NOUN"}, {"nz", "NOUN"}, {"ng", "NOUN"}, {"s", "NOUN"},
+                {"t", "NOUN"}, {"i", "NOUN"}, {"l", "NOUN"}, {"j", "NOUN"},
+                {"nr", "PROPN"}, {"ns", "PROPN"}, {"nt", "PROPN"}, {"nw", "PROPN"},
+                {"v", "VERB"}, {"vn", "VERB"}, {"vd", "VERB"},
+                {"a", "ADJ"}, {"an", "ADJ"}, {"ad", "ADJ"}, {"ag", "ADJ"},
+                {"d", "ADV"}, {"m", "NUM"}, {"q", "NUM"}, {"r", "PRON"},
+                {"p", "ADP"}, {"f", "ADP"}, {"c", "CCONJ"}, {"u", "PART"},
+                {"h", "PART"}, {"k", "PART"}, {"w", "PUNCT"},
+                {"e", "X"}, {"o", "X"}, {"xc", "X"},
+        };
+        for (const auto& label : labels) {
+            if (label.compare(0, 4, "POS_") != 0) continue;
+            auto mc = ltp_to_ud.find(label.substr(4));
+            if (mc == ltp_to_ud.end()) continue;
+            auto it2 = kind_codes.find("POS_" + mc->second);
+            if (it2 != kind_codes.end()) {
+                return it2->second.first + codemap::special_code_nums;
+            }
+        }
+        return codemap::unk_code;
     }
 
     /**

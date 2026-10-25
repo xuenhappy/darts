@@ -31,8 +31,9 @@ class WordEncoder(nn.Module):
     """
 
     def __init__(self, vocab_num, hidden_size, wtype_num, num_layers=2, num_heads=4,
-                 max_positions=4096, max_word_positions=32):
+                 max_positions=4096, max_word_positions=32, type_dropout=0.0):
         super().__init__()
+        self.type_dropout = float(type_dropout)
         if hidden_size % num_heads:
             raise ValueError("hidden_size must be divisible by num_heads")
         self.vocab_num = vocab_num
@@ -128,7 +129,14 @@ class WordEncoder(nn.Module):
         # while graph nodes include it. The contextual/position parameters are
         # shared in both cases; only graph calls add the type representation.
         if self.wtype_num > 0 and batch_word_info.shape[1] > 3:
-            word_type_embedding = self.type_embedding(batch_word_info[:, 3])
+            word_types = batch_word_info[:, 3]
+            if self.training and self.type_dropout > 0:
+                # type 列 dropout：随机 UNK 化（PAD 填充与 CLS/SEP 哨兵除外），
+                # 防止量化器/识别器把词性当捷径（2026-10-25）
+                drop = torch.rand(word_types.shape, device=word_types.device) < self.type_dropout
+                keep = (word_types == 0) | (word_types == 2) | (word_types == 3)
+                word_types = torch.where(drop & ~keep, torch.full_like(word_types, 1), word_types)
+            word_type_embedding = self.type_embedding(word_types)
             return self.type_normal(word_embedding + word_type_embedding)
         return word_embedding
 
@@ -641,9 +649,10 @@ class JointSegmentationTrainer(nn.Module):
     def __init__(self, vocab_num, hidden_size, wtype_num,
                  recognizer_kind="binary", class_num=None, positive_weight=None,
                  pu_target=0.0, pu_weight=0.0, distance_buckets=0,
-                 quantizer_score="cosine", char_negative_weight=1.0):
+                 quantizer_score="cosine", char_negative_weight=1.0,
+                 type_dropout=0.0):
         super().__init__()
-        encoder = WordEncoder(vocab_num, hidden_size, wtype_num)
+        encoder = WordEncoder(vocab_num, hidden_size, wtype_num, type_dropout=type_dropout)
         if recognizer_kind == "binary":
             self.recognizer = SpanRecognizer(
                 vocab_num, hidden_size, encoder=encoder, positive_weight=positive_weight,
