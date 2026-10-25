@@ -46,3 +46,5 @@ GTAGS
 data/external/
 data/generated/
 model_bin/*
+neural.bak-20261023/
+neural.v1-cosine/
