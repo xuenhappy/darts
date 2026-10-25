@@ -816,7 +816,8 @@ MAX_GRAPH_EDGES=2800 \
 MAX_GRAPH_NODES=550 \
 MAX_GRAPH_WORDPIECES=108 \
 QUANTIZER_BATCH_SIZE=4 \
-bash scripts/train_production_neural.sh
+python scripts/train_joint.py train --mode lac-nural --recognizer-kind syntax \
+    --train data/train.lac --dev data/dev.lac --output-dir model_bin/joint
 ```
 
 `GraphLossSparse` 的候选 DAG 配分在 CPU 上执行，因为其拓扑循环使用解析 backward，
