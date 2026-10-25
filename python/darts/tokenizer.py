@@ -168,8 +168,11 @@ class Tokenizer:
             span_words = {}
             for node in sub["nodes"]:
                 span_words.setdefault((node["st"], node["et"]), []).append(node)
-            parts.append("<h3>识别词矩阵（行=st 列=et · 同格多 cell 彩色 · "
-                         "★最优路径 · 灰=不可见/无词）</h3>"
+            n_nom = sum(1 for node in sub["nodes"]
+                        if any(lb.startswith("NEURAL_") for lb in node["labels"]))
+            parts.append(f"<h3>识别词矩阵（行=st 列=et · 同格多 cell 彩色 · "
+                         f"★最优路径 · ⚡虚线=神经提名 {n_nom}/{len(sub['nodes'])} · "
+                         f"灰=不可见/无词）</h3>"
                          "<div class=\"drag\"><table class=\"matrix\"><tr><th>"
                          "st＼et</th>")
             for et in range(1, n_atoms + 1):
@@ -195,11 +198,15 @@ class Tokenizer:
                         fx = (f"<span class=\"fx\">#{node['idx']}"
                               f"{'′' + str(-node['feat']) if node['feat'] < -1 else ''}"
                               f"</span>")
+                        neural = any(lb.startswith("NEURAL_")
+                                     for lb in node["labels"])
                         chips.append(
-                            f"<span class=\"wcell {color}{star}\" title="
+                            f"<span class=\"wcell {color}{star}"
+                            f"{' neural' if neural else ''}\" title="
                             f"\"idx={node['idx']} feat={node['feat']} "
                             f"labels={esc(','.join(node['labels']))}\">"
                             f"{esc(node['text'])}<small>{esc(label_main)}</small>"
+                            f"{'<b class=\"nb\">⚡</b>' if neural else ''}"
                             f"{fx}</span>")
                     parts.append(f"<td>{''.join(chips)}</td>")
                 parts.append("</tr>")
