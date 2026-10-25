@@ -109,8 +109,10 @@ class Tokenizer:
     def seg_report(self, sentence: str, temperature: float = None) -> str:
         """可视化切分报告 → HTML 字符串（CSS 固定于 data/report.css）。
 
-        内容：原始/规范化句子、每个切分子句的原子表、候选词矩阵（词性）、
-        转移边矩阵（x1@x2 + 权重，最优路径绿色）、最终切分结果。
+        商务现代简约风格。每个切分子句包含：3×n 可拖动原子条（st~et 合并
+        单元格）、atom 索引 n×n 上三角候选词矩阵（同格多 cell 彩色区分，
+        下半三角与无词处置灰）、节点上三角转移边矩阵（x1@x2 + 权重，最优
+        路径绿色，不可见处置灰）、最终切分结果。
         """
         if not isinstance(sentence, str) or not sentence:
             raise ValueError("sentence must be a non-empty string")
@@ -123,92 +125,148 @@ class Tokenizer:
         parts = [
             "<!DOCTYPE html><html><head><meta charset=\"utf-8\">",
             "<title>darts 切分报告</title><style>", self._report_css(),
-            "</style></head><body>",
-            "<h1>darts 切分报告</h1>",
-            f"<p class=\"meta\">mode={esc(self.mode or 'default')} · "
-            f"temperature={temp if temp is not None else 'deterministic'} · "
-            f"sub-sentences={len(report['subs'])}</p>",
-            "<h3>原始句子</h3>",
+            "</style></head><body><div class=\"wrap\">",
+            "<h1><span class=\"dot\"></span>darts 切分报告</h1>",
+            f"<p class=\"meta\">mode <b>{esc(self.mode or 'default')}</b> · "
+            f"temperature <b>{temp if temp is not None else 'deterministic'}</b> · "
+            f"sub-sentences <b>{len(report['subs'])}</b></p>",
+            "<div class=\"card\"><h2>原始句子</h2>",
             f"<div class=\"sentence\">{esc(sentence)}</div>",
-            "<h3>规范化后句子</h3>",
-            f"<div class=\"sentence\">{esc(_normalize(sentence))}</div>",
+            "<h3>规范化后（normalize）</h3>",
+            f"<div class=\"sentence\">{esc(_normalize(sentence))}</div></div>",
         ]
         for si, sub in enumerate(report["subs"], 1):
             best = set(sub.get("best", []))
-            best_edges = {(f, t) for f, t in zip(
-                sub.get("best", []), list(sub.get("best", []))[1:])}
-            parts.append("<div class=\"subsection\">")
+            best_seq = list(sub.get("best", []))
+            best_edges = set(zip(best_seq, best_seq[1:]))
+            n_atoms = len(sub["atoms"])
+            parts.append("<div class=\"card\">")
             parts.append(f"<h2>子句 {si}/{len(report['subs'])}</h2>")
             parts.append(f"<div class=\"sentence\">{esc(sub['text'])}</div>")
 
-            # 原子表
-            parts.append("<h3>AtomList（原子）</h3><table><tr>"
-                         "<th>#</th><th>atom</th><th>type</th>"
-                         "<th>st</th><th>et</th></tr>")
-            for i, (image, ctype, st, et) in enumerate(sub["atoms"]):
-                parts.append(
-                    f"<tr><td class=\"num\">{i}</td><td>{esc(image)}</td>"
-                    f"<td class=\"type\">{esc(ctype)}</td>"
-                    f"<td class=\"num\">{st}</td><td class=\"num\">{et}</td></tr>")
-            parts.append("</table>")
+            # ── AtomList：3 行 × n 列，可拖动 ──
+            parts.append("<h3>AtomList 原子条（拖动横移 · st~et 合并单元格）</h3>"
+                         "<div class=\"drag atomgrid\">")
+            parts.append("<div class=\"h\">#</div>")
+            for i in range(n_atoms):
+                parts.append(f"<div class=\"h\">{i}</div>")
+            parts.append("<div class=\"h\">atom</div>")
+            for image, _t, _s, _e in sub["atoms"]:
+                parts.append(f"<div class=\"a\">{esc(image)}</div>")
+            parts.append("<div class=\"h\">type</div>")
+            for _i, (_im, ctype, _s, _e) in enumerate(sub["atoms"]):
+                parts.append(f"<div class=\"t\">{esc(ctype)}</div>")
+            parts.append("<div class=\"h\">st~et</div>")
+            for _i, (_im, _t, st, et) in enumerate(sub["atoms"]):
+                parts.append(f"<div class=\"p\">{st}~{et}</div>")
+            parts.append("</div>")
 
-            # 候选词矩阵
-            parts.append("<h3>识别词矩阵（候选格 · 词性标签）</h3>"
-                         "<div class=\"scroll\"><table><tr><th>idx</th>"
-                         "<th>word</th><th>[st,et)</th><th>feat</th>"
-                         "<th>labels</th></tr>")
+            # ── 候选词矩阵：atom 索引 n×n 上三角（行 st，列 et）──
+            span_words = {}
             for node in sub["nodes"]:
-                cls = " class=\"best\"" if node["idx"] in best else ""
-                tags = "".join(
-                    f"<span class=\"tag{' tag-hot' if lb.startswith('POS_') else ''}\">"
-                    f"{esc(lb)}</span>" for lb in node["labels"]) or "—"
-                parts.append(
-                    f"<tr{cls}><td class=\"num\">{node['idx']}</td>"
-                    f"<td>{esc(node['text'])}</td>"
-                    f"<td class=\"num\">[{node['st']},{node['et']})</td>"
-                    f"<td class=\"num\">{node['feat']}</td><td>{tags}</td></tr>")
-            parts.append("</table></div>")
-
-            # 转移边矩阵（x1@x2 + 权重；最优路径边绿色）
-            edges = {(e["f"], e["t"]): e["w"] for e in sub["edges"]}
-            col_ids = sorted({t for (_f, t) in edges})
-            row_ids = sorted({f for (f, _t) in edges})
-            short = {n["idx"]: n["text"] for n in sub["nodes"]}
-
-            def label(i):
-                if i == -1:
-                    return "␣"
-                return short.get(i, "END")
-            parts.append("<h3>SegPath 转移边矩阵（x1@x2 · 权重，最优路径绿色）"
-                         "</h3><div class=\"scroll\"><table><tr><th>from＼to</th>")
-            for t in col_ids:
-                tl = "END" if t not in short else short[t]
-                parts.append(f"<th>{esc(tl)}<br/><small>#{t}</small></th>")
+                span_words.setdefault((node["st"], node["et"]), []).append(node)
+            parts.append("<h3>识别词矩阵（行=st 列=et · 同格多 cell 彩色 · "
+                         "★最优路径 · 灰=不可见/无词）</h3>"
+                         "<div class=\"drag\"><table class=\"matrix\"><tr><th>"
+                         "st＼et</th>")
+            for et in range(1, n_atoms + 1):
+                parts.append(f"<th class=\"num\">{et}</th>")
             parts.append("</tr>")
-            for f in row_ids:
-                fl = "START" if f == -1 else short.get(f, str(f))
-                parts.append(f"<tr><th>{esc(fl)}<br/><small>#{f}</small></th>")
-                for t in col_ids:
-                    if (f, t) in edges:
-                        w = edges[(f, t)]
-                        cls = " class=\"bestedge\"" if (f, t) in best_edges else ""
-                        parts.append(
-                            f"<td{cls}>{esc(str(label(f)))}@{esc(str(label(t)))}"
-                            f"<br/><small>{w:.3f}</small></td>")
-                    else:
-                        parts.append("<td></td>")
+            for st in range(n_atoms):
+                parts.append(f"<tr><th class=\"num\">{st}</th>")
+                for et in range(1, n_atoms + 1):
+                    if et <= st:
+                        parts.append("<td class=\"dead\">·</td>")
+                        continue
+                    cells = span_words.get((st, et))
+                    if not cells:
+                        parts.append("<td class=\"void\">—</td>")
+                        continue
+                    chips = []
+                    for ci, node in enumerate(cells):
+                        color = f"c{ci % 8}"
+                        star = " best" if node["idx"] in best else ""
+                        label_main = next(
+                            (lb for lb in node["labels"]
+                             if lb.startswith("POS_")), "")
+                        fx = (f"<span class=\"fx\">#{node['idx']}"
+                              f"{'′' + str(-node['feat']) if node['feat'] < -1 else ''}"
+                              f"</span>")
+                        chips.append(
+                            f"<span class=\"wcell {color}{star}\" title="
+                            f"\"idx={node['idx']} feat={node['feat']} "
+                            f"labels={esc(','.join(node['labels']))}\">"
+                            f"{esc(node['text'])}<small>{esc(label_main)}</small>"
+                            f"{fx}</span>")
+                    parts.append(f"<td>{''.join(chips)}</td>")
                 parts.append("</tr>")
             parts.append("</table></div>")
 
-            # 最终结果
+            # ── 转移边矩阵：节点 idx 上三角（不可见处置灰）──
+            edges = {(e["f"], e["t"]): e["w"] for e in sub["edges"]}
+            node_ids = sorted({n["idx"] for n in sub["nodes"]})
+            size = max(node_ids) + 1 if node_ids else 0
+            ids = [-1] + node_ids + [size]
+            short = {n["idx"]: (n["text"], n["st"], n["et"])
+                     for n in sub["nodes"]}
+
+            def nlabel(i):
+                if i == -1:
+                    return "␣START"
+                if i == size:
+                    return "END␣"
+                w, s, e = short[i]
+                return f"{w}[{s},{e})"
+            parts.append("<h3>SegPath 转移边矩阵（节点上三角 · x1@x2 + 权重 · "
+                         "最优路径绿色 · 灰=不可达）</h3><div class=\"drag\">"
+                         "<table class=\"matrix\"><tr><th>from＼to</th>")
+            for t in ids:
+                tag = "best" if t in best and t != size else ""
+                star = " ★" if tag else ""
+                parts.append(f"<th class=\"corner\">{esc(nlabel(t))}{star}<br/>"
+                             f"<small>#{t}</small></th>")
+            parts.append("</tr>")
+            for f in ids:
+                tag = "best" if f in best else ""
+                star = " ★" if tag else ""
+                parts.append(f"<tr><th class=\"corner\">{esc(nlabel(f))}{star}<br/>"
+                             f"<small>#{f}</small></th>")
+                for t in ids:
+                    if ids.index(t) <= ids.index(f):
+                        parts.append("<td class=\"dead\">·</td>")
+                        continue
+                    if (f, t) in edges:
+                        w = edges[(f, t)]
+                        cls = (" class=\"edgecell bestedge\""
+                               if (f, t) in best_edges
+                               else " class=\"edgecell\"")
+                        parts.append(
+                            f"<td{cls}>{esc(nlabel(f))}<b>@</b>"
+                            f"{esc(nlabel(t))}<br/>{w:.3f}</td>")
+                    else:
+                        parts.append("<td class=\"void\">—</td>")
+                parts.append("</tr>")
+            parts.append("</table></div>")
+
+            # ── 最终结果 ──
             parts.append("<h3>最终输出</h3><div class=\"final\">")
             for word, labels in sub["out"]:
                 tag = next((lb for lb in labels if lb.startswith("POS_")
                             and lb != "POS_PUNCT"), None)
-                badge = f" <span class=\"tag\">{esc(tag)}</span>" if tag else ""
-                parts.append(f"<b>{esc(word)}</b>{badge}")
+                badge = (f"<span class=\"tag tag-hot\">{esc(tag)}</span>"
+                         if tag else "")
+                parts.append(f"<span class=\"w\"><b>{esc(word)}</b>{badge}</span>")
             parts.append("</div></div>")
-        parts.append("</body></html>")
+        parts.append("</div>"
+                     "<script>"
+                     "for(const d of document.querySelectorAll('.drag'))"
+                     "{let x=0,l=0,down=false;"
+                     "d.addEventListener('mousedown',e=>{down=true;x=e.clientX;l=d.scrollLeft});"
+                     "d.addEventListener('mouseleave',()=>down=false);"
+                     "d.addEventListener('mouseup',()=>down=false);"
+                     "d.addEventListener('mousemove',e=>{if(!down)return;"
+                     "d.scrollLeft=l-(e.clientX-x)});}"
+                     "</script></body></html>")
         return "".join(parts)
 
     def tokenize(self, unicode_sentence: str, mode: str = "default", HMM: bool = True

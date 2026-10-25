@@ -1,24 +1,91 @@
-/* darts seg_report 固定样式（data/report.css） */
-body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-       margin: 24px auto; max-width: 1200px; color: #24292f; background: #f6f8fa; }
-h1 { font-size: 20px; border-bottom: 2px solid #d0d7de; padding-bottom: 8px; }
-h2 { font-size: 16px; margin-top: 28px; color: #1f6feb; }
-h3 { font-size: 14px; margin: 16px 0 6px; color: #57606a; }
-.sentence { background: #fff; border: 1px solid #d0d7de; border-radius: 6px;
-            padding: 8px 12px; margin: 6px 0; font-size: 15px; }
-.subsection { background: #fff; border: 1px solid #d0d7de; border-radius: 8px;
-              padding: 12px 16px; margin: 12px 0; overflow-x: auto; }
-table { border-collapse: collapse; font-size: 12px; margin: 6px 0; background: #fff; }
-th, td { border: 1px solid #d8dee4; padding: 3px 7px; white-space: nowrap; }
-th { background: #eaeef2; font-weight: 600; }
-td.num { text-align: right; font-family: ui-monospace, Menlo, monospace; }
-td.type { color: #953800; font-family: ui-monospace, Menlo, monospace; }
-tr.best > td, td.best { background: #d1f7d8 !important; font-weight: 700; }
-td.bestedge { background: #2da44e !important; color: #fff; font-weight: 700; }
-.tag { display: inline-block; background: #ddf4ff; color: #0969da; border-radius: 4px;
-       padding: 0 6px; margin: 0 2px; font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
-.tag-hot { background: #ffd8cc; color: #cf222e; }
-.final { font-size: 16px; background: #dafbe1; border-radius: 6px; padding: 8px 12px; }
-.final b { margin: 0 2px; }
-.meta { color: #57606a; font-size: 12px; }
-.scroll { max-height: 340px; overflow-y: auto; }
+/* darts seg_report 固定样式（data/report.css）— 商务现代简约 */
+:root {
+  --ink: #1a2233; --muted: #5b6472; --line: #e3e8ef; --bg: #f4f6fa;
+  --accent: #3b5bdb; --accent2: #7048e8; --ok: #2f9e44; --okbg: #d3f9d8;
+  --card: #ffffff; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.10);
+}
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+       margin: 0; padding: 28px 20px 60px; background: var(--bg); color: var(--ink);
+       -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1280px; margin: 0 auto; }
+h1 { font-size: 21px; font-weight: 700; letter-spacing: .2px; margin: 0 0 4px; }
+h1 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+          background: linear-gradient(135deg, var(--accent), var(--accent2)); margin-right: 8px; }
+.meta { color: var(--muted); font-size: 12.5px; margin-bottom: 18px; }
+.meta b { color: var(--ink); font-weight: 600; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+        box-shadow: var(--shadow); padding: 18px 20px; margin: 14px 0; }
+.card > h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.card > h2::before { content: ""; width: 4px; height: 16px; border-radius: 2px;
+                     background: linear-gradient(180deg, var(--accent), var(--accent2)); }
+.sentence { font-size: 15.5px; line-height: 1.7; padding: 10px 14px; border-radius: 8px;
+            background: #f8f9fc; border: 1px dashed var(--line); }
+h3 { font-size: 13px; color: var(--muted); margin: 18px 0 8px; font-weight: 600;
+     text-transform: uppercase; letter-spacing: .5px; }
+
+/* ── 滚动/拖动容器 ── */
+.drag { overflow: auto; cursor: grab; scrollbar-width: thin; }
+.drag:active { cursor: grabbing; }
+.drag::-webkit-scrollbar { height: 8px; width: 8px; }
+.drag::-webkit-scrollbar-thumb { background: #c3cad6; border-radius: 4px; }
+
+/* ── AtomList 3×n 条 ── */
+.atomgrid { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(64px, auto);
+            gap: 4px; min-width: max-content; }
+.atomgrid .h { font-size: 10.5px; color: var(--muted); text-align: center;
+               padding: 2px 4px; }
+.atomgrid .a { font-size: 15px; font-weight: 600; text-align: center; padding: 6px 6px 4px;
+               background: #eef2ff; border: 1px solid #dbe4ff; border-radius: 8px; }
+.atomgrid .t { font-size: 10px; text-align: center; color: #862e9c; font-family: ui-monospace, Menlo, monospace; }
+.atomgrid .p { font-size: 10px; text-align: center; color: var(--muted);
+               font-family: ui-monospace, Menlo, monospace; padding-bottom: 4px; }
+
+/* ── 通用表格 ── */
+table { border-collapse: separate; border-spacing: 3px; font-size: 12px; }
+th, td { border-radius: 6px; padding: 4px 8px; white-space: nowrap; }
+thead th { background: linear-gradient(180deg, #f1f3f9, #e9edf5); color: #3b4354;
+           font-weight: 600; border: 1px solid var(--line); }
+td.num, th.num { text-align: right; font-family: ui-monospace, Menlo, monospace; }
+
+/* ── 上三角矩阵通用 ── */
+.matrix td, .matrix th { min-width: 52px; text-align: center; }
+.matrix .dead { background: repeating-linear-gradient(45deg, #eef0f4, #eef0f4 6px, #e7eaef 6px, #e7eaef 12px);
+                color: #b6bdc9; }
+.matrix .void { background: #f5f6fa; color: #c2c8d4; }
+.corner { font-size: 10px; color: var(--muted); }
+
+/* ── 候选词 cell（同格多词彩色堆叠）── */
+.wcell { display: inline-flex; flex-direction: column; align-items: center; margin: 1px;
+         padding: 2px 7px; border-radius: 7px; font-weight: 600; border: 1.5px solid transparent; }
+.wcell small { font-size: 9.5px; font-weight: 500; font-family: ui-monospace, Menlo, monospace; }
+.wcell .fx { font-size: 9px; color: #666; }
+.wcell.best { border-color: var(--ok); box-shadow: 0 0 0 2px #b2f2bb66; }
+.wcell.best::after { content: "★"; color: var(--ok); font-size: 9px; margin-left: 2px; }
+.c0 { background: #e7f5ff; color: #1864ab; } .c0 small { color: #1c7ed6; }
+.c1 { background: #fff3bf; color: #a06b00; } .c1 small { color: #e67700; }
+.c2 { background: #d3f9d8; color: #2b6a3c; } .c2 small { color: #2f9e44; }
+.c3 { background: #ffe3e3; color: #a61e4d; } .c3 small { color: #e64980; }
+.c4 { background: #e5dbff; color: #5f3dc4; } .c4 small { color: #7048e8; }
+.c5 { background: #c3fae8; color: #087f5b; } .c5 small { color: #0ca678; }
+.c6 { background: #fff0f6; color: #862e9c; } .c6 small { color: #ae3ec9; }
+.c7 { background: #dbf4ff; color: #0b7285; } .c7 small { color: #15aabf; }
+
+/* ── 转移边矩阵 ── */
+.edge { font-size: 10.5px; font-family: ui-monospace, Menlo, monospace; }
+.edge b { font-family: inherit; }
+td.edgecell { background: #f1f3f9; border: 1px solid var(--line); }
+td.edgecell.bestedge { background: linear-gradient(135deg, #37b24d, #2f9e44);
+                       color: #fff; font-weight: 700; border-color: #2b8a3e; }
+
+/* ── 最终结果 ── */
+.final { font-size: 16px; line-height: 2; }
+.final .w { display: inline-block; margin: 2px 3px; padding: 3px 10px; border-radius: 8px;
+            background: linear-gradient(180deg, #f8f9ff, #eef1fb); border: 1px solid #dbe2f5; }
+.final .w b { color: var(--ink); }
+.tag { display: inline-block; background: #e7f5ff; color: #1864ab; border-radius: 5px;
+       padding: 0 5px; margin-left: 5px; font-size: 10.5px;
+       font-family: ui-monospace, Menlo, monospace; }
+.tag-hot { background: #fff3bf; color: #a06b00; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 2px; font-size: 11px; color: var(--muted); }
+.legend .wcell { font-size: 11px; }
