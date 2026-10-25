@@ -40,6 +40,7 @@ def build_model(metadata):
         pu_weight=metadata.get("pu_weight", 0.0),
         distance_buckets=metadata.get("distance_buckets", 0),
         quantizer_score=metadata.get("quantizer_score", "cosine"),
+        char_negative_weight=metadata.get("char_negative_weight", 1.0),
     )
 
 
@@ -163,6 +164,7 @@ def train(args):
         "pu_weight": args.pu_weight,
         "distance_buckets": args.quantizer_distance_buckets,
         "quantizer_score": args.quantizer_score,
+        "char_negative_weight": args.char_negative_weight,
         "training_stage": args.training_stage,
         "labels": span_train.labels if args.recognizer_kind == "syntax" else None,
         "type_map": type_map,
@@ -313,6 +315,9 @@ def train(args):
                         auxiliary_weight=args.graph_auxiliary_weight,
                         auxiliary_unlabelled_weight=args.graph_auxiliary_unlabelled_weight,
                         auxiliary_max_edges=args.graph_auxiliary_max_edges,
+                        c_weight=args.quantizer_c_weight,
+                        zipf_weight=args.zipf_weight,
+                        atom_ratio_weight=args.atom_ratio_weight,
                     )
             if recognizer_loss is None:
                 loss = (
@@ -567,9 +572,17 @@ def main():
                          help="linear warmup epochs before cosine decay (0=off)")
     command.add_argument("--quantizer-distance-buckets", type=int, default=0,
                          help="gap-aware quantizer: relative-distance bucket embeddings (0=off)")
-    command.add_argument("--quantizer-score", choices=("cosine", "sigmoid-dot"),
-                         default="cosine",
-                         help="quantizer head: cosine+softplus (default) or bounded 10*sigmoid(dot*tau)")
+    command.add_argument("--quantizer-score", choices=("cosine", "sigmoid-dot", "fused"),
+                         default="fused",
+                         help="quantizer head: fused (default, E2E-validated 0.779 vs cosine 0.769), cosine+softplus, or bounded sigmoid-dot")
+    command.add_argument("--char-negative-weight", type=float, default=1.0,
+                         help="loss multiplier for single-char NOT_WORD rows (1.0=off; try 3-5)")
+    command.add_argument("--quantizer-c-weight", type=float, default=0.0,
+                         help="fused score: optional direct BCE on the c head (0=off; c trains via path loss only — wordness is the recognizer's job)")
+    command.add_argument("--zipf-weight", type=float, default=0.0,
+                         help="saturation suppression: hinge penalty on edge NLL <0.1 / >49 (sigma dead zones; 0=off)")
+    command.add_argument("--atom-ratio-weight", type=float, default=0.0,
+                         help="minimize gold_path/atom_path cost ratio per graph (direct ranking signal against char splits; 0=off)")
     command.add_argument("--online-graph", action=argparse.BooleanOptionalAction,
                          default=False,
                          help="graph reader simulates online candidate density (no envelope fill; dict+gold+distractors)")

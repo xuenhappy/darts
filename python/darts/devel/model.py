@@ -201,15 +201,30 @@ class Quantizer(nn.Module):
             # 注意维度用 input_size（编码器输出维），不是内部投影 hidden
             self.distance_embedding = nn.Embedding(self.distance_buckets, input_size)
             nn.init.zeros_(self.distance_embedding.weight)
-        if score == "sigmoid-dot":
+        if score in ("sigmoid-dot", "fused"):
             # τ 乘性、初始 1/√d（attention 式 √d 缩放）：raw dot 量级 ~√d，
             # 乘 1/√d 归一至 O(1)，初始 NLL≈5（中性）；可学习并钳制范围
             self.temperature = nn.Parameter(
                 torch.tensor(1.0 / np.sqrt(hidden_size), dtype=torch.float32))
+        if score == "fused":
+            # c 头：softplus 激活（恒正，零初始化基线 ln2≈0.69）——两端词性
+            # 强度只有加法贡献，无负负得正死角；dot 加可学习负锚点：
+            # 无词性证据时 assoc≈anchor+dot<0 → NLL 大（不成词就要大），
+            # 两端皆词时 c1+c2 压过锚点 → NLL 落 0.x（高频主体便宜）。
+            # assoc = dot + anchor + c(x1) + c(x2)；NLL = 50·σ(−assoc·τ)
+            self.max_nll = 50.0
+            self.chead = nn.Linear(input_size, 1)
+            nn.init.zeros_(self.chead.weight)
+            nn.init.zeros_(self.chead.bias)
+            self.dot_anchor = nn.Parameter(torch.tensor(0.0))
         else:
             # Cosine similarity is bounded to [-1, 1]. A sqrt(d) initial inverse
             # temperature gives the probability head useful dynamic range early.
             self.logit_scale = nn.Parameter(torch.tensor(np.log(np.sqrt(hidden_size)), dtype=torch.float32))
+
+    def wordness(self, x):
+        """c(x)：softplus 恒正的词性强度（仅 fused）。"""
+        return F.softplus(self.chead(x)).squeeze(-1)
 
     def logits(self, x, y, gaps=None):
         """关联 logit（高=更关联）；两条路径语义一致，供 DP/辅助桥共用。"""
@@ -217,12 +232,20 @@ class Quantizer(nn.Module):
             distance = self.distance_embedding(gaps)
             x = x + distance
             y = y + distance
-        if self.score == "sigmoid-dot":
+        if self.score in ("sigmoid-dot", "fused"):
             dot = torch.sum(self.Kmap(x) * self.Qmap(y), dim=-1)
-            # τ ∈ (1e-4, 1.0]：只允许从 1/√d 初始收紧灵敏度，不允许放大——
-            # sigmoid 饱和区 ±5，raw dot 自身可达该量级，放大会推进饱和
-            tau = self.temperature.clamp(1e-4, 1.0)
-            return -dot * tau
+            if self.score == "fused":
+                # assoc = dot + anchor − c(x1) − c(x2)；c = softplus 非词度
+                # （不成词则大）。−assoc = c1+c2−dot 即拒斥分：任一端非词
+                # → c 大 → NLL 大（不成词就要大）；两端皆词 → c≈0 → NLL 由
+                # dot 决定（高频主体 0.x）。τ 在 forward 内作用于整个 assoc
+                association = (dot + self.dot_anchor
+                               - self.wordness(x) - self.wordness(y))
+            else:
+                # τ ∈ (1e-4, 1.0]：只收紧不放大——sigmoid 饱和区 ±5
+                tau = self.temperature.clamp(1e-4, 1.0)
+                association = -dot * tau
+            return association
         # The default eps=1e-12 makes gradients explode when a projection is
         # close to the zero vector. Such vectors occur naturally early in graph
         # training; a bounded denominator keeps association NLL differentiable.
@@ -233,6 +256,11 @@ class Quantizer(nn.Module):
 
     def forward(self, x, y, gaps=None):
         association_logit = self.logits(x, y, gaps)
+        if self.score == "fused":
+            # NLL = 50·σ(−assoc·τ)——τ 统一缩放 dot 与两个 c 项之和
+            tau = self.temperature.clamp(1e-4, 1.0)
+            return (self.max_nll * torch.sigmoid(
+                -association_logit * tau)).view(-1)
         if self.score == "sigmoid-dot":
             return (self.max_nll * torch.sigmoid(-association_logit)).view(-1)
         # softplus(-x) is the stable form of -log(sigmoid(x)).
@@ -351,7 +379,7 @@ class SyntaxSpanRecognizer(nn.Module):
     """Classify every span as NOT_WORD or one mutually exclusive POS type."""
 
     def __init__(self, vocab_num, hidden_size, class_num, encoder=None,
-                 pu_target=0.0, pu_weight=0.0):
+                 pu_target=0.0, pu_weight=0.0, char_negative_weight=1.0):
         super().__init__()
         if class_num < 2:
             raise ValueError("syntax recognizer requires NOT_WORD and at least one POS class")
@@ -360,6 +388,10 @@ class SyntaxSpanRecognizer(nn.Module):
         self.classifier = nn.Sequential(nn.Dropout(0.1), nn.Linear(hidden_size, class_num))
         self.pu_target = pu_target
         self.pu_weight = pu_weight
+        # 单字负样本加权：高频单字在其它语境常为词，先验淹没上下文证据
+        # （实测 这种车辆 句中 这/种 P≈0.999）；对 len==1 且非词的训练行
+        # 放大损失权重，教识别器用上下文压制句内被合并的单字
+        self.char_negative_weight = float(char_negative_weight)
 
     def logits(self, batch_input_idx, batch_lengths, batch_span_info):
         embeddings = self.encoder(batch_input_idx, batch_lengths, batch_span_info)
@@ -391,6 +423,12 @@ class SyntaxSpanRecognizer(nn.Module):
             pos_weight=(negatives / positives).clamp(max=12.0),
             reduction="none",
         )
+        if self.char_negative_weight != 1.0:
+            atom_len = batch_span_info[:, 3]
+            single_neg = (atom_len == 1) & ~is_word
+            word_losses = torch.where(
+                single_neg,
+                word_losses * self.char_negative_weight, word_losses)
         word_loss = (word_losses * word_weights).sum() / word_weights.sum().clamp_min(1.0)
         if not is_word.any():
             return word_loss
@@ -464,7 +502,8 @@ class GraphQuantizerTrainer(nn.Module):
 
     def forward(self, batch_input_idx, batch_lengths, batch_word_info, batch_graph,
                 detach_context=False, auxiliary_weight=0.0,
-                auxiliary_unlabelled_weight=0.05, auxiliary_max_edges=4096):
+                auxiliary_unlabelled_weight=0.05, auxiliary_max_edges=4096,
+                c_weight=0.0, zipf_weight=0.0, atom_ratio_weight=0.0):
         device = next(self.parameters()).device
         batch_input_idx = batch_input_idx.to(device)
         batch_lengths = batch_lengths.to(device)
@@ -491,8 +530,56 @@ class GraphQuantizerTrainer(nn.Module):
         association_nll = self.quantizer(path_embeds[sources],
                                          path_embeds[targets], gaps)
         path_loss = self.lossfunc(batch_word_info, batch_graph, association_nll)
+        total = path_loss
+        if (self.quantizer.score == "fused" and c_weight > 0
+                and not detach_context):
+            # c 头监督：金标路径端点=正（此上下文成词），其余节点=负。
+            # c 由上下文嵌入计算 → 学的是"该 span 在该句中是否成词"
+            gold_mask = batch_graph[:, 3].bool()
+            gold_nodes = torch.zeros(
+                batch_word_info.shape[0], device=path_embeds.device)
+            gold_nodes[batch_graph[:, 1][gold_mask]] = 1.0
+            gold_nodes[batch_graph[:, 2][gold_mask]] = 1.0
+            c_logits = self.quantizer.wordness(path_embeds)
+            pos = gold_nodes.sum().clamp_min(1.0)
+            neg = (1.0 - gold_nodes).sum().clamp_min(1.0)
+            total = total + c_weight * F.binary_cross_entropy_with_logits(
+                c_logits, gold_nodes, pos_weight=(neg / pos).clamp(max=12.0))
+        if zipf_weight > 0:
+            # 双端饱和压制（2026-10-24 定稿，替代分位 zipf loss）：σ(·) 在
+            # NLL→0 与 NLL→50 两端梯度消失（学习死区）。hinge 逐边惩罚
+            # <0.1 与 >49 的边，把权重压回有效动态范围；锚点机制已保证
+            # "成词 0.x / 不成词大"的分布形状，这里只防两端堆积
+            low = F.relu(0.1 - association_nll)
+            high = F.relu(association_nll - 49.0)
+            sat = (low.mean() + high.mean()) / self.quantizer.max_nll
+            total = total + zipf_weight * sat
+        if atom_ratio_weight > 0 and batch_graph.shape[1] > 4:
+            # 长度平衡的路径比值损失（2026-10-24 用户定案）：
+            #   (gold_sum/√len_gold) / (atom_sum/√len_atom)
+            # 消除长短路径 NLL 累加偏置；graph 第 5 列=字符路径边掩码。
+            # 梯度同时压金标边、抬字符边；字符链缺失的图自动排除。
+            gold_mask_f = batch_graph[:, 3].to(association_nll.dtype)
+            atom_mask_f = batch_graph[:, 4].to(association_nll.dtype)
+            n_graphs = int(batch_word_info[:, 0].max().item()) + 1
+            gold_sum = torch.zeros(n_graphs, dtype=association_nll.dtype,
+                                   device=association_nll.device)
+            atom_sum = torch.zeros_like(gold_sum)
+            gold_cnt = torch.zeros_like(gold_sum)
+            atom_cnt = torch.zeros_like(gold_sum)
+            gold_sum.index_add_(0, batch_graph[:, 0],
+                                association_nll * gold_mask_f)
+            atom_sum.index_add_(0, batch_graph[:, 0],
+                                association_nll * atom_mask_f)
+            gold_cnt.index_add_(0, batch_graph[:, 0], gold_mask_f)
+            atom_cnt.index_add_(0, batch_graph[:, 0], atom_mask_f)
+            valid = (atom_cnt > 1.5) & (gold_cnt > 1.5) & (atom_sum > 1e-3)
+            if valid.any():
+                gold_norm = gold_sum[valid] / gold_cnt[valid].sqrt()
+                atom_norm = atom_sum[valid] / atom_cnt[valid].sqrt()
+                total = total + atom_ratio_weight * (gold_norm / atom_norm).mean()
         if not detach_context or auxiliary_weight <= 0.0:
-            return path_loss
+            return total
 
         # The dynamic-programming path objective remains responsible for exact
         # graph probabilities, but its long gradient does not enter the
@@ -545,7 +632,7 @@ class GraphQuantizerTrainer(nn.Module):
             torch.full_like(edge_targets, auxiliary_unlabelled_weight),
         )
         auxiliary_loss = (edge_losses * edge_weights).sum() / edge_weights.sum().clamp_min(1.0)
-        return path_loss + auxiliary_weight * auxiliary_loss
+        return total + auxiliary_weight * auxiliary_loss
 
 
 class JointSegmentationTrainer(nn.Module):
@@ -554,7 +641,7 @@ class JointSegmentationTrainer(nn.Module):
     def __init__(self, vocab_num, hidden_size, wtype_num,
                  recognizer_kind="binary", class_num=None, positive_weight=None,
                  pu_target=0.0, pu_weight=0.0, distance_buckets=0,
-                 quantizer_score="cosine"):
+                 quantizer_score="cosine", char_negative_weight=1.0):
         super().__init__()
         encoder = WordEncoder(vocab_num, hidden_size, wtype_num)
         if recognizer_kind == "binary":
@@ -568,6 +655,7 @@ class JointSegmentationTrainer(nn.Module):
             self.recognizer = SyntaxSpanRecognizer(
                 vocab_num, hidden_size, class_num, encoder=encoder,
                 pu_target=pu_target, pu_weight=pu_weight,
+                char_negative_weight=char_negative_weight,
             )
         else:
             raise ValueError(f"unsupported recognizer kind: {recognizer_kind}")

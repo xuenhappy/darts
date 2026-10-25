@@ -219,10 +219,21 @@ class GraphSampleReader(IterableDataset):
             if match is None:
                 raise RuntimeError(
                     f"gold node {(atom_start, atom_end, type_code)} missing from graph for {text}"
-                )
+            )
             gold_nodes.append(match)
         gold_nodes.append(len(nodes) - 1)
         gold_edges = set(zip(gold_nodes, gold_nodes[1:]))
+
+        # 字符路径边掩码（atom-ratio 损失用）：逐 atom 的单字节点链
+        # （取每个 atom 的第一个候选节点）；链不完整则全零（该图排除）
+        char_node = {}
+        for index, node in enumerate(nodes[1:-1], start=1):
+            if node[4] - node[3] == 1 and node[3] not in char_node:
+                char_node[node[3]] = index
+        atom_edge_nodes = set()
+        if all(i in char_node for i in range(len(atoms))):
+            chain = [0] + [char_node[i] for i in range(len(atoms))] + [len(nodes) - 1]
+            atom_edge_nodes = set(zip(chain, chain[1:]))
 
         edges = []
         for source, left in enumerate(nodes[:-1]):
@@ -230,7 +241,8 @@ class GraphSampleReader(IterableDataset):
             for target in range(1, len(nodes)):
                 right = nodes[target]
                 if right[3] == target_start:
-                    edges.append((source, target, int((source, target) in gold_edges)))
+                    edges.append((source, target, int((source, target) in gold_edges),
+                                  int((source, target) in atom_edge_nodes)))
         return code_ids, nodes, edges
 
     def _batch(self, samples):
@@ -240,8 +252,9 @@ class GraphSampleReader(IterableDataset):
         offset = 0
         for batch_id, (_codes, nodes, edges) in enumerate(samples):
             word_info.extend((batch_id, node[0], node[1], node[2]) for node in nodes)
-            graph.extend((batch_id, source + offset, target + offset, gold)
-                         for source, target, gold in edges)
+            graph.extend((batch_id, edge[0] + offset, edge[1] + offset,
+                          *edge[2:])
+                         for edge in edges)
             offset += len(nodes)
         graph.sort(key=lambda edge: (edge[0], edge[2], edge[1]))
         return (torch.from_numpy(code_ids).long(), torch.from_numpy(lengths).long(),
