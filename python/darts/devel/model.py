@@ -194,7 +194,7 @@ class Quantizer(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, distance_buckets=0,
-                 score="cosine", max_nll=10.0):
+                 score="fused", max_nll=50.0):
         nn.Module.__init__(self)
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -220,7 +220,6 @@ class Quantizer(nn.Module):
             # 无词性证据时 assoc≈anchor+dot<0 → NLL 大（不成词就要大），
             # 两端皆词时 c1+c2 压过锚点 → NLL 落 0.x（高频主体便宜）。
             # assoc = dot + anchor + c(x1) + c(x2)；NLL = 50·σ(−assoc·τ)
-            self.max_nll = 50.0
             self.chead = nn.Linear(input_size, 1)
             nn.init.zeros_(self.chead.weight)
             nn.init.zeros_(self.chead.bias)
