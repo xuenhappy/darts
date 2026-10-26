@@ -44,7 +44,8 @@
             "type": "MnnRecongnizer",
             "model.path": "data/models/neural/recognizer.mnn",
             "max.span": "5",
-            "threshold": "0.5",
+            "threshold": "0.7",
+            "label.threshold": "0.0",
             "threshold.2": "0.96",
             "threshold.3": "0.96",
             "threshold.4": "0.96",
@@ -58,7 +59,8 @@
             "model.path": "data/models/neural/syntax.mnn",
             "label.path": "data/models/neural/syntax.labels.txt",
             "max.span": "5",
-            "threshold": "0.5",
+            "threshold": "0.7",
+            "label.threshold": "0.0",
             "deps": {
                 "wordpiece.name": "wordpiece.dict"
             }
