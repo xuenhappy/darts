@@ -3,6 +3,8 @@
 // 神经插件：MNN 推理后端（2026-10-25 自 onnxruntime 迁移）
 // 导出链：torch --dynamo--> onnx --MNNConvert--> .mnn（见 train_joint export）
 // 数值契约：MNN Precision_High 强制 FP32；动态 shape 经 resizeTensor/resizeSession
+#include <MNN/Interpreter.hpp>
+#include <MNN/Tensor.hpp>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -14,8 +16,6 @@
 #include "../utils/filetool.hpp"
 #include "../utils/strtool.hpp"
 #include "./encoder.hpp"
-#include <MNN/Interpreter.hpp>
-#include <MNN/Tensor.hpp>
 namespace darts {
 
 // MNN 会话包装：加载、按名喂取、动态 shape resize（带 shape 缓存去重）
@@ -31,7 +31,7 @@ struct MnnModel {
         if (const char* value = std::getenv("DARTS_MNN_THREADS"))
             threads = std::atoi(value);
         else if (const char* value = std::getenv("DARTS_ORT_THREADS"))
-            threads = std::atoi(value);  // 兼容历史变量名
+            threads = std::atoi(value);    // 兼容历史变量名
         return threads > 0 ? threads : 1;  // MNN 小模型并行同步开销大于收益，单线程最优
     }
 
@@ -41,20 +41,17 @@ struct MnnModel {
         MNN::BackendConfig backend;
         // Precision_High 强制 FP32（Low/Normal 档位有 ~5e-3 漂移）；
         // DARTS_MNN_PRECISION=low 可换 fp16 算术换速度（E2E 影响 ~0.1pp 级）
-        const char* prec = std::getenv("DARTS_MNN_PRECISION");
-        backend.precision = (prec && std::string(prec) == "low")
-            ? MNN::BackendConfig::Precision_Low
-            : MNN::BackendConfig::Precision_High;
+        const char* prec  = std::getenv("DARTS_MNN_PRECISION");
+        backend.precision = (prec && std::string(prec) == "low") ? MNN::BackendConfig::Precision_Low
+                                                                 : MNN::BackendConfig::Precision_High;
         MNN::ScheduleConfig config;
         config.type          = MNN_FORWARD_CPU;
         config.numThread     = thread_count();
         config.backendConfig = &backend;
-        this->session = this->net->createSession(config);
+        this->session        = this->net->createSession(config);
         if (this->session == nullptr) return EXIT_FAILURE;
-        for (const auto& item : this->net->getSessionInputAll(this->session))
-            this->input_names.push_back(item.first);
-        for (const auto& item : this->net->getSessionOutputAll(this->session))
-            this->output_names.push_back(item.first);
+        for (const auto& item : this->net->getSessionInputAll(this->session)) this->input_names.push_back(item.first);
+        for (const auto& item : this->net->getSessionOutputAll(this->session)) this->output_names.push_back(item.first);
         this->last_shapes.assign(this->input_names.size(), {});
         return EXIT_SUCCESS;
     }
@@ -116,8 +113,7 @@ struct MnnModel {
     }
 
     void run() const {
-        if (this->net->runSession(this->session) != 0)
-            throw std::runtime_error("MNN runSession failed");
+        if (this->net->runSession(this->session) != 0) throw std::runtime_error("MNN runSession failed");
     }
 
     bool has_output(const std::string& name) const {
@@ -125,8 +121,7 @@ struct MnnModel {
     }
 
     // 按名取输出（双头模型的多输出契约）
-    std::vector<float> fetch_float_named(const std::string& name,
-                                         std::vector<int>* shape = nullptr) const {
+    std::vector<float> fetch_float_named(const std::string& name, std::vector<int>* shape = nullptr) const {
         MNN::Tensor* device = this->net->getSessionOutput(this->session, name.c_str());
         if (device == nullptr) throw std::runtime_error("MNN model has no output " + name);
         MNN::Tensor host(device, MNN::Tensor::CAFFE);
@@ -282,12 +277,11 @@ class MnnIndicator {
             words_tensor_values[idx + 1] = ends_[w->et - 1];
             // 一致性修复（见上方注释）：神经提名单 POS_* 标签直接编码；
             // 词典多标签词回退 H 序（与训练 reader 的词典副本节点同型）
-            words_tensor_values[idx + 2] = this->lencoder == nullptr
-                ? codemap::unk_code
-                : this->lencoder->encodeSyntaxPreferred(w);
+            words_tensor_values[idx + 2] =
+                this->lencoder == nullptr ? codemap::unk_code : this->lencoder->encodeSyntaxPreferred(w);
         });
         // run model
-            this->model.resize({{static_cast<int>(adim)}, {static_cast<int>(words_size), 3}});
+        this->model.resize({{static_cast<int>(adim)}, {static_cast<int>(words_size), 3}});
         this->model.feed_int64("sents", alist_tensor_values.data());
         this->model.feed_int64("wordinfo", words_tensor_values.data());
         this->model.run();
@@ -297,11 +291,11 @@ class MnnIndicator {
             throw std::runtime_error("MNN indicator returned unexpected embedding count");
 
         if (std::getenv("DARTS_MNN_DEBUG")) {
-            std::cerr << "[mnn-ind] T=" << adim << " W=" << words_size << " emdim=" << this->emdim
-                      << " sents=[";
+            std::cerr << "[mnn-ind] T=" << adim << " W=" << words_size << " emdim=" << this->emdim << " sents=[";
             for (int64_t v : alist_tensor_values) std::cerr << v << ",";
             std::cerr << "] wi=[";
-            for (size_t k = 0; k < 24 && k < words_tensor_values.size(); ++k) std::cerr << words_tensor_values[k] << ",";
+            for (size_t k = 0; k < 24 && k < words_tensor_values.size(); ++k)
+                std::cerr << words_tensor_values[k] << ",";
             std::cerr << "] emb0=[";
             for (size_t k = 0; k < 6; ++k) std::cerr << flat[k] << ",";
             std::cerr << "] emb1=[";
@@ -391,14 +385,13 @@ class MnnQuantizer {
         this->model.feed_float("a", pre->getAttData());
         this->model.feed_float("b", next->getAttData());
         this->model.run();
-        std::vector<float> out = this->model.fetch_float();
+        std::vector<float> out       = this->model.fetch_float();
         const double association_nll = out.empty() ? 1e6 : static_cast<double>(out[0]);
         return std::isfinite(association_nll) && association_nll >= 0.0 ? association_nll : 1e6;
     }
 
-    void rangingBatch(
-        const std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>>& pairs,
-        std::vector<double>& weights) const {
+    void rangingBatch(const std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>>& pairs,
+                      std::vector<double>& weights) const {
         if (!batched_input) {
             weights.reserve(weights.size() + pairs.size());
             for (const auto& pair : pairs) weights.push_back(ranging(pair.first, pair.second));
@@ -428,18 +421,16 @@ class MnnQuantizer {
         this->model.run();
         std::vector<float> association_nll = this->model.fetch_float();
         if (std::getenv("DARTS_MNN_DEBUG") && !association_nll.empty()) {
-            std::cerr << "[mnn-q] E=" << edge_count << " nll0=[" << association_nll[0]
-                      << "," << association_nll[1] << "," << association_nll[2]
-                      << "] a0=[" << first[0] << "," << first[1] << "," << first[2]
+            std::cerr << "[mnn-q] E=" << edge_count << " nll0=[" << association_nll[0] << "," << association_nll[1]
+                      << "," << association_nll[2] << "] a0=[" << first[0] << "," << first[1] << "," << first[2]
                       << "] b0=[" << second[0] << "," << second[1] << "]" << std::endl;
         }
         if (association_nll.size() != edge_count)
             throw std::runtime_error("MNN quantizer returned an invalid NLL tensor");
         weights.reserve(weights.size() + edge_count);
         for (size_t i = 0; i < edge_count; ++i)
-            weights.push_back(valid[i] && std::isfinite(association_nll[i]) && association_nll[i] >= 0.0f
-                                  ? association_nll[i]
-                                  : 1e6);
+            weights.push_back(
+                valid[i] && std::isfinite(association_nll[i]) && association_nll[i] >= 0.0f ? association_nll[i] : 1e6);
     }
 
     ~MnnQuantizer() {}
@@ -498,19 +489,18 @@ class MnnDecider : public Decider {
         return quantizer.ranging(pre, next);
     }
 
-    void rangingBatch(
-        const std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>>& pairs,
-        std::vector<double>& weights) const override {
+    void rangingBatch(const std::vector<std::pair<std::shared_ptr<Word>, std::shared_ptr<Word>>>& pairs,
+                      std::vector<double>& weights) const override {
         const size_t offset = weights.size();
         quantizer.rangingBatch(pairs, weights);
         // Neural probabilities may be poorly calibrated for deterministic
         // date/time/unit rules. Preserve neural ordering while strongly
         // preferring paths through those high-confidence rule candidates.
-        for (size_t index = 0; index < pairs.size(); ++index) {
-            if (isDeterministicRule(pairs[index].first) ||
-                isDeterministicRule(pairs[index].second))
-                weights[offset + index] *= 0.05;
-        }
+        // for (size_t index = 0; index < pairs.size(); ++index) {
+        //     if (isDeterministicRule(pairs[index].first) ||
+        //         isDeterministicRule(pairs[index].second))
+        //         weights[offset + index] *= 0.05;
+        // }
     }
 
     ~MnnDecider() {}
@@ -568,8 +558,7 @@ class MnnRecongnizer : public CellRecognizer {
         }
         if (spans.empty()) return;
 
-        model.resize({{static_cast<int>(token_ids.size())},
-                      {static_cast<int>(spans.size()), 2}});
+        model.resize({{static_cast<int>(token_ids.size())}, {static_cast<int>(spans.size()), 2}});
         model.feed_int64("sents", token_ids.data());
         model.feed_int64("spaninfo", span_values.data());
         model.run();
@@ -602,7 +591,7 @@ class MnnRecongnizer : public CellRecognizer {
         length_thresholds.assign(max_span + 1, threshold);
         for (size_t length = 2; length <= max_span; ++length) {
             const std::string key = std::string(THRESHOLD_KEY) + "." + std::to_string(length);
-            iter = params.find(key);
+            iter                  = params.find(key);
             if (iter == params.end()) continue;
             try {
                 length_thresholds[length] = std::stof(iter->second);
@@ -665,8 +654,8 @@ class MnnRecongnizer : public CellRecognizer {
 
 const char* MnnRecongnizer::MODEL_PATH_KEY  = "model.path";
 const char* MnnRecongnizer::WORDPIECE_PARAM = "wordpiece.name";
-const char* MnnRecongnizer::MAX_SPAN_KEY     = "max.span";
-const char* MnnRecongnizer::THRESHOLD_KEY    = "threshold";
+const char* MnnRecongnizer::MAX_SPAN_KEY    = "max.span";
+const char* MnnRecongnizer::THRESHOLD_KEY   = "threshold";
 
 REGISTER_Recognizer(MnnRecongnizer);
 
@@ -684,7 +673,7 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
     // 双头因子化模型（2026-10-25）：threshold* 门 成词概率 σ(w)；
     // label.threshold 门 联合标签概率 σ(w)·softmax(l)。旧单输出模型
     // threshold* 仍门 联合 argmax 概率（行为不变）。
-    bool factorized = false;
+    bool factorized       = false;
     float label_threshold = 0.0f;
     std::shared_ptr<WordPice> wordpiece;
     std::vector<std::string> labels;
@@ -717,8 +706,7 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
             std::cerr << "invalid syntax recognizer option: " << error.what() << std::endl;
             return EXIT_FAILURE;
         }
-        if (max_span < 1 || max_span > 32 || threshold < 0.0f || threshold > 1.0f)
-            return EXIT_FAILURE;
+        if (max_span < 1 || max_span > 32 || threshold < 0.0f || threshold > 1.0f) return EXIT_FAILURE;
         auto label_option = params.find(LABEL_THRESHOLD_KEY);
         try {
             if (label_option != params.end()) label_threshold = std::stof(label_option->second);
@@ -735,8 +723,8 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
 
         auto label_path = params.find(LABEL_PATH_KEY);
         auto model_path = params.find(MODEL_PATH_KEY);
-        if (label_path == params.end() || model_path == params.end() ||
-            loadLabels(label_path->second)) return EXIT_FAILURE;
+        if (label_path == params.end() || model_path == params.end() || loadLabels(label_path->second))
+            return EXIT_FAILURE;
         const std::string resolved = getResource(model_path->second);
         if (model.load(resolved) != EXIT_SUCCESS) return EXIT_FAILURE;
         factorized = model.has_output("word_probabilities");
@@ -769,8 +757,7 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
         if (spans.empty()) return;
 
         try {
-            model.resize({{static_cast<int>(token_ids.size())},
-                          {static_cast<int>(spans.size()), 2}});
+            model.resize({{static_cast<int>(token_ids.size())}, {static_cast<int>(spans.size()), 2}});
             model.feed_int64("sents", token_ids.data());
             model.feed_int64("spaninfo", span_values.data());
             model.run();
@@ -790,8 +777,7 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
                     // 联合标签门：σ(w)·softmax(l) ≥ label.threshold
                     const float word_p = word_probabilities[span];
                     if (!std::isfinite(word_p) || word_p < threshold) continue;
-                    const size_t type =
-                        std::max_element(row + 1, row + labels.size()) - row;
+                    const size_t type   = std::max_element(row + 1, row + labels.size()) - row;
                     const float joint_p = row[type];
                     if (!std::isfinite(joint_p) || joint_p < label_threshold) continue;
                     auto word = std::make_shared<Word>(atoms, spans[span].first, spans[span].second);
@@ -818,11 +804,11 @@ class MnnSyntaxRecongnizer : public CellRecognizer {
 };
 
 const char* MnnSyntaxRecongnizer::LABEL_THRESHOLD_KEY = "label.threshold";
-const char* MnnSyntaxRecongnizer::MODEL_PATH_KEY = "model.path";
-const char* MnnSyntaxRecongnizer::LABEL_PATH_KEY = "label.path";
-const char* MnnSyntaxRecongnizer::WORDPIECE_PARAM = "wordpiece.name";
-const char* MnnSyntaxRecongnizer::MAX_SPAN_KEY = "max.span";
-const char* MnnSyntaxRecongnizer::THRESHOLD_KEY = "threshold";
+const char* MnnSyntaxRecongnizer::MODEL_PATH_KEY      = "model.path";
+const char* MnnSyntaxRecongnizer::LABEL_PATH_KEY      = "label.path";
+const char* MnnSyntaxRecongnizer::WORDPIECE_PARAM     = "wordpiece.name";
+const char* MnnSyntaxRecongnizer::MAX_SPAN_KEY        = "max.span";
+const char* MnnSyntaxRecongnizer::THRESHOLD_KEY       = "threshold";
 REGISTER_Recognizer(MnnSyntaxRecongnizer);
 
 }  // namespace darts
