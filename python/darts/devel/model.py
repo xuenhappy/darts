@@ -4,6 +4,7 @@
 @author: enxu
 '''
 from .utils import *
+from .anchor_quantizer import AnchorDecomposedQuantizer, atom_anchor_and_ratio_loss  # DARTS_ANCHORED_DECOMPOSED_PATCH
 import numpy as np
 import torch
 import torch.nn as nn
@@ -540,9 +541,11 @@ class GraphQuantizerTrainer(nn.Module):
                  quantizer_score="cosine"):
         super().__init__()
         self.predictor = encoder or WordEncoder(vocab_num, hidden_size, wtype_num)
-        self.quantizer = Quantizer(hidden_size, 32,
-                                   distance_buckets=distance_buckets,
-                                   score=quantizer_score)
+        self.quantizer = (
+            AnchorDecomposedQuantizer(hidden_size, 32, distance_buckets=distance_buckets)
+            if quantizer_score == "anchored-decomposed" else
+            Quantizer(hidden_size, 32, distance_buckets=distance_buckets, score=quantizer_score)
+        )
         self.lossfunc = GraphLossSparse(edge_chunk_size=edge_chunk_size, strict_path=strict_path)
 
     def _edge_gaps(self, batch_word_info, sources, targets):
@@ -555,7 +558,9 @@ class GraphQuantizerTrainer(nn.Module):
     def forward(self, batch_input_idx, batch_lengths, batch_word_info, batch_graph,
                 detach_context=False, auxiliary_weight=0.0,
                 auxiliary_unlabelled_weight=0.05, auxiliary_max_edges=4096,
-                c_weight=0.0, zipf_weight=0.0, atom_ratio_weight=0.0):
+                c_weight=0.0, zipf_weight=0.0, atom_ratio_weight=0.0,
+                atom_anchor_weight=0.02, atom_anchor_target=2.0,
+                anchor_ratio_weight=None):
         device = next(self.parameters()).device
         batch_input_idx = batch_input_idx.to(device)
         batch_lengths = batch_lengths.to(device)
@@ -583,6 +588,16 @@ class GraphQuantizerTrainer(nn.Module):
                                          path_embeds[targets], gaps)
         path_loss = self.lossfunc(batch_word_info, batch_graph, association_nll)
         total = path_loss
+        if self.quantizer.score == "anchored-decomposed":
+            if batch_graph.shape[1] < 5:
+                raise ValueError("anchored-decomposed requires atom path mask in graph column 5")
+            # Avoid counting both old atom_ratio_weight and new ratio term.
+            ratio_w = atom_ratio_weight if anchor_ratio_weight is None else anchor_ratio_weight
+            anchor_extra, _ = atom_anchor_and_ratio_loss(
+                association_nll, batch_graph, atom_target=atom_anchor_target,
+                ratio_weight=ratio_w, anchor_weight=atom_anchor_weight,
+            )
+            total = total + anchor_extra
         if (self.quantizer.score == "fused" and c_weight > 0
                 and not detach_context):
             # c 头监督：金标路径端点=正（此上下文成词），其余节点=负。
@@ -597,6 +612,8 @@ class GraphQuantizerTrainer(nn.Module):
             neg = (1.0 - gold_nodes).sum().clamp_min(1.0)
             total = total + c_weight * F.binary_cross_entropy_with_logits(
                 c_logits, gold_nodes, pos_weight=(neg / pos).clamp(max=12.0))
+        if zipf_weight > 0 and self.quantizer.score == "anchored-decomposed":
+            raise ValueError("zipf_weight assumes costs in [0, 50]; use 0 with anchored-decomposed")
         if zipf_weight > 0:
             # 双端饱和压制（2026-10-24 定稿，替代分位 zipf loss）：σ(·) 在
             # NLL→0 与 NLL→50 两端梯度消失（学习死区）。hinge 逐边惩罚
@@ -606,7 +623,7 @@ class GraphQuantizerTrainer(nn.Module):
             high = F.relu(association_nll - 49.0)
             sat = (low.mean() + high.mean()) / self.quantizer.max_nll
             total = total + zipf_weight * sat
-        if atom_ratio_weight > 0 and batch_graph.shape[1] > 4:
+        if atom_ratio_weight > 0 and self.quantizer.score != "anchored-decomposed" and batch_graph.shape[1] > 4:
             # 长度平衡的路径比值损失（2026-10-24 用户定案）：
             #   (gold_sum/√len_gold) / (atom_sum/√len_atom)
             # 消除长短路径 NLL 累加偏置；graph 第 5 列=字符路径边掩码。

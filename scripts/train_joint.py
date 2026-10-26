@@ -322,6 +322,8 @@ def train(args):
                         c_weight=args.quantizer_c_weight,
                         zipf_weight=args.zipf_weight,
                         atom_ratio_weight=args.atom_ratio_weight,
+                        atom_anchor_weight=args.atom_anchor_weight,
+                        atom_anchor_target=args.atom_anchor_target,
                     )
             if recognizer_loss is None:
                 loss = (
@@ -477,6 +479,9 @@ def export(args):
     if syntax:
         runtime["label.path"] = "syntax.labels.txt"
         runtime["threshold"] = str(metadata.get("dev", {}).get("threshold", 0.5))
+        if metadata.get("syntax_factorized"):
+            # 双头模型：threshold 门成词概率；label.threshold 门联合标签概率
+            runtime["label.threshold"] = str(metadata.get("label_threshold", 0.0))
     metadata_name = "lac.json" if syntax else "neural.json"
     (output / metadata_name).write_text(
         json.dumps({**metadata, "runtime": runtime}, ensure_ascii=False, indent=2) + "\n",
@@ -598,7 +603,7 @@ def main():
                          help="linear warmup epochs before cosine decay (0=off)")
     command.add_argument("--quantizer-distance-buckets", type=int, default=0,
                          help="gap-aware quantizer: relative-distance bucket embeddings (0=off)")
-    command.add_argument("--quantizer-score", choices=("cosine", "sigmoid-dot", "fused"),
+    command.add_argument("--quantizer-score", choices=("cosine", "sigmoid-dot", "fused", "anchored-decomposed"),
                          default="fused",
                          help="quantizer head: fused (default, E2E-validated 0.779 vs cosine 0.769), cosine+softplus, or bounded sigmoid-dot")
     command.add_argument("--char-negative-weight", type=float, default=1.0,
@@ -607,6 +612,10 @@ def main():
                          help="fused score: optional direct BCE on the c head (0=off; c trains via path loss only — wordness is the recognizer's job)")
     command.add_argument("--zipf-weight", type=float, default=0.0,
                          help="saturation suppression: hinge penalty on edge NLL <0.1 / >49 (sigma dead zones; 0=off)")
+    command.add_argument("--atom-anchor-weight", type=float, default=0.02,
+                         help="mean atom edge cost absolute anchor (anchored-decomposed only)")
+    command.add_argument("--atom-anchor-target", type=float, default=2.0,
+                         help="desired per-atom-path-edge cost (anchored-decomposed only)")
     command.add_argument("--atom-ratio-weight", type=float, default=0.0,
                          help="minimize gold_path/atom_path cost ratio per graph (direct ranking signal against char splits; 0=off)")
     command.add_argument("--online-graph", action=argparse.BooleanOptionalAction,
